@@ -34,12 +34,14 @@ struct MapLibreView: UIViewRepresentable {
         })
     }
 
-    @MainActor
+    // MLNMapViewDelegate is an ObjC protocol with no @MainActor annotation; Swift 6 rejects
+    // class-level @MainActor on the conforming type. All MLN callbacks are main-thread in
+    // practice, so nonisolated(unsafe) on mutable state is correct and safe here.
     final class Coordinator: NSObject, MLNMapViewDelegate, @unchecked Sendable {
         private let sourceID = "salish-vectors"
         private let shaftLayerID = "salish-shafts"
         private let barbLayerID = "salish-barbs"
-        private var pendingVectors: [CurrentVector]?
+        nonisolated(unsafe) private var pendingVectors: [CurrentVector]?
         private let onViewportChange: (ChartBounds) -> Void
 
         init(onViewportChange: @escaping (ChartBounds) -> Void) {

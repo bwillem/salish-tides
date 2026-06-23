@@ -191,7 +191,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				C7344A304C88DDAC69D5686D /* XCRemoteSwiftPackageReference "GRDB.swift" */,
-				D85694463C2ED42CE7A64F17 /* XCRemoteSwiftPackageReference "maplibre-native" */,
+				6693D0D8681A53917A378B5F /* XCRemoteSwiftPackageReference "maplibre-gl-native-distribution" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 489D3086E0E1A69D40C4993B /* Products */;
@@ -422,20 +422,20 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		6693D0D8681A53917A378B5F /* XCRemoteSwiftPackageReference "maplibre-gl-native-distribution" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/maplibre/maplibre-gl-native-distribution";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 6.27.0;
+			};
+		};
 		C7344A304C88DDAC69D5686D /* XCRemoteSwiftPackageReference "GRDB.swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/groue/GRDB.swift";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 7.0.0;
-			};
-		};
-		D85694463C2ED42CE7A64F17 /* XCRemoteSwiftPackageReference "maplibre-native" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/maplibre/maplibre-native";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 6.0.0;
+				minimumVersion = 7.11.1;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
@@ -443,7 +443,7 @@
 /* Begin XCSwiftPackageProductDependency section */
 		42B0127065AEDC608BD0C4A4 /* MapLibre */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = D85694463C2ED42CE7A64F17 /* XCRemoteSwiftPackageReference "maplibre-native" */;
+			package = 6693D0D8681A53917A378B5F /* XCRemoteSwiftPackageReference "maplibre-gl-native-distribution" */;
 			productName = MapLibre;
 		};
 		4C2D431933E482A18FCC18F9 /* GRDB */ = {
