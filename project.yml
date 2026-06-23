@@ -1,0 +1,59 @@
+name: SalishTides
+options:
+  bundleIdPrefix: com.bguenther
+  deploymentTarget:
+    iOS: "17.0"
+
+packages:
+  MapLibre:
+    url: https://github.com/maplibre/maplibre-native
+    from: "6.0.0"
+  GRDB:
+    url: https://github.com/groue/GRDB.swift
+    from: "7.0.0"
+
+targets:
+  SalishTides:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: SalishTides
+    resources:
+      - path: ios-production-handoff/data/atlas_lookup_2026.json
+      - path: ios-production-handoff/data/atlas_index.json
+      - path: ios-production-handoff/data/maps
+        type: folder
+    info:
+      path: SalishTides/Info.plist
+      properties:
+        CFBundleDisplayName: "Salish Tides"
+        UILaunchStoryboardName: ""
+        UIRequiresFullScreen: true
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+        NSLocationWhenInUseUsageDescription: "Your location is shown on the chart so you can orient yourself relative to the currents."
+        UIApplicationSupportsIndirectInputEvents: true
+        UIStatusBarHidden: false
+    dependencies:
+      - package: MapLibre
+        product: MapLibre
+      - package: GRDB
+        product: GRDB
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.bguenther.salishtides
+        SWIFT_VERSION: "6.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+        ENABLE_PREVIEWS: "YES"
+        SWIFT_STRICT_CONCURRENCY: complete
+      configs:
+        Debug:
+          DEBUG_INFORMATION_FORMAT: dwarf
+        Release:
+          SWIFT_OPTIMIZATION_LEVEL: "-O"
+          SWIFT_COMPILATION_MODE: wholemodule

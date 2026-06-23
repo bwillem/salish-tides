@@ -1,0 +1,14 @@
+{
+  "version": 8,
+  "name": "Salish Stub",
+  "sources": {},
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "#1a3a5c"
+      }
+    }
+  ]
+}
