@@ -19,11 +19,14 @@ targets:
     deploymentTarget: "17.0"
     sources:
       - path: SalishTides
-    resources:
-      - path: ios-production-handoff/data/atlas_lookup_2026.json
-      - path: ios-production-handoff/data/atlas_index.json
-      - path: ios-production-handoff/data/maps
-        type: folder
+        excludes:
+          - "Resources/maps"
+    postBuildScripts:
+      - name: Copy Maps Data
+        script: |
+          DEST="${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/maps"
+          mkdir -p "$DEST"
+          rsync -a --delete "${SRCROOT}/ios-production-handoff/data/maps/" "$DEST/"
     info:
       path: SalishTides/Info.plist
       properties:
