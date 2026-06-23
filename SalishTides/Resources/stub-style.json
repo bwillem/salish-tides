@@ -1,7 +1,28 @@
 {
   "version": 8,
-  "name": "Salish Stub",
-  "sources": {},
+  "name": "Salish Tides",
+  "sources": {
+    "carto-dark": {
+      "type": "raster",
+      "tiles": [
+        "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
+        "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
+        "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png"
+      ],
+      "tileSize": 256,
+      "attribution": "© OpenStreetMap contributors © CARTO",
+      "maxzoom": 19
+    },
+    "openseamap": {
+      "type": "raster",
+      "tiles": [
+        "https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png"
+      ],
+      "tileSize": 256,
+      "attribution": "© OpenSeaMap contributors",
+      "maxzoom": 18
+    }
+  },
   "layers": [
     {
       "id": "background",
@@ -9,6 +30,17 @@
       "paint": {
         "background-color": "#1a3a5c"
       }
+    },
+    {
+      "id": "carto-dark-tiles",
+      "type": "raster",
+      "source": "carto-dark"
+    },
+    {
+      "id": "openseamap-tiles",
+      "type": "raster",
+      "source": "openseamap",
+      "minzoom": 10
     }
   ]
 }

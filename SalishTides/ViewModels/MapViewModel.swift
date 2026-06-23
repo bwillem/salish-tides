@@ -11,6 +11,7 @@ final class MapViewModel {
     var migrationProgress: Double = 0
     var migrationError: String?
     var visibleViewport: ChartBounds?
+    var crosshairSpeed: Double?
 
     private let selector: ChartSelector
     private let atlasIndex: AtlasIndex
@@ -66,8 +67,24 @@ final class MapViewModel {
         do {
             let vectors = try await VectorDatabase.shared.vectors(chart: selection.chart, regions: regions)
             currentVectors = vectors
+            crosshairSpeed = nearestSpeed(in: vectors, viewport: visibleViewport)
         } catch {
             currentVectors = []
+            crosshairSpeed = nil
         }
+    }
+
+    private func nearestSpeed(in vectors: [CurrentVector], viewport: ChartBounds?) -> Double? {
+        guard let vp = viewport else { return nil }
+        let cLat = (vp.lat_min + vp.lat_max) / 2
+        let cLon = (vp.lon_min + vp.lon_max) / 2
+        return vectors
+            .filter { $0.isSignificant }
+            .min(by: {
+                let d1 = ($0.lat - cLat) * ($0.lat - cLat) + ($0.lon - cLon) * ($0.lon - cLon)
+                let d2 = ($1.lat - cLat) * ($1.lat - cLat) + ($1.lon - cLon) * ($1.lon - cLon)
+                return d1 < d2
+            })
+            .map { $0.speedKnots }
     }
 }

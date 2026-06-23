@@ -18,6 +18,7 @@ struct ContentView: View {
         ZStack(alignment: .bottom) {
             MapLibreView()
                 .ignoresSafeArea()
+            CrosshairView()
             VStack(spacing: 0) {
                 HStack {
                     Spacer()
@@ -38,6 +39,24 @@ struct ContentView: View {
         } message: {
             Text(vm.migrationError ?? "")
         }
+    }
+}
+
+private struct CrosshairView: View {
+    var body: some View {
+        ZStack {
+            Circle()
+                .strokeBorder(.white.opacity(0.75), lineWidth: 1.5)
+                .frame(width: 22, height: 22)
+            Path { p in
+                p.move(to: CGPoint(x: 0, y: -18)); p.addLine(to: CGPoint(x: 0, y: -12))
+                p.move(to: CGPoint(x: 0, y:  12)); p.addLine(to: CGPoint(x: 0, y:  18))
+                p.move(to: CGPoint(x: -18, y: 0)); p.addLine(to: CGPoint(x: -12, y: 0))
+                p.move(to: CGPoint(x:  12, y: 0)); p.addLine(to: CGPoint(x:  18, y: 0))
+            }
+            .stroke(.white.opacity(0.75), lineWidth: 1.5)
+        }
+        .allowsHitTesting(false)
     }
 }
 
