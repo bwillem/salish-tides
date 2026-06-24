@@ -3,6 +3,7 @@ import GRDB
 
 struct VectorRecord: Codable, FetchableRecord, PersistableRecord, Sendable {
     static let databaseTableName = "vectors"
+    var volume: Int
     var chart: Int
     var region: String
     var lat: Double
@@ -26,15 +27,21 @@ actor VectorDatabase {
         let p = try DatabasePool(path: dbURL.path)
         try p.write { db in
             try db.create(table: VectorRecord.databaseTableName, ifNotExists: true) { t in
+                t.column("volume", .integer).notNull()
                 t.column("chart", .integer).notNull()
                 t.column("region", .text).notNull()
                 t.column("lat", .double).notNull()
                 t.column("lon", .double).notNull()
                 t.column("speed_ms", .double).notNull()
                 t.column("direction_deg", .double).notNull()
-                // Unique constraint prevents duplicate rows on repeated migration runs
-                t.uniqueKey(["chart", "region", "lat", "lon"])
+                t.uniqueKey(["volume", "chart", "region", "lat", "lon"])
             }
+            try db.create(
+                index: "vectors_by_volume_chart",
+                on: VectorRecord.databaseTableName,
+                columns: ["volume", "chart", "region"],
+                ifNotExists: true
+            )
         }
         self.pool = p
     }
@@ -43,20 +50,18 @@ actor VectorDatabase {
         guard let pool else { return }
         try pool.write { db in
             for record in records {
-                // INSERT OR IGNORE: silently skips rows that violate the unique constraint,
-                // making migration safe to re-run after an interrupted first launch.
                 try record.insert(db, onConflict: .ignore)
             }
         }
     }
 
-    func vectors(chart: Int, regions: [String]) throws -> [CurrentVector] {
+    func vectors(volume: Int, chart: Int, regions: [String]) throws -> [CurrentVector] {
         guard let pool, !regions.isEmpty else { return [] }
         return try pool.read { db in
             let placeholders = databaseQuestionMarks(count: regions.count)
-            var args: [DatabaseValueConvertible] = [chart]
+            var args: [DatabaseValueConvertible] = [volume, chart]
             args += regions as [DatabaseValueConvertible]
-            let sql = "SELECT * FROM vectors WHERE chart = ? AND region IN (\(placeholders))"
+            let sql = "SELECT * FROM vectors WHERE volume = ? AND chart = ? AND region IN (\(placeholders))"
             return try VectorRecord.fetchAll(db, sql: sql, arguments: StatementArguments(args))
                 .map(\.asVector)
         }

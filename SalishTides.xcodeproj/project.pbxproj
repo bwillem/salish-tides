@@ -10,6 +10,7 @@
 		063221F80851C1FDC5A9257C /* atlas_lookup_vol2_2026.json in Resources */ = {isa = PBXBuildFile; fileRef = FD04BD2129588FF977B70226 /* atlas_lookup_vol2_2026.json */; };
 		1D5038B1FFB6DE1A54FE8E25 /* MapViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F6AC464A41AEC5AA01D5BB8 /* MapViewModel.swift */; };
 		1F1918795868670251164A0C /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC4BE54595E9CB5FA8F715B3 /* ContentView.swift */; };
+		2872EC1D5D05AB899A667652 /* AtlasVolume.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34E23098B238D68AE7C4E0CA /* AtlasVolume.swift */; };
 		28CEED760DB3C36FC29C60ED /* PhaseIndicatorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF78D89E101E6B88EB6D487E /* PhaseIndicatorView.swift */; };
 		2C6DCF8F97E181783A106DBC /* VectorDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = A89FE39742D2A11DF361182D /* VectorDatabase.swift */; };
 		3002DAB5B09EDAE4506050FB /* atlas_lookup_2026.json in Resources */ = {isa = PBXBuildFile; fileRef = 1E2E5511446438A2D163BF38 /* atlas_lookup_2026.json */; };
@@ -31,6 +32,7 @@
 		1E2E5511446438A2D163BF38 /* atlas_lookup_2026.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = atlas_lookup_2026.json; sourceTree = "<group>"; };
 		2DB51EF67918D47D54D0733D /* atlas_lookup_vol4_2026.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = atlas_lookup_vol4_2026.json; sourceTree = "<group>"; };
 		33F90FC333D8D0174AF1A089 /* AtlasLookupTable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtlasLookupTable.swift; sourceTree = "<group>"; };
+		34E23098B238D68AE7C4E0CA /* AtlasVolume.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtlasVolume.swift; sourceTree = "<group>"; };
 		4FA576D80059DF72E4354E26 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		6F8AC975A9DE6B660C38E780 /* SalishTidesApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SalishTidesApp.swift; sourceTree = "<group>"; };
 		705E9152F8BEA1FA75608D3F /* MapLibreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapLibreView.swift; sourceTree = "<group>"; };
@@ -115,6 +117,7 @@
 			children = (
 				89B5A3FF117EF3148984AFA7 /* AtlasIndex.swift */,
 				33F90FC333D8D0174AF1A089 /* AtlasLookupTable.swift */,
+				34E23098B238D68AE7C4E0CA /* AtlasVolume.swift */,
 				B534466B629735C3AFD88226 /* CurrentVector.swift */,
 			);
 			path = Models;
@@ -259,6 +262,7 @@
 			files = (
 				5634D37C27B06326BEB8F192 /* AtlasIndex.swift in Sources */,
 				DEEA37D4F253B7A4E151C3EB /* AtlasLookupTable.swift in Sources */,
+				2872EC1D5D05AB899A667652 /* AtlasVolume.swift in Sources */,
 				1F1918795868670251164A0C /* ContentView.swift in Sources */,
 				570A422AFA165A8582E8CC3E /* CurrentVector.swift in Sources */,
 				5447EAD323169BC3E88B2FF6 /* DatabaseMigrator.swift in Sources */,

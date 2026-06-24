@@ -13,6 +13,7 @@ enum Tendency: Sendable {
 }
 
 struct ChartSelection: Sendable {
+    let volume: Int
     let chart: Int
     let phase: String
     let tendency: Tendency
@@ -21,10 +22,12 @@ struct ChartSelection: Sendable {
 // Chart selection is a table lookup keyed to America/Vancouver local hour.
 // Do NOT use device-local calendar — the table is keyed to Pacific time with DST baked in.
 final class ChartSelector: Sendable {
+    let volume: Int
     private let table: AtlasLookupTable
     private let cal: Calendar
 
-    init(table: AtlasLookupTable) {
+    init(volume: Int, table: AtlasLookupTable) {
+        self.volume = volume
         self.table = table
         var c = Calendar(identifier: .gregorian)
         c.timeZone = TimeZone(identifier: "America/Vancouver")!
@@ -50,17 +53,17 @@ final class ChartSelector: Sendable {
 
         for (name, lohi) in table.phases where lohi.count >= 2 && c >= lohi[0] && c <= lohi[1] {
             let tendency: Tendency = name.contains("flood") ? .flood : .ebb
-            return ChartSelection(chart: c, phase: name, tendency: tendency)
+            return ChartSelection(volume: volume, chart: c, phase: name, tendency: tendency)
         }
-        return ChartSelection(chart: c, phase: "unknown", tendency: .flood)
+        return ChartSelection(volume: volume, chart: c, phase: "unknown", tendency: .flood)
     }
 
-    static func load() throws -> ChartSelector {
-        guard let url = Bundle.main.url(forResource: "atlas_lookup_2026", withExtension: "json") else {
+    static func load(for spec: VolumeSpec) throws -> ChartSelector {
+        guard let url = Bundle.main.url(forResource: spec.lookupResource, withExtension: "json") else {
             throw CocoaError(.fileNoSuchFile)
         }
         let data = try Data(contentsOf: url)
         let table = try JSONDecoder().decode(AtlasLookupTable.self, from: data)
-        return ChartSelector(table: table)
+        return ChartSelector(volume: spec.id, table: table)
     }
 }
