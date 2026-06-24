@@ -21,8 +21,8 @@ import argparse
 import os
 import sys
 
-ATLAS_DIR = "/Users/bryan/salish-tides/ios-production-handoff/atlas-source"
-DEFAULT_OUTPUT = "/Users/bryan/salish-tides/ios-production-handoff/data/maps"
+ATLAS_DIR = "/Users/bryan/salish-tides/dev/pdfs"
+DEFAULT_OUTPUT = "/Users/bryan/salish-tides/data/maps"
 CALIBRATION_PATH = os.path.join(os.path.dirname(__file__), "vol1_pts_per_ms.json")
 
 VOLUMES = {
@@ -101,7 +101,7 @@ def page_index(vol, chart, region):
     return 18 + r_offset * cfg['n_charts'] + chart
 
 
-def extract_geo_transform(words):
+def extract_geo_transform(words, page_width=612, page_height=792):
     """
     Build lat/lon ↔ PDF-top-coordinate linear transforms from degree/minute labels.
 
@@ -109,42 +109,87 @@ def extract_geo_transform(words):
     Bottom-edge minute labels → longitude fixes.
     Degree labels ("48°N", "122°W") tell us which degree the minutes belong to.
 
+    Thresholds are relative to the page size so both portrait (612×792) and
+    landscape (792×612, e.g. Vol 4 Region F) pages work.
+
     Returns (y_to_lat, x_to_lon) or None on failure.
     """
-    lat_deg = None
-    lon_deg = None
+    # Degree labels carry both a value AND a position. The position marks the
+    # whole-degree gridline; minute ticks on either side belong to different
+    # degrees. Using a single degree for every tick mis-scales/flips any chart
+    # whose gridlines cross a degree line (e.g. Puget Sound straddling 122/123°W).
+    lat_deg = None          # value of the °N label
+    lat_deg_y = None        # its vertical (top) position — the parallel line
+    lon_deg = None          # value of the °W label
+    lon_deg_x = None        # its horizontal (center) position — the meridian line
 
     for w in words:
         t = w['text']
         m = re.match(r'^(\d+)°N$', t)
         if m:
             lat_deg = int(m.group(1))
+            lat_deg_y = (w['top'] + w['bottom']) / 2
         m = re.match(r'^(\d+)°W$', t)
         if m:
             lon_deg = int(m.group(1))
+            lon_deg_x = (w['x0'] + w['x1']) / 2
 
     if lat_deg is None or lon_deg is None:
         return None
 
-    lat_points = []  # (top_y, lat_decimal)
-    lon_points = []  # (x, lon_decimal)
-
+    # Collect raw minute ticks with positions first, so we can use the "0'" tick
+    # (the exact gridline) as the pivot when present, falling back to the degree
+    # label's position.
+    lat_ticks = []  # (top_y, minutes)
+    lon_ticks = []  # (x, minutes)
     for w in words:
-        t = w['text']
-        m = re.match(r"^(\d+(?:\.\d+)?)'$", t)
+        m = re.match(r"^(\d+(?:\.\d+)?)'$", w['text'])
         if not m:
             continue
         mins = float(m.group(1))
         if mins > 59.9:
             continue
+        if w['x0'] < page_width * 0.147 and w['top'] < page_height * 0.883:
+            lat_ticks.append(((w['top'] + w['bottom']) / 2, mins))
+        elif (page_height * 0.84 < w['top'] < page_height * 0.95
+              and page_width * 0.147 < w['x0'] < page_width * 0.964):
+            lon_ticks.append(((w['x0'] + w['x1']) / 2, mins))
 
-        # Left-edge label (x < 90, not at very bottom) → latitude
-        if w['x0'] < 90 and w['top'] < 700:
-            lat_points.append((w['top'], lat_deg + mins / 60.0))
+    if len(lat_ticks) < 2 or len(lon_ticks) < 2:
+        return None
 
-        # Bottom-edge label (near bottom, x inside map area) → longitude
-        elif w['top'] > 695 and w['top'] < 740 and 90 < w['x0'] < 590:
-            lon_points.append((w['x0'], -(lon_deg + mins / 60.0)))
+    # Assign each tick its whole degree by detecting degree-line crossings from
+    # the minute sequence itself (robust to where the degree *label* is drawn).
+    # Scanning from the high-coordinate end toward the low end, minutes within a
+    # degree decrease in fixed steps; at a degree boundary they jump UP by ~60.
+    # Each jump means the degree steps down by one.
+    def assign_degrees(ticks, deg_label, deg_pos):
+        # ticks: list of (pos, minutes). Order by pos so coordinate decreases
+        # along the scan: latitude decreases with top (north→south), longitude
+        # (negative, west→east) — both scan from smaller pos to larger pos with
+        # decreasing minutes within a degree.
+        order = sorted(range(len(ticks)), key=lambda i: ticks[i][0])
+        seg = 0
+        seg_of = {}
+        prev_m = None
+        for i in order:
+            mm = ticks[i][1]
+            if prev_m is not None and mm > prev_m + 30:  # jumped up → crossed a degree line
+                seg += 1
+            seg_of[i] = seg
+            prev_m = mm
+        # Anchor: the tick nearest the degree label sits in the labelled degree.
+        if deg_pos is not None:
+            anchor = min(range(len(ticks)), key=lambda i: abs(ticks[i][0] - deg_pos))
+        else:
+            anchor = order[0]
+        base = deg_label + seg_of[anchor]  # degree = base - seg
+        return [(ticks[i][0], base - seg_of[i], ticks[i][1]) for i in range(len(ticks))]
+
+    lat_points = [(y, deg + mm / 60.0)
+                  for (y, deg, mm) in assign_degrees(lat_ticks, lat_deg, lat_deg_y)]
+    lon_points = [(x, -(deg + mm / 60.0))
+                  for (x, deg, mm) in assign_degrees(lon_ticks, lon_deg, lon_deg_x)]
 
     if len(lat_points) < 2 or len(lon_points) < 2:
         return None
@@ -298,6 +343,10 @@ def extract_vectors_from_page(page, y_to_lat, x_to_lon, map_start_top,
     4. Convert shaft geometry to lat/lon/speed/direction
     """
     page_h = page.height
+    page_w = page.width
+    # Border columns relative to page width (portrait 612 → [90, 590]).
+    x_min = page_w * 0.147
+    x_max = page_w * 0.964
     seen = set()
     vectors = []
 
@@ -314,7 +363,7 @@ def extract_vectors_from_page(page, y_to_lat, x_to_lon, map_start_top,
         ys_top = [page_h - p[1] for p in pts]
 
         # Skip border columns
-        if max(xs) > 590 or min(xs) < 90:
+        if max(xs) > x_max or min(xs) < x_min:
             continue
 
         # Must be in map area
@@ -391,7 +440,7 @@ def extract_chart_vectors(pdf, vol, chart, region, pts_per_ms=None):
        f"Map {chart}{region}" not in all_words_text:
         return None, f"Header mismatch for Vol{vol} chart {chart}{region}"
 
-    transform = extract_geo_transform(words)
+    transform = extract_geo_transform(words, page_width=page.width, page_height=page.height)
     if transform is None:
         return None, "Could not extract geographic transform"
     y_to_lat, x_to_lon = transform

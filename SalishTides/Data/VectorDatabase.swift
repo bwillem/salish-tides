@@ -20,12 +20,24 @@ actor VectorDatabase {
     static let shared = VectorDatabase()
     private var pool: DatabasePool?
 
+    // Bump whenever the `vectors` table layout OR the bundled JSON changes.
+    // setup() drops and recreates the table when the on-disk version is older,
+    // so existing installs can't be left with a stale layout or stale data.
+    // The DB is a pure derived cache rebuilt from bundled JSON, so dropping
+    // is always safe — DatabaseMigrator repopulates it.
+    // v4: corrected Vol 2-4 georeferencing (degree-crossing/landscape fix).
+    private static let schemaVersion = 4
+
     private init() {}
 
     func setup() throws {
         let dbURL = try Self.dbURL()
         let p = try DatabasePool(path: dbURL.path)
         try p.write { db in
+            let onDisk = try Int.fetchOne(db, sql: "PRAGMA user_version") ?? 0
+            if onDisk < Self.schemaVersion {
+                try db.execute(sql: "DROP TABLE IF EXISTS \(VectorRecord.databaseTableName)")
+            }
             try db.create(table: VectorRecord.databaseTableName, ifNotExists: true) { t in
                 t.column("volume", .integer).notNull()
                 t.column("chart", .integer).notNull()
@@ -42,6 +54,9 @@ actor VectorDatabase {
                 columns: ["volume", "chart", "region"],
                 ifNotExists: true
             )
+            if onDisk < Self.schemaVersion {
+                try db.execute(sql: "PRAGMA user_version = \(Self.schemaVersion)")
+            }
         }
         self.pool = p
     }

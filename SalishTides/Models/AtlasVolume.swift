@@ -29,7 +29,7 @@ let atlasVolumes: [VolumeSpec] = [
         maxChart: 64,
         regions: ["A", "B", "C", "D", "E", "F"],
         bounds: ChartBounds(lat_min: 46.9, lat_max: 48.5, lon_min: -123.9, lon_max: -122.1),
-        atlasIndexResource: nil
+        atlasIndexResource: "atlas_index_vol2"
     ),
     VolumeSpec(
         // Vol 3 uses the same tidal lookup as Vol 1 (Point Atkinson reference, 43 charts)
@@ -39,8 +39,8 @@ let atlasVolumes: [VolumeSpec] = [
         mapSubdirectory: "maps_vol3",
         maxChart: 43,
         regions: ["A", "B", "C", "D", "E", "F", "G", "H"],
-        bounds: ChartBounds(lat_min: 49.0, lat_max: 51.0, lon_min: -126.1, lon_max: -124.0),
-        atlasIndexResource: nil
+        bounds: ChartBounds(lat_min: 49.0, lat_max: 51.2, lon_min: -125.5, lon_max: -123.5),
+        atlasIndexResource: "atlas_index_vol3"
     ),
     VolumeSpec(
         id: 4,
@@ -49,6 +49,6 @@ let atlasVolumes: [VolumeSpec] = [
         maxChart: 69,
         regions: ["A", "B", "C", "D", "E", "F", "G", "H"],
         bounds: ChartBounds(lat_min: 49.8, lat_max: 52.2, lon_min: -129.1, lon_max: -125.0),
-        atlasIndexResource: nil
+        atlasIndexResource: "atlas_index_vol4"
     ),
 ]

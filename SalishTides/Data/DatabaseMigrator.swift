@@ -4,9 +4,13 @@ actor DatabaseMigrator {
     static let shared = DatabaseMigrator()
     private init() {}
 
-    // v3: added volume column to vectors table
-    private static let vectorKey = "vectorDBMigrated_v3"
-    // v1: tide hi/lo predictions
+    // Gates the expensive one-time population — set only after every record is
+    // inserted, so an interrupted first launch can't leave a partial table.
+    // Keep vectorKey's version in lockstep with VectorDatabase.schemaVersion: a
+    // schema bump drops the table, so the population key must change too or the
+    // fresh table is left empty. v4 = corrected Vol 2-4 georeferencing.
+    private static let vectorKey = "vectorDBMigrated_v4"
+    // Tide hi/lo predictions (independent of the vector schema).
     private static let tideKey = "tideDBMigrated_v1"
     private var isRunning = false
 

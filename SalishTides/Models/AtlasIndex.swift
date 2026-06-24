@@ -33,18 +33,16 @@ struct ChartEntry: Decodable, Sendable {
 }
 
 struct AtlasIndex: Decodable, Sendable {
-    let metadata: AtlasMetadata
-    let regions: [String: RegionInfo]
     let index: [ChartEntry]
+    // Cosmetic provenance — present in Vol 1's index, omitted from the lean
+    // Vol 2-4 index files. Only `index` drives viewport region culling.
+    let metadata: AtlasMetadata?
+    let regions: [String: RegionInfo]?
 
-    static let empty = AtlasIndex(
-        metadata: AtlasMetadata(source: "", author: "", model: "", constituents: [], reference_station: ""),
-        regions: [:],
-        index: []
-    )
+    static let empty = AtlasIndex(index: [], metadata: nil, regions: nil)
 
-    static func load() throws -> AtlasIndex {
-        guard let url = Bundle.main.url(forResource: "atlas_index", withExtension: "json") else {
+    static func load(resource: String) throws -> AtlasIndex {
+        guard let url = Bundle.main.url(forResource: resource, withExtension: "json") else {
             throw CocoaError(.fileNoSuchFile)
         }
         let data = try Data(contentsOf: url)
