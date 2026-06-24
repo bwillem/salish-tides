@@ -17,7 +17,8 @@ final class MapViewModel {
     var currentSelection: ChartSelection? { currentSelections.first }
 
     private let selectors: [(VolumeSpec, ChartSelector)]
-    private let atlasIndex: AtlasIndex
+    // Per-volume region index for viewport culling, keyed by volume id.
+    private let atlasIndexes: [Int: AtlasIndex]
 
     // Monotonic token so a slow multi-volume load can't overwrite the results
     // of a newer request (rapid time-scrub / pan). Incremented on the main
@@ -44,7 +45,15 @@ final class MapViewModel {
             built.append((spec, ChartSelector(volume: spec.id, table: table)))
         }
         self.selectors = built
-        self.atlasIndex = (try? AtlasIndex.load()) ?? AtlasIndex.empty
+
+        var indexes: [Int: AtlasIndex] = [:]
+        for spec in atlasVolumes {
+            guard let resource = spec.atlasIndexResource else { continue }
+            if let index = try? AtlasIndex.load(resource: resource) {
+                indexes[spec.id] = index
+            }
+        }
+        self.atlasIndexes = indexes
     }
 
     func initialize() async {
@@ -108,11 +117,11 @@ final class MapViewModel {
             guard let sel = selector.selection(for: date) else { continue }
             selections.append(sel)
 
-            // Use atlas index for viewport-based region culling when available (Vol 1);
-            // fall back to all regions for volumes without an index.
+            // Use the volume's index for viewport-based region culling when
+            // available; fall back to all regions if the index failed to load.
             let regions: [String]
-            if spec.atlasIndexResource != nil {
-                regions = atlasIndex.regions(forChart: sel.chart, intersecting: visibleViewport)
+            if let index = atlasIndexes[spec.id] {
+                regions = index.regions(forChart: sel.chart, intersecting: visibleViewport)
             } else {
                 regions = spec.regions
             }

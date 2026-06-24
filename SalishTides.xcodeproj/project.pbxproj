@@ -10,14 +10,17 @@
 		063221F80851C1FDC5A9257C /* atlas_lookup_vol2_2026.json in Resources */ = {isa = PBXBuildFile; fileRef = FD04BD2129588FF977B70226 /* atlas_lookup_vol2_2026.json */; };
 		1D5038B1FFB6DE1A54FE8E25 /* MapViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F6AC464A41AEC5AA01D5BB8 /* MapViewModel.swift */; };
 		1F1918795868670251164A0C /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC4BE54595E9CB5FA8F715B3 /* ContentView.swift */; };
+		23763E8BE56345AE4D3C891E /* atlas_index_vol4.json in Resources */ = {isa = PBXBuildFile; fileRef = 83BD3EE7B3E3404AA899666B /* atlas_index_vol4.json */; };
 		2872EC1D5D05AB899A667652 /* AtlasVolume.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34E23098B238D68AE7C4E0CA /* AtlasVolume.swift */; };
 		28CEED760DB3C36FC29C60ED /* PhaseIndicatorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF78D89E101E6B88EB6D487E /* PhaseIndicatorView.swift */; };
 		2C6DCF8F97E181783A106DBC /* VectorDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = A89FE39742D2A11DF361182D /* VectorDatabase.swift */; };
 		3002DAB5B09EDAE4506050FB /* atlas_lookup_2026.json in Resources */ = {isa = PBXBuildFile; fileRef = 1E2E5511446438A2D163BF38 /* atlas_lookup_2026.json */; };
+		41162347ABE1FEA0F4DD421B /* atlas_index_vol2.json in Resources */ = {isa = PBXBuildFile; fileRef = EA075EE14D6DD086954E95E5 /* atlas_index_vol2.json */; };
 		5447EAD323169BC3E88B2FF6 /* DatabaseMigrator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F7E80F4511F77B96813E4D3 /* DatabaseMigrator.swift */; };
 		5634D37C27B06326BEB8F192 /* AtlasIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89B5A3FF117EF3148984AFA7 /* AtlasIndex.swift */; };
 		570A422AFA165A8582E8CC3E /* CurrentVector.swift in Sources */ = {isa = PBXBuildFile; fileRef = B534466B629735C3AFD88226 /* CurrentVector.swift */; };
 		674193FB48B28EB47DDE9EF9 /* MapLibreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 705E9152F8BEA1FA75608D3F /* MapLibreView.swift */; };
+		8892B94C18ABFFDE44949FD5 /* atlas_index_vol3.json in Resources */ = {isa = PBXBuildFile; fileRef = 1F71279AD0BA5885E48ABD65 /* atlas_index_vol3.json */; };
 		A14E261EEF019763C5C3ED1C /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 4C2D431933E482A18FCC18F9 /* GRDB */; };
 		BC9A62D51F3C27B4EB0BD09C /* stub-style.json in Resources */ = {isa = PBXBuildFile; fileRef = D8D047884F1E73D88E45BDA6 /* stub-style.json */; };
 		D02F6CEBAD38ED7BCD07D911 /* MapLibre in Frameworks */ = {isa = PBXBuildFile; productRef = 42B0127065AEDC608BD0C4A4 /* MapLibre */; };
@@ -30,6 +33,7 @@
 
 /* Begin PBXFileReference section */
 		1E2E5511446438A2D163BF38 /* atlas_lookup_2026.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = atlas_lookup_2026.json; sourceTree = "<group>"; };
+		1F71279AD0BA5885E48ABD65 /* atlas_index_vol3.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = atlas_index_vol3.json; sourceTree = "<group>"; };
 		2DB51EF67918D47D54D0733D /* atlas_lookup_vol4_2026.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = atlas_lookup_vol4_2026.json; sourceTree = "<group>"; };
 		33F90FC333D8D0174AF1A089 /* AtlasLookupTable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtlasLookupTable.swift; sourceTree = "<group>"; };
 		34E23098B238D68AE7C4E0CA /* AtlasVolume.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtlasVolume.swift; sourceTree = "<group>"; };
@@ -37,6 +41,7 @@
 		6F8AC975A9DE6B660C38E780 /* SalishTidesApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SalishTidesApp.swift; sourceTree = "<group>"; };
 		705E9152F8BEA1FA75608D3F /* MapLibreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapLibreView.swift; sourceTree = "<group>"; };
 		7DFE8DC52452666E434AA9D7 /* SalishTides.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = SalishTides.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		83BD3EE7B3E3404AA899666B /* atlas_index_vol4.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = atlas_index_vol4.json; sourceTree = "<group>"; };
 		89B5A3FF117EF3148984AFA7 /* AtlasIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtlasIndex.swift; sourceTree = "<group>"; };
 		9F6AC464A41AEC5AA01D5BB8 /* MapViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapViewModel.swift; sourceTree = "<group>"; };
 		9F7E80F4511F77B96813E4D3 /* DatabaseMigrator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseMigrator.swift; sourceTree = "<group>"; };
@@ -45,6 +50,7 @@
 		B534466B629735C3AFD88226 /* CurrentVector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrentVector.swift; sourceTree = "<group>"; };
 		BF78D89E101E6B88EB6D487E /* PhaseIndicatorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhaseIndicatorView.swift; sourceTree = "<group>"; };
 		D8D047884F1E73D88E45BDA6 /* stub-style.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "stub-style.json"; sourceTree = "<group>"; };
+		EA075EE14D6DD086954E95E5 /* atlas_index_vol2.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = atlas_index_vol2.json; sourceTree = "<group>"; };
 		F4B415D45980FEC40DFF87CB /* atlas_index.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = atlas_index.json; sourceTree = "<group>"; };
 		FC4BE54595E9CB5FA8F715B3 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		FD04BD2129588FF977B70226 /* atlas_lookup_vol2_2026.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = atlas_lookup_vol2_2026.json; sourceTree = "<group>"; };
@@ -126,6 +132,9 @@
 		6E171FC31CA52259AEEECA2B /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				EA075EE14D6DD086954E95E5 /* atlas_index_vol2.json */,
+				1F71279AD0BA5885E48ABD65 /* atlas_index_vol3.json */,
+				83BD3EE7B3E3404AA899666B /* atlas_index_vol4.json */,
 				F4B415D45980FEC40DFF87CB /* atlas_index.json */,
 				1E2E5511446438A2D163BF38 /* atlas_lookup_2026.json */,
 				FD04BD2129588FF977B70226 /* atlas_lookup_vol2_2026.json */,
@@ -225,6 +234,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				F743BEB1EA6645CE4C8D41E9 /* atlas_index.json in Resources */,
+				41162347ABE1FEA0F4DD421B /* atlas_index_vol2.json in Resources */,
+				8892B94C18ABFFDE44949FD5 /* atlas_index_vol3.json in Resources */,
+				23763E8BE56345AE4D3C891E /* atlas_index_vol4.json in Resources */,
 				3002DAB5B09EDAE4506050FB /* atlas_lookup_2026.json in Resources */,
 				063221F80851C1FDC5A9257C /* atlas_lookup_vol2_2026.json in Resources */,
 				D14AD78CBA4B0066C42F056B /* atlas_lookup_vol4_2026.json in Resources */,
