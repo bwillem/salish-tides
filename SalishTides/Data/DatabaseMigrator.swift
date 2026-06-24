@@ -4,7 +4,12 @@ actor DatabaseMigrator {
     static let shared = DatabaseMigrator()
     private init() {}
 
-    // v3: added volume column to vectors table
+    // Gates the expensive one-time population. This guarantees *completeness*
+    // (set only after every record is inserted), which a row-count check
+    // couldn't — an interrupted first launch would leave a partial table.
+    // Keep the version suffix in lockstep with VectorDatabase.schemaVersion:
+    // a schema bump drops the table, so the population key must change too,
+    // otherwise needsMigration stays false and the fresh table is left empty.
     private static let migratedKey = "vectorDBMigrated_v3"
     private var isRunning = false
 

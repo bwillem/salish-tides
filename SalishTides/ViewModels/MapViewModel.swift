@@ -19,6 +19,11 @@ final class MapViewModel {
     private let selectors: [(VolumeSpec, ChartSelector)]
     private let atlasIndex: AtlasIndex
 
+    // Monotonic token so a slow multi-volume load can't overwrite the results
+    // of a newer request (rapid time-scrub / pan). Incremented on the main
+    // actor, captured per call, re-checked after every await.
+    private var loadGeneration = 0
+
     init() {
         // Build one selector per unique lookup resource — Vol 1 and Vol 3 share a file,
         // so we load it once and reuse it for both volume IDs.
@@ -77,12 +82,24 @@ final class MapViewModel {
     }
 
     private func loadVectors(for date: Date) async {
+        loadGeneration &+= 1
+        let generation = loadGeneration
+
         // Find all volumes whose geographic bounds intersect the current viewport.
         // If no viewport yet, include all volumes so any initial chart load works.
-        let activeSelectors = selectors.filter { spec, _ in
-            guard let vp = visibleViewport else { return true }
-            return spec.bounds.intersects(vp)
+        // Rank volumes containing the viewport center first, so currentSelection
+        // (.first) reflects the water the user is actually looking at.
+        let center = visibleViewport.map {
+            (lat: ($0.lat_min + $0.lat_max) / 2, lon: ($0.lon_min + $0.lon_max) / 2)
         }
+        let activeSelectors = selectors
+            .filter { spec, _ in
+                guard let vp = visibleViewport else { return true }
+                return spec.bounds.intersects(vp)
+            }
+            .sorted { lhs, rhs in
+                rank(lhs.0, center: center) < rank(rhs.0, center: center)
+            }
 
         var selections: [ChartSelection] = []
         var vectors: [CurrentVector] = []
@@ -103,15 +120,28 @@ final class MapViewModel {
 
             do {
                 let vecs = try await VectorDatabase.shared.vectors(volume: spec.id, chart: sel.chart, regions: regions)
+                // A newer load started while we were awaiting — drop these stale results.
+                guard generation == loadGeneration else { return }
                 vectors.append(contentsOf: vecs)
             } catch {
                 // Non-fatal: one volume failing doesn't hide the others
             }
         }
 
+        guard generation == loadGeneration else { return }
         currentSelections = selections
         currentVectors = vectors
         crosshairSpeed = nearestSpeed(in: vectors, viewport: visibleViewport)
+    }
+
+    // 0 if the volume's bounds contain the viewport center, else 1 — used only
+    // to order active volumes; ties keep their original (volume-id) order.
+    private func rank(_ spec: VolumeSpec, center: (lat: Double, lon: Double)?) -> Int {
+        guard let c = center else { return 0 }
+        let b = spec.bounds
+        let contains = c.lat >= b.lat_min && c.lat <= b.lat_max &&
+                       c.lon >= b.lon_min && c.lon <= b.lon_max
+        return contains ? 0 : 1
     }
 
     private func nearestSpeed(in vectors: [CurrentVector], viewport: ChartBounds?) -> Double? {
