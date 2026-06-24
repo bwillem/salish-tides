@@ -16,6 +16,11 @@ DerivedData/
 **/.DS_Store
 
 # Data and local dev artifacts
-data/
+# NOTE: leading slash anchors to repo root so this does NOT also match the
+# case-insensitive SalishTides/Data/ source dir (core.ignorecase=true on macOS).
+/data/
+ios-production-handoff/
 dev/pdfs/
+**/__pycache__/
+*.pyc
 .claude/

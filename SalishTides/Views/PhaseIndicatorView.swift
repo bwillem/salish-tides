@@ -8,7 +8,9 @@ struct PhaseIndicatorView: View {
             VStack(spacing: 0) {
 
                 // ── Tide height chart ────────────────────────────────────────
-                TideChartView(currentDate: vm.currentDate)
+                TideChartView(currentDate: vm.currentDate,
+                              station: vm.tideStation,
+                              events: vm.tideEvents)
                     .frame(height: 108)
                     .padding(.horizontal, Spacing.sm)
                     .padding(.top, Spacing.sm)

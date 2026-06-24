@@ -13,6 +13,11 @@ final class MapViewModel {
     var visibleViewport: ChartBounds?
     var crosshairSpeed: Double?
 
+    // Nearest tide station to the crosshair + its hi/lo events spanning the
+    // visible time window (drives TideChartView).
+    var tideStation: TideStation?
+    var tideEvents: [TideEvent] = []
+
     // Convenience for views that only need one selection (e.g. phase indicator)
     var currentSelection: ChartSelection? { currentSelections.first }
 
@@ -45,6 +50,7 @@ final class MapViewModel {
     func initialize() async {
         do {
             try await VectorDatabase.shared.setup()
+            try await TideDatabase.shared.setup()
 
             if await DatabaseMigrator.shared.needsMigration {
                 isMigrating = true
@@ -58,6 +64,8 @@ final class MapViewModel {
 
             migrationProgress = 1.0
             isMigrating = false
+
+            try await TideDatabase.shared.loadStations()
 
             await loadVectors(for: currentDate)
         } catch {
@@ -112,6 +120,29 @@ final class MapViewModel {
         currentSelections = selections
         currentVectors = vectors
         crosshairSpeed = nearestSpeed(in: vectors, viewport: visibleViewport)
+
+        await updateTides(for: date)
+    }
+
+    // Pick the nearest station to the crosshair and fetch a ±18 h window of
+    // hi/lo events (wide enough that the ±6 h chart always has bracketing
+    // extrema for interpolation).
+    private func updateTides(for date: Date) async {
+        guard let vp = visibleViewport else {
+            tideStation = nil; tideEvents = []
+            return
+        }
+        let cLat = (vp.lat_min + vp.lat_max) / 2
+        let cLon = (vp.lon_min + vp.lon_max) / 2
+        guard let station = await TideDatabase.shared.nearestStation(lat: cLat, lon: cLon) else {
+            tideStation = nil; tideEvents = []
+            return
+        }
+        let from = date.addingTimeInterval(-18 * 3600)
+        let to = date.addingTimeInterval(18 * 3600)
+        let events = (try? await TideDatabase.shared.events(stationID: station.id, from: from, to: to)) ?? []
+        tideStation = station
+        tideEvents = events
     }
 
     private func nearestSpeed(in vectors: [CurrentVector], viewport: ChartBounds?) -> Double? {
