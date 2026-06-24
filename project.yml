@@ -25,6 +25,9 @@ targets:
           - "Resources/maps_vol3"
           - "Resources/maps_vol4"
     postBuildScripts:
+      # Requires a populated data/ directory (see DESIGN.md "Data bootstrap").
+      # data/ is gitignored, so a fresh clone must generate it first — these
+      # rsyncs fail the build if the source dirs are missing.
       - name: Copy Atlas & Tide Data
         script: |
           for VOL in maps maps_vol2 maps_vol3 maps_vol4; do

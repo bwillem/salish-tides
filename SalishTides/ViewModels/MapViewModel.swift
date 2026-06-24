@@ -170,13 +170,14 @@ final class MapViewModel {
         crosshairSpeed = nearestSpeed(in: vectors, viewport: visibleViewport)
         currentVectors = thinned(vectors, for: visibleViewport)
 
-        await updateTides(for: date)
+        await updateTides(for: date, generation: generation)
     }
 
     // Pick the nearest station to the crosshair and fetch a ±18 h window of
     // hi/lo events (wide enough that the ±6 h chart always has bracketing
-    // extrema for interpolation).
-    private func updateTides(for date: Date) async {
+    // extrema for interpolation). Honors the same load-generation guard as the
+    // vector path so a slow fetch can't overwrite a newer scrub/pan's result.
+    private func updateTides(for date: Date, generation: Int) async {
         guard let vp = visibleViewport else {
             tideStation = nil; tideEvents = []
             return
@@ -184,12 +185,15 @@ final class MapViewModel {
         let cLat = (vp.lat_min + vp.lat_max) / 2
         let cLon = (vp.lon_min + vp.lon_max) / 2
         guard let station = await TideDatabase.shared.nearestStation(lat: cLat, lon: cLon) else {
+            guard generation == loadGeneration else { return }
             tideStation = nil; tideEvents = []
             return
         }
         let from = date.addingTimeInterval(-18 * 3600)
         let to = date.addingTimeInterval(18 * 3600)
         let events = (try? await TideDatabase.shared.events(stationID: station.id, from: from, to: to)) ?? []
+        // A newer load started while we were awaiting — drop these stale results.
+        guard generation == loadGeneration else { return }
         tideStation = station
         tideEvents = events
     }

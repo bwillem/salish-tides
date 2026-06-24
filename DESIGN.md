@@ -332,6 +332,20 @@ The app has no animations currently. When animations are added (e.g., arrow fade
 - `@Observable` (used via `MapViewModel`); GRDB over SwiftData for migration performance.
 - `.ultraThinMaterial` auto-gains the Liquid Glass appearance on iOS 26 — no code change needed; watch for visual regressions there.
 
+### Data bootstrap (before first build)
+
+`data/` is gitignored and **not** in a fresh clone, but the post-build script
+(`project.yml`) rsyncs it into the app bundle — a missing dir fails the build.
+Generate it first:
+
+- **Atlas currents** (`data/maps*`): produced by the extraction tooling in `dev/extraction/`.
+- **Tide predictions** (`data/tides/tides_2026.json`): run `python3 dev/tides/fetch_tides.py`
+  (needs network — pulls NOAA + CHS). Re-curate the station set first with
+  `dev/tides/curate_stations.py` only if changing coverage/year.
+
+If `data/tides/` is absent the app builds with no tide data and the chart shows
+its "Tide data unavailable" placeholder.
+
 ---
 
 ## 8. Open Design Backlog
