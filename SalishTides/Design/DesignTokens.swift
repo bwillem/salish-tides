@@ -68,7 +68,36 @@ enum Radius {
     static let sm:   CGFloat =  8
     static let md:   CGFloat = 12
     static let lg:   CGFloat = 16
+    static let xl:   CGFloat = 28  // floating glass cards (phase panel, timeline bar)
     static let pill: CGFloat = 999  // for Capsule()-equivalent rounded rects
+}
+
+// MARK: - Floating Card
+//
+// The single "glass card" surface used for every floating overlay (phase
+// panel, timeline bar). Ultra-thin material, continuous-rounded corners, a
+// hairline edge, and a soft drop shadow to lift it off the map. Use this
+// modifier rather than re-deriving the treatment so the surfaces stay in sync.
+
+enum Elevation {
+    static let cardShadowColor   = Color.black.opacity(0.25)
+    static let cardShadowRadius: CGFloat = 12
+    static let cardShadowYOffset: CGFloat = 4
+    static let cardBorderColor   = Color.white.opacity(0.12)
+    static let cardBorderWidth: CGFloat = 0.5
+}
+
+extension View {
+    func floatingCard(cornerRadius: CGFloat = Radius.xl) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        return self
+            .background(.ultraThinMaterial, in: shape)
+            .overlay(shape.strokeBorder(Elevation.cardBorderColor, lineWidth: Elevation.cardBorderWidth))
+            .clipShape(shape)
+            .shadow(color: Elevation.cardShadowColor,
+                    radius: Elevation.cardShadowRadius,
+                    y: Elevation.cardShadowYOffset)
+    }
 }
 
 // MARK: - UIColor Helpers (for MapLibre NSExpression)

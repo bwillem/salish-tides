@@ -64,19 +64,13 @@ Used exclusively for MapLibre arrow rendering. Matches scientific convention (co
 
 ### 2.2 System Colors & Materials
 
-- **Overlay backgrounds:** `.ultraThinMaterial` (current, good — adapts to dark mode and blurs the map behind)
+- **Overlay backgrounds:** `.ultraThinMaterial` (adapts to dark mode and blurs the map behind). Applied via the **Floating Card** surface — see §4.1b.
 - **Text over map:** `.primary` / `.secondary` work in both light and dark because they adapt. Prefer these over hardcoded white.
 - **Text on `oceanDeep`:** Hardcode `.white` — the background is fixed dark.
 
 ### 2.3 Dark Mode
 
-The app currently has no explicit dark mode treatment beyond system materials.
-
-**Recommended approach (next iteration):**
-- Migration screen: `oceanDeep` already looks correct in dark mode (dark background is appropriate)
-- PhaseIndicator capsule: `.ultraThinMaterial` auto-adapts ✓
-- Timeline bar: `.ultraThinMaterial` auto-adapts ✓
-- Current vector arrows: the color scale should remain constant regardless of map light/dark, since the basemap is the context
+No explicit dark-mode treatment — system materials auto-adapt, `oceanDeep` is already dark, and the current color scale is held constant (the basemap, not the system appearance, is its context). Revisit if a light basemap ships.
 
 ---
 
@@ -87,9 +81,9 @@ Named styles live in `DesignTokens.swift` as `Font` extensions.
 | Token | Base style | Weight | Role |
 |-------|-----------|--------|------|
 | `.stDisplay` | `.largeTitle` | Bold | Splash screen headline |
-| `.stHeadline` | `.subheadline` | Bold | Phase name in capsule badge |
+| `.stHeadline` | `.subheadline` | Bold | Phase name in panel |
 | `.stClock` | `.headline` | Regular + monospacedDigit | Date/time in timeline |
-| `.stCaption` | `.caption` | Regular | Chart number, secondary labels |
+| `.stCaption` | `.caption` | Regular | Secondary labels |
 | `.stMono` | `.caption2` | Mono + monospacedDigit | Speed readout, offset label |
 
 **Design rationale:**
@@ -112,39 +106,81 @@ From `Spacing` enum in `DesignTokens.swift`:
 | `Spacing.xxs` | 2 pt | Icon/text tight spacing |
 | `Spacing.xs` | 4 pt | Internal component padding |
 | `Spacing.sm` | 8 pt | Between related elements |
-| `Spacing.md` | 14 pt | Horizontal padding in capsule/bar |
+| `Spacing.md` | 14 pt | Card inner padding |
 | `Spacing.lg` | 16 pt | Screen edge margin |
 | `Spacing.xl` | 24 pt | Between sections |
 | `Spacing.xxl` | 32 pt | Large vertical gaps |
+
+### 4.1a Corner Radius
+
+From the `Radius` enum in `DesignTokens.swift`. All card-level surfaces use the
+**continuous** (squircle) corner curve, not the default circular one.
+
+| Token | Value | Common use |
+|-------|-------|-----------|
+| `Radius.sm` | 8 pt | Small controls, inner chips |
+| `Radius.md` | 12 pt | Buttons, secondary surfaces |
+| `Radius.lg` | 16 pt | Mid-size panels |
+| `Radius.xl` | 28 pt | **Floating glass cards** (phase panel, timeline bar) |
+| `Radius.pill` | 999 | Capsule-equivalent rounded rects |
+
+### 4.1b Elevation & The Floating Card
+
+The single surface treatment for every floating overlay. Defined once as the
+`.floatingCard()` view modifier (`DesignTokens.swift`) and the `Elevation`
+tokens — **do not re-derive it per view**, so the phase panel and timeline bar
+stay visually identical.
+
+| Property | Value |
+|----------|-------|
+| Material | `.ultraThinMaterial` |
+| Corner | `Radius.xl` (28 pt), `.continuous` |
+| Border | `Elevation.cardBorderColor` = white @ 12%, 0.5 pt hairline (`strokeBorder`) |
+| Shadow | `Elevation.cardShadowColor` = black @ 25%, radius 12, y-offset 4 |
+| Clip | content clipped to the rounded shape so nothing overflows the corners |
+
+```swift
+SomeContent()
+    .frame(width: 248)   // size first
+    .floatingCard()      // then apply the surface
+```
+
+**Why a shared modifier:** before harmonization the timeline bar was an
+edge-to-edge frameless material slab while the phase panel was a 16 pt capsule —
+they read as two different systems. Floating both on the same card makes them a
+deliberate pair bracketing the map, and the map currents stay visible around and
+beneath each card.
 
 ### 4.2 iPad Layout Grid
 
 - **Safe area:** Respect all four safe areas (status bar, home indicator, multitasking sidebars)
 - **Screen edge margin:** `Spacing.lg` (16 pt) minimum from any safe-area edge
-- **Map chrome budget:** Timeline bar + phase capsule together should not exceed 15% of vertical screen height on the smallest supported iPad (iPad 10th gen, 1180×820 pt landscape)
+- **Map chrome budget:** Timeline bar + phase panel together should not exceed 15% of vertical screen height on the smallest supported iPad (iPad 10th gen, 1180×820 pt landscape)
 
 ### 4.3 Touch Targets
 
 **Minimum:** 44×44 pt (Apple HIG). 
 **Recommended for gloved/outdoor use:** 48×48 pt.
 
-The current `← Hr` / `Hr →` step buttons with `.controlSize(.small)` likely fall below 44 pt. Flag for audit.
+The **Now** button uses `.controlSize(.small)` and may fall below 44 pt — audit. The time tape is 36 pt tall but spans the full card width, so its drag target is large.
 
 ### 4.4 Overlay Placement
 
+Both overlays are **floating cards** (§4.1b) — inset from the screen edges with
+the map visible around and beneath them.
+
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  [status bar]                              [PhaseIndicator]  │  ← top-right, safe area + 8pt
-│                                                              │
-│                        MAP                                   │
-│                       (full bleed)                           │
+│  [status bar]                          ╭────────────────╮    │  ← top-right floating card
+│                                        │  tide chart    │    │     (safe area + 8pt)
+│                        MAP             │  Phase · kn ✛  │    │
+│                       (full bleed)     ╰────────────────╯    │
 │                        [crosshair]                           │
 │                                                              │
-│  ┌────────────────────────────────────────────────────────┐  │
-│  │               TimelineControlView                      │  │  ← ultraThinMaterial bar
-│  │  ← Hr    Jun 24 · 15:00    Hr →                       │  │
-│  │  [Now]  [════════●════════]  +2h                      │  │
-│  └────────────────────────────────────────────────────────┘  │
+│        ╭──────────────────────────────────────────────╮      │  ← floating card, inset 16pt
+│        │            Jun 24 at 15:00                    │      │
+│        │  [Now]   ·····│····· (time tape) ·····        │      │
+│        ╰──────────────────────────────────────────────╯      │
 │  [home indicator]                                            │
 └──────────────────────────────────────────────────────────────┘
 ```
@@ -153,49 +189,52 @@ The current `← Hr` / `Hr →` step buttons with `.controlSize(.small)` likely 
 
 ## 5. Component Anatomy
 
-### 5.1 PhaseIndicator Capsule
+### 5.1 PhaseIndicator Panel
 
 **Location:** Top-right, `.padding(.trailing)` + `.padding(.top, 8)` from safe area  
-**Shape:** `Capsule()` fill with `.ultraThinMaterial`  
-**Padding:** 14 pt horizontal, 8 pt vertical
+**Surface:** Floating card (§4.1b), fixed `width: 248`  
+**Composition:** tide height chart on top, hairline divider, phase row below
 
 **Anatomy:**
 ```
-[icon] [Phase Name (bold subheadline)]
-       [Chart N of 43 · X.X kn ✛ (caption2 mono)]
+╭──────────────────────────────╮
+│  [TideChartView — 108 pt]     │  ← station name · datum, curve, cursor height
+│  ──────────────────────────   │  ← 0.5 pt divider, white @ 12%
+│  [icon] Phase Name            │
+│         X.X kn ✛              │
+╰──────────────────────────────╯
 ```
 
 **States:**
 - **Normal:** flood icon (arrow.up.circle.fill, `.tideFlood`) or ebb icon (arrow.down.circle.fill, `.tideEbb`)
 - **No selection:** hidden (conditional on `vm.currentSelection != nil`)
 - **Speed available:** shows crosshair speed with `✛` suffix
-- **Speed unavailable:** shows only chart/phase
+- **Tide data unavailable:** chart shows a "Tide data unavailable" placeholder
 
 **Open design issues:**
 - The `✛` suffix character is non-standard and may not read naturally on VoiceOver
-- "Chart N of 43" is Vol 1-specific; will need updating when multi-volume support lands
 
 ### 5.2 Timeline Control Bar
 
-**Location:** Bottom, full-width, above home indicator  
-**Background:** `.ultraThinMaterial` (not a Card; intentionally frameless)  
-**Padding:** 10 pt horizontal, 12 pt bottom, 10 pt top
+**Location:** Bottom, floating, inset `Spacing.lg` (16 pt) from the side edges, above the home indicator  
+**Surface:** Floating card (§4.1b)  
+**Inner padding:** `Spacing.lg` horizontal, `Spacing.md` vertical
 
 **Anatomy (top row):**
 ```
-[← Hr]          [Date Mon DD · HH:MM]          [Hr →]
-                [Chart N · Phase Name]
+[Now]            [Date Mon DD at HH:MM]            (balance)
+                 [Phase Name]
 ```
 
 **Anatomy (bottom row):**
 ```
-[Now]  [════════════════●═══════]  [+Nh]
+·····│····· Time Tape (fixed centre cursor, ticks scroll, snaps to hour) ·····
 ```
 
-**Slider:** ±12 hour range, 1-hour steps. The `±12h` range covers one full tidal day in either direction, which is appropriate.
-
-**Open design issues:**
-- "← Hr" and "Hr →" are text labels that don't convey symbol semantics; consider SF Symbols `chevron.left` / `chevron.right` with "1 hr" accessibility label
+**Time tape:** ±12 hour range, snaps to whole hours (data is hourly). The fixed
+centre cursor turns amber (`.tideEbb`) when offset from "now"; the **Now** button
+tints amber when not at the present. The `±12h` range covers one full tidal day
+in either direction. See `TapeSliderView`.
 - The `Now` button uses `.bordered` style — fine for MVP, but could become a secondary-action pill with `.tideFlood` tint
 - No haptic feedback on slider step or button press — add `UIImpactFeedbackGenerator` at step boundaries
 
@@ -259,12 +298,11 @@ Elements that need explicit accessibility labels (not yet implemented):
 Image(systemName: tendencyIcon(sel.tendency))
     .accessibilityLabel(sel.tendency == .flood ? "Flood tide" : "Ebb tide")
 
-// Timeline step buttons
-Button("← Hr") { ... }
-    .accessibilityLabel("Step back one hour")
-
-Button("Hr →") { ... }
-    .accessibilityLabel("Step forward one hour")
+// Time tape (TapeSliderView)
+TapeSliderView(...)
+    .accessibilityLabel("Time")
+    .accessibilityValue("\(offsetHours) hours from now")
+    // expose as an adjustable element (increment/decrement by 1 hour)
 
 // Now button
 Button("Now") { ... }
@@ -298,39 +336,22 @@ The app has no animations currently. When animations are added (e.g., arrow fade
 - Consider `UISplitViewController`-equivalent for future detail panels (current info, legend)
 - Stage Manager / multitasking: the map should remain functional in 2/3 split view
 
-### iOS 17+ Features Available
+### Platform notes
 
-- `@Observable` macro (already used via `MapViewModel`)
-- `SwiftData` (not used — GRDB preferred for performance reasons)
-- `scrollTargetBehavior` for potential future chart picker
-- `backgroundStyle` modifier for cleaner material application
-
-### iOS 26 / Liquid Glass (Future)
-
-Apple introduced Liquid Glass materials in iOS 26. The current `.ultraThinMaterial` will automatically gain the new appearance on iOS 26 devices. This is an advantage — no code changes needed for the new system aesthetic. Monitor for visual regressions after iOS 26 adoption.
+- `@Observable` (used via `MapViewModel`); GRDB over SwiftData for migration performance.
+- `.ultraThinMaterial` auto-gains the Liquid Glass appearance on iOS 26 — no code change needed; watch for visual regressions there.
 
 ---
 
-## 8. Design Iteration Log
-
-| Date | Change | Rationale |
-|------|--------|-----------|
-| 2026-06-24 | Created design system, extracted tokens to `DesignTokens.swift` | Baseline |
-| 2026-06-24 | Changed moderate-current color from `#FFFFBF` to `#FAD95E` | Near-white yellow invisible in sunlight on light basemap |
-| 2026-06-24 | Changed ebb color from system `.orange` to `#DE7314` | More nautical, less generic; differentiates from warning/error orange |
-
----
-
-## 9. Open Design Backlog
+## 8. Open Design Backlog
 
 | Priority | Item | Notes |
 |----------|------|-------|
 | High | Real nautical basemap | Current stub-style.json is solid blue. Need PMTiles + proper chart style. Until this ships, all visual design is provisional. |
 | High | Crosshair contrast on light map | White-on-white will be invisible. Add dark stroke or shadow. |
 | Medium | VoiceOver labels | See §6.2 — none of the overlay controls have explicit labels yet |
-| Medium | Touch target audit | Step buttons likely < 44×44 pt |
 | Medium | Speed legend | Users need a legend to understand the 5-color current scale |
 | Medium | Sunlight contrast validation | Test `.currentModerate` (#FAD95E) on device in daylight |
 | Low | Haptic feedback | Add impact feedback to slider steps and Now button |
 | Low | Dark mode explicit treatment | Materials handle it, but test the full dark-mode flow |
-| Low | Portrait layout | Verify timeline + phase capsule don't overlap in portrait on smaller iPads |
+| Low | Portrait layout | Verify timeline + phase panel don't overlap in portrait on smaller iPads |

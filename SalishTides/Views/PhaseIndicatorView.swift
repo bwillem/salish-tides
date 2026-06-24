@@ -42,8 +42,8 @@ struct PhaseIndicatorView: View {
                 .padding(.horizontal, Spacing.md)
                 .padding(.vertical, Spacing.sm)
             }
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: Radius.lg))
             .frame(width: 248)
+            .floatingCard()
         }
     }
 
