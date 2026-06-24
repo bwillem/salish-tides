@@ -39,7 +39,7 @@ let atlasVolumes: [VolumeSpec] = [
         mapSubdirectory: "maps_vol3",
         maxChart: 43,
         regions: ["A", "B", "C", "D", "E", "F", "G", "H"],
-        bounds: ChartBounds(lat_min: 49.0, lat_max: 51.0, lon_min: -126.1, lon_max: -124.0),
+        bounds: ChartBounds(lat_min: 49.0, lat_max: 51.2, lon_min: -125.5, lon_max: -123.5),
         atlasIndexResource: "atlas_index_vol3"
     ),
     VolumeSpec(

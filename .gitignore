@@ -19,3 +19,5 @@ DerivedData/
 data/
 dev/pdfs/
 .claude/
+__pycache__/
+*.pyc
