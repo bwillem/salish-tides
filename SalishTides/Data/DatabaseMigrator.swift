@@ -10,7 +10,7 @@ actor DatabaseMigrator {
     // Keep the version suffix in lockstep with VectorDatabase.schemaVersion:
     // a schema bump drops the table, so the population key must change too,
     // otherwise needsMigration stays false and the fresh table is left empty.
-    private static let migratedKey = "vectorDBMigrated_v3"
+    private static let migratedKey = "vectorDBMigrated_v4"
     private var isRunning = false
 
     var needsMigration: Bool {

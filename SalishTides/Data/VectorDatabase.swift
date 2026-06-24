@@ -20,12 +20,13 @@ actor VectorDatabase {
     static let shared = VectorDatabase()
     private var pool: DatabasePool?
 
-    // Bump whenever the `vectors` table layout changes. setup() drops and
-    // recreates the table when the on-disk schema is older, so existing
-    // installs can't be left with a stale layout (e.g. a pre-volume table).
+    // Bump whenever the `vectors` table layout OR the bundled JSON changes.
+    // setup() drops and recreates the table when the on-disk version is older,
+    // so existing installs can't be left with a stale layout or stale data.
     // The DB is a pure derived cache rebuilt from bundled JSON, so dropping
     // is always safe — DatabaseMigrator repopulates it.
-    private static let schemaVersion = 3
+    // v4: corrected Vol 2-4 georeferencing (degree-crossing/landscape fix).
+    private static let schemaVersion = 4
 
     private init() {}
 
