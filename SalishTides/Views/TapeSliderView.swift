@@ -20,6 +20,23 @@ struct TapeSliderView: View {
         return max(-Double(maxHours), min(Double(maxHours), raw))
     }
 
+    // VoiceOver value: the current offset relative to "now".
+    private var accessibilityValueText: String {
+        guard offsetHours != 0 else { return "Now" }
+        let h = abs(offsetHours)
+        let unit = h == 1 ? "hour" : "hours"
+        return offsetHours > 0 ? "\(h) \(unit) ahead of now" : "\(h) \(unit) before now"
+    }
+
+    // Adjustable-action step (VoiceOver swipe up/down), clamped + committed.
+    private func step(by delta: Int) {
+        let clamped = max(-maxHours, min(maxHours, offsetHours + delta))
+        guard clamped != offsetHours else { return }
+        offsetHours = clamped
+        dragTranslation = 0
+        onCommit()
+    }
+
     var body: some View {
         Canvas { ctx, size in
             draw(ctx: ctx, size: size)
@@ -51,6 +68,17 @@ struct TapeSliderView: View {
                     onCommit()
                 }
         )
+        .accessibilityElement()
+        .accessibilityLabel("Forecast time")
+        .accessibilityValue(accessibilityValueText)
+        .accessibilityHint("Swipe up or down to change the time by one hour")
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: step(by: 1)
+            case .decrement: step(by: -1)
+            @unknown default: break
+            }
+        }
     }
 
     // MARK: - Canvas drawing

@@ -58,6 +58,7 @@ private struct CrosshairView: View {
             .stroke(.white.opacity(0.75), lineWidth: 1.5)
         }
         .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 

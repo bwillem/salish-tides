@@ -291,28 +291,19 @@ Target: **WCAG AA** minimum everywhere, **AAA (7:1)** for map-overlaid text give
 
 ### 6.2 VoiceOver Labels
 
-Elements that need explicit accessibility labels (not yet implemented):
+The overlay controls expose explicit labels (implemented):
 
-```swift
-// PhaseIndicatorView icon
-Image(systemName: tendencyIcon(sel.tendency))
-    .accessibilityLabel(sel.tendency == .flood ? "Flood tide" : "Ebb tide")
+| Control | Treatment |
+|---------|-----------|
+| Time tape (`TapeSliderView`) | Adjustable element — label "Forecast time", value reads the offset ("2 hours ahead of now" / "Now"), swipe up/down steps ±1 hour |
+| Now button | Title + hint "Returns the timeline to the current time" |
+| Date/phase readout | Combined into one element ("Jun 24 at 3:00 PM, Medium Flood") |
+| Tide chart (`TideChartView` Canvas) | Single element labelled with the current tide ("Tide 2.4 metres at Bedwell Harbour, above chart datum") |
+| Phase row | Single element ("medium flood tide. 0.4 knots at crosshair.") |
+| Crosshair | `.accessibilityHidden(true)` — decorative |
 
-// Time tape (TapeSliderView)
-TapeSliderView(...)
-    .accessibilityLabel("Time")
-    .accessibilityValue("\(offsetHours) hours from now")
-    // expose as an adjustable element (increment/decrement by 1 hour)
-
-// Now button
-Button("Now") { ... }
-    .accessibilityLabel("Jump to current time")
-
-// Slider
-Slider(value: $offsetHours, in: -12...12, step: 1)
-    .accessibilityLabel("Time offset")
-    .accessibilityValue("\(Int(offsetHours)) hours")
-```
+Not automatable from CLI — verify with the Accessibility Inspector or an
+XCUITest before shipping (e.g. assert the "Forecast time" element is adjustable).
 
 ### 6.3 Dynamic Type
 
@@ -349,7 +340,7 @@ The app has no animations currently. When animations are added (e.g., arrow fade
 |----------|------|-------|
 | High | Real nautical basemap | Current stub-style.json is solid blue. Need PMTiles + proper chart style. Until this ships, all visual design is provisional. |
 | High | Crosshair contrast on light map | White-on-white will be invisible. Add dark stroke or shadow. |
-| Medium | VoiceOver labels | See §6.2 — none of the overlay controls have explicit labels yet |
+| Low | VoiceOver audit | Labels are in place (§6.2); verify reading order + adjustable tape on-device with the Accessibility Inspector |
 | Medium | Speed legend | Users need a legend to understand the 5-color current scale |
 | Medium | Sunlight contrast validation | Test `.currentModerate` (#FAD95E) on device in daylight |
 | Low | Haptic feedback | Add impact feedback to slider steps and Now button |

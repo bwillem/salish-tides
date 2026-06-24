@@ -15,6 +15,8 @@ struct PhaseIndicatorView: View {
                     .padding(.horizontal, Spacing.sm)
                     .padding(.top, Spacing.sm)
                     .padding(.bottom, Spacing.xs)
+                    .accessibilityElement()
+                    .accessibilityLabel(tideChartLabel)
 
                 Rectangle()
                     .fill(.white.opacity(0.12))
@@ -41,10 +43,30 @@ struct PhaseIndicatorView: View {
                 }
                 .padding(.horizontal, Spacing.md)
                 .padding(.vertical, Spacing.sm)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(phaseRowLabel(sel))
             }
             .frame(width: 248)
             .floatingCard()
         }
+    }
+
+    private var tideChartLabel: String {
+        guard let station = vm.tideStation,
+              let h = TideCurve.height(at: vm.currentDate, events: vm.tideEvents) else {
+            return "Tide chart. Data unavailable."
+        }
+        let datum = station.datum == "MLLW" ? "mean lower low water" : "chart datum"
+        return String(format: "Tide %.1f metres at %@, above %@.", h, station.name, datum)
+    }
+
+    private func phaseRowLabel(_ sel: ChartSelection) -> String {
+        let phase = sel.phase.replacingOccurrences(of: "_", with: " ").lowercased()
+        var label = "\(phase) tide."
+        if let speed = vm.crosshairSpeed {
+            label += String(format: " %.1f knots at crosshair.", speed)
+        }
+        return label
     }
 
     private func tendencyIcon(_ tendency: Tendency) -> String {

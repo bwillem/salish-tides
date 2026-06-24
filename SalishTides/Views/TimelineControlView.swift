@@ -14,6 +14,7 @@ struct TimelineControlView: View {
                     .buttonStyle(.bordered)
                     .controlSize(.small)
                     .tint(offsetHours == 0 ? nil : Color.tideEbb)
+                    .accessibilityHint("Returns the timeline to the current time")
 
                 Spacer()
 
@@ -30,11 +31,13 @@ struct TimelineControlView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+                .accessibilityElement(children: .combine)
 
                 Spacer()
 
                 // Invisible balance weight matching the Now button width
                 Color.clear.frame(width: 54, height: 1)
+                    .accessibilityHidden(true)
             }
 
             // ── Time tape slider ─────────────────────────────────────────────
