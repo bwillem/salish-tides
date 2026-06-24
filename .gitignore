@@ -15,6 +15,7 @@ DerivedData/
 .DS_Store
 **/.DS_Store
 
-# Development artifacts
-ios-production-handoff/
+# Data and local dev artifacts
+data/
+dev/pdfs/
 .claude/

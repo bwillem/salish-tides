@@ -21,12 +21,17 @@ targets:
       - path: SalishTides
         excludes:
           - "Resources/maps"
+          - "Resources/maps_vol2"
+          - "Resources/maps_vol3"
+          - "Resources/maps_vol4"
     postBuildScripts:
-      - name: Copy Maps Data
+      - name: Copy Atlas Map Data
         script: |
-          DEST="${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/maps"
-          mkdir -p "$DEST"
-          rsync -a --delete "${SRCROOT}/ios-production-handoff/data/maps/" "$DEST/"
+          for VOL in maps maps_vol2 maps_vol3 maps_vol4; do
+            DEST="${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/${VOL}"
+            mkdir -p "$DEST"
+            rsync -a --delete "${SRCROOT}/data/${VOL}/" "$DEST/"
+          done
     info:
       path: SalishTides/Info.plist
       properties:

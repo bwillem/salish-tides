@@ -37,6 +37,12 @@ struct AtlasIndex: Decodable, Sendable {
     let regions: [String: RegionInfo]
     let index: [ChartEntry]
 
+    static let empty = AtlasIndex(
+        metadata: AtlasMetadata(source: "", author: "", model: "", constituents: [], reference_station: ""),
+        regions: [:],
+        index: []
+    )
+
     static func load() throws -> AtlasIndex {
         guard let url = Bundle.main.url(forResource: "atlas_index", withExtension: "json") else {
             throw CocoaError(.fileNoSuchFile)

@@ -6,38 +6,56 @@ import Observation
 final class MapViewModel {
     var currentDate: Date = .now
     var currentVectors: [CurrentVector] = []
-    var currentSelection: ChartSelection?
+    var currentSelections: [ChartSelection] = []
     var isMigrating = false
     var migrationProgress: Double = 0
     var migrationError: String?
     var visibleViewport: ChartBounds?
     var crosshairSpeed: Double?
 
-    private let selector: ChartSelector
+    // Convenience for views that only need one selection (e.g. phase indicator)
+    var currentSelection: ChartSelection? { currentSelections.first }
+
+    private let selectors: [(VolumeSpec, ChartSelector)]
     private let atlasIndex: AtlasIndex
 
     init() {
-        self.selector = try! ChartSelector.load()
-        self.atlasIndex = try! AtlasIndex.load()
+        // Build one selector per unique lookup resource — Vol 1 and Vol 3 share a file,
+        // so we load it once and reuse it for both volume IDs.
+        var loaded: [String: AtlasLookupTable] = [:]
+        var built: [(VolumeSpec, ChartSelector)] = []
+        for spec in atlasVolumes {
+            let table: AtlasLookupTable
+            if let cached = loaded[spec.lookupResource] {
+                table = cached
+            } else if let url = Bundle.main.url(forResource: spec.lookupResource, withExtension: "json"),
+                      let data = try? Data(contentsOf: url),
+                      let decoded = try? JSONDecoder().decode(AtlasLookupTable.self, from: data) {
+                table = decoded
+                loaded[spec.lookupResource] = decoded
+            } else {
+                continue
+            }
+            built.append((spec, ChartSelector(volume: spec.id, table: table)))
+        }
+        self.selectors = built
+        self.atlasIndex = (try? AtlasIndex.load()) ?? AtlasIndex.empty
     }
 
     func initialize() async {
         do {
             try await VectorDatabase.shared.setup()
 
-            // Check inside the actor so the flag read and the migration run are serialized
             if await DatabaseMigrator.shared.needsMigration {
                 isMigrating = true
             }
 
-            // migrate() is idempotent — safe to call even if already done
             try await DatabaseMigrator.shared.migrate { [weak self] fraction in
                 Task { @MainActor [weak self] in
                     self?.migrationProgress = fraction
                 }
             }
 
-            // Set to 1.0 before hiding the view so the progress bar completes visually
             migrationProgress = 1.0
             isMigrating = false
 
@@ -59,19 +77,41 @@ final class MapViewModel {
     }
 
     private func loadVectors(for date: Date) async {
-        guard let selection = selector.selection(for: date) else { return }
-        currentSelection = selection
-
-        // Use viewport filtering when available; falls back to all regions when map hasn't reported bounds yet
-        let regions = atlasIndex.regions(forChart: selection.chart, intersecting: visibleViewport)
-        do {
-            let vectors = try await VectorDatabase.shared.vectors(chart: selection.chart, regions: regions)
-            currentVectors = vectors
-            crosshairSpeed = nearestSpeed(in: vectors, viewport: visibleViewport)
-        } catch {
-            currentVectors = []
-            crosshairSpeed = nil
+        // Find all volumes whose geographic bounds intersect the current viewport.
+        // If no viewport yet, include all volumes so any initial chart load works.
+        let activeSelectors = selectors.filter { spec, _ in
+            guard let vp = visibleViewport else { return true }
+            return spec.bounds.intersects(vp)
         }
+
+        var selections: [ChartSelection] = []
+        var vectors: [CurrentVector] = []
+
+        for (spec, selector) in activeSelectors {
+            guard let sel = selector.selection(for: date) else { continue }
+            selections.append(sel)
+
+            // Use atlas index for viewport-based region culling when available (Vol 1);
+            // fall back to all regions for volumes without an index.
+            let regions: [String]
+            if spec.atlasIndexResource != nil {
+                regions = atlasIndex.regions(forChart: sel.chart, intersecting: visibleViewport)
+            } else {
+                regions = spec.regions
+            }
+            guard !regions.isEmpty else { continue }
+
+            do {
+                let vecs = try await VectorDatabase.shared.vectors(volume: spec.id, chart: sel.chart, regions: regions)
+                vectors.append(contentsOf: vecs)
+            } catch {
+                // Non-fatal: one volume failing doesn't hide the others
+            }
+        }
+
+        currentSelections = selections
+        currentVectors = vectors
+        crosshairSpeed = nearestSpeed(in: vectors, viewport: visibleViewport)
     }
 
     private func nearestSpeed(in vectors: [CurrentVector], viewport: ChartBounds?) -> Double? {
