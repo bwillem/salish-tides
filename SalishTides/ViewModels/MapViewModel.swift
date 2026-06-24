@@ -25,6 +25,16 @@ final class MapViewModel {
     // actor, captured per call, re-checked after every await.
     private var loadGeneration = 0
 
+    // Coalesces the burst of regionDidChange callbacks during an active
+    // pan/zoom into a single reload once movement settles.
+    private var viewportReloadTask: Task<Void, Never>?
+    private let viewportDebounce: Duration = .milliseconds(200)
+
+    // Target arrow count across the longer screen axis. Down-sampling bins
+    // vectors into a grid sized from the viewport span, so on-screen density
+    // stays roughly constant as the user zooms instead of collapsing into mush.
+    private let thinTargetAcross = 70.0
+
     init() {
         // Build one selector per unique lookup resource — Vol 1 and Vol 3 share a file,
         // so we load it once and reuse it for both volume IDs.
@@ -85,9 +95,17 @@ final class MapViewModel {
         await loadVectors(for: date)
     }
 
-    func updateViewport(_ bounds: ChartBounds) async {
+    func updateViewport(_ bounds: ChartBounds) {
         visibleViewport = bounds
-        await loadVectors(for: currentDate)
+        // Debounce: cancel any pending reload and reschedule. A continuous pan
+        // keeps cancelling, so the DB work runs once, after the map settles.
+        viewportReloadTask?.cancel()
+        let delay = viewportDebounce
+        viewportReloadTask = Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled, let self else { return }
+            await self.loadVectors(for: self.currentDate)
+        }
     }
 
     private func loadVectors(for date: Date) async {
@@ -139,8 +157,44 @@ final class MapViewModel {
 
         guard generation == loadGeneration else { return }
         currentSelections = selections
-        currentVectors = vectors
+        // Crosshair readout uses the full-resolution set; only the rendered
+        // layer is down-sampled.
         crosshairSpeed = nearestSpeed(in: vectors, viewport: visibleViewport)
+        currentVectors = thinned(vectors, for: visibleViewport)
+    }
+
+    private struct Cell: Hashable { let x: Int; let y: Int }
+
+    // Bin vectors into viewport-sized cells, keeping the fastest per cell —
+    // strong currents are the ones worth showing, and the cell size shrinks as
+    // the user zooms in, so detail returns naturally at close range.
+    private func thinned(_ vectors: [CurrentVector], for viewport: ChartBounds?) -> [CurrentVector] {
+        guard let vp = viewport else { return vectors }
+        let latSpan = vp.lat_max - vp.lat_min
+        let lonSpan = vp.lon_max - vp.lon_min
+        guard latSpan > 0, lonSpan > 0 else { return vectors }
+
+        // Square-ish cells on screen: a degree of longitude is shorter than a
+        // degree of latitude by cos(lat), so widen the longitude cell to match.
+        let centerLat = (vp.lat_min + vp.lat_max) / 2
+        let cosLat = max(0.1, cos(centerLat * .pi / 180))
+        let screenSpan = max(latSpan, lonSpan * cosLat)
+        let cellLat = screenSpan / thinTargetAcross
+        let cellLon = cellLat / cosLat
+        guard cellLat > 0, cellLon > 0 else { return vectors }
+
+        var best: [Cell: CurrentVector] = [:]
+        best.reserveCapacity(vectors.count)
+        for v in vectors {
+            let cell = Cell(x: Int((v.lon / cellLon).rounded(.down)),
+                            y: Int((v.lat / cellLat).rounded(.down)))
+            if let existing = best[cell] {
+                if v.speed_ms > existing.speed_ms { best[cell] = v }
+            } else {
+                best[cell] = v
+            }
+        }
+        return Array(best.values)
     }
 
     // 0 if the volume's bounds contain the viewport center, else 1 — used only
