@@ -14,3 +14,7 @@ DerivedData/
 # macOS
 .DS_Store
 **/.DS_Store
+
+# Development artifacts
+ios-production-handoff/
+.claude/
