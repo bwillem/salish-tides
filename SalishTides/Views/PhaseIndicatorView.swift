@@ -28,18 +28,10 @@ struct PhaseIndicatorView: View {
                         Text(sel.phase.replacingOccurrences(of: "_", with: " ").capitalized)
                             .font(.stHeadline)
 
-                        HStack(spacing: 6) {
-                            Text("Chart \(sel.chart) of 43")
-                                .font(.stCaption)
+                        if let speed = vm.crosshairSpeed {
+                            Text(String(format: "%.1f kn ✛", speed))
+                                .font(.stMono)
                                 .foregroundStyle(.secondary)
-                            if let speed = vm.crosshairSpeed {
-                                Text("·")
-                                    .font(.stCaption)
-                                    .foregroundStyle(.secondary)
-                                Text(String(format: "%.1f kn ✛", speed))
-                                    .font(.stMono)
-                                    .foregroundStyle(.primary)
-                            }
                         }
                     }
 

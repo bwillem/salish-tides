@@ -20,6 +20,7 @@
 		A14E261EEF019763C5C3ED1C /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 4C2D431933E482A18FCC18F9 /* GRDB */; };
 		B3E0A98667446BD785E78FBB /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 808EEF6FA5FE567E488AA3D5 /* DesignTokens.swift */; };
 		BC9A62D51F3C27B4EB0BD09C /* stub-style.json in Resources */ = {isa = PBXBuildFile; fileRef = D8D047884F1E73D88E45BDA6 /* stub-style.json */; };
+		CC1DE4A9F7C994DD5459CB22 /* TapeSliderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28E631FED305377F6178516B /* TapeSliderView.swift */; };
 		D02F6CEBAD38ED7BCD07D911 /* MapLibre in Frameworks */ = {isa = PBXBuildFile; productRef = 42B0127065AEDC608BD0C4A4 /* MapLibre */; };
 		DEEA37D4F253B7A4E151C3EB /* AtlasLookupTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33F90FC333D8D0174AF1A089 /* AtlasLookupTable.swift */; };
 		E1217A140CE89A8A73B3C4A6 /* TimelineControlView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B460FF242F858B027A672B40 /* TimelineControlView.swift */; };
@@ -30,6 +31,7 @@
 
 /* Begin PBXFileReference section */
 		1E2E5511446438A2D163BF38 /* atlas_lookup_2026.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = atlas_lookup_2026.json; sourceTree = "<group>"; };
+		28E631FED305377F6178516B /* TapeSliderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TapeSliderView.swift; sourceTree = "<group>"; };
 		33F90FC333D8D0174AF1A089 /* AtlasLookupTable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtlasLookupTable.swift; sourceTree = "<group>"; };
 		4FA576D80059DF72E4354E26 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		6F8AC975A9DE6B660C38E780 /* SalishTidesApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SalishTidesApp.swift; sourceTree = "<group>"; };
@@ -146,6 +148,7 @@
 			isa = PBXGroup;
 			children = (
 				BF78D89E101E6B88EB6D487E /* PhaseIndicatorView.swift */,
+				28E631FED305377F6178516B /* TapeSliderView.swift */,
 				E02E5CB168CDB0660201216E /* TideChartView.swift */,
 				B460FF242F858B027A672B40 /* TimelineControlView.swift */,
 			);
@@ -276,6 +279,7 @@
 				1D5038B1FFB6DE1A54FE8E25 /* MapViewModel.swift in Sources */,
 				28CEED760DB3C36FC29C60ED /* PhaseIndicatorView.swift in Sources */,
 				FB3737835F764AD3A85B61BE /* SalishTidesApp.swift in Sources */,
+				CC1DE4A9F7C994DD5459CB22 /* TapeSliderView.swift in Sources */,
 				5DB2319BABC9FB829D843F6A /* TideChartView.swift in Sources */,
 				F702FD4B25479975DDD40BEE /* TidePredictor.swift in Sources */,
 				E1217A140CE89A8A73B3C4A6 /* TimelineControlView.swift in Sources */,
