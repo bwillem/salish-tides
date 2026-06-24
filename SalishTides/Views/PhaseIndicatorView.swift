@@ -5,31 +5,51 @@ struct PhaseIndicatorView: View {
 
     var body: some View {
         if let sel = vm.currentSelection {
-            HStack(spacing: 8) {
-                Image(systemName: tendencyIcon(sel.tendency))
-                    .foregroundStyle(tendencyColor(sel.tendency))
-                    .imageScale(.large)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(sel.phase.replacingOccurrences(of: "_", with: " ").capitalized)
-                        .font(.subheadline.bold())
-                    HStack(spacing: 6) {
-                        Text("Chart \(sel.chart) of 43")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                        if let speed = vm.crosshairSpeed {
-                            Text("·")
-                                .font(.caption2)
+            VStack(spacing: 0) {
+
+                // ── Tide height chart ────────────────────────────────────────
+                TideChartView(currentDate: vm.currentDate)
+                    .frame(height: 108)
+                    .padding(.horizontal, Spacing.sm)
+                    .padding(.top, Spacing.sm)
+                    .padding(.bottom, Spacing.xs)
+
+                Rectangle()
+                    .fill(.white.opacity(0.12))
+                    .frame(height: 0.5)
+
+                // ── Phase info row ───────────────────────────────────────────
+                HStack(spacing: Spacing.sm) {
+                    Image(systemName: tendencyIcon(sel.tendency))
+                        .foregroundStyle(tendencyColor(sel.tendency))
+                        .imageScale(.medium)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(sel.phase.replacingOccurrences(of: "_", with: " ").capitalized)
+                            .font(.stHeadline)
+
+                        HStack(spacing: 6) {
+                            Text("Chart \(sel.chart) of 43")
+                                .font(.stCaption)
                                 .foregroundStyle(.secondary)
-                            Text(String(format: "%.1f kn ✛", speed))
-                                .font(.caption2.monospacedDigit())
-                                .foregroundStyle(.primary)
+                            if let speed = vm.crosshairSpeed {
+                                Text("·")
+                                    .font(.stCaption)
+                                    .foregroundStyle(.secondary)
+                                Text(String(format: "%.1f kn ✛", speed))
+                                    .font(.stMono)
+                                    .foregroundStyle(.primary)
+                            }
                         }
                     }
+
+                    Spacer(minLength: 0)
                 }
+                .padding(.horizontal, Spacing.md)
+                .padding(.vertical, Spacing.sm)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(.ultraThinMaterial, in: Capsule())
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: Radius.lg))
+            .frame(width: 248)
         }
     }
 
@@ -38,6 +58,6 @@ struct PhaseIndicatorView: View {
     }
 
     private func tendencyColor(_ tendency: Tendency) -> Color {
-        tendency == .flood ? .blue : .orange
+        tendency == .flood ? .tideFlood : .tideEbb
     }
 }
