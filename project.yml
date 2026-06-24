@@ -25,13 +25,20 @@ targets:
           - "Resources/maps_vol3"
           - "Resources/maps_vol4"
     postBuildScripts:
-      - name: Copy Atlas Map Data
+      # Requires a populated data/ directory (see DESIGN.md "Data bootstrap").
+      # data/ is gitignored, so a fresh clone must generate it first — these
+      # rsyncs fail the build if the source dirs are missing.
+      - name: Copy Atlas & Tide Data
         script: |
           for VOL in maps maps_vol2 maps_vol3 maps_vol4; do
             DEST="${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/${VOL}"
             mkdir -p "$DEST"
             rsync -a --delete "${SRCROOT}/data/${VOL}/" "$DEST/"
           done
+          # Tide-prediction bundle (single JSON, lives under tides/)
+          TIDE_DEST="${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/tides"
+          mkdir -p "$TIDE_DEST"
+          rsync -a --delete "${SRCROOT}/data/tides/" "$TIDE_DEST/"
     info:
       path: SalishTides/Info.plist
       properties:

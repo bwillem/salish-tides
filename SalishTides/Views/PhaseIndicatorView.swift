@@ -5,32 +5,68 @@ struct PhaseIndicatorView: View {
 
     var body: some View {
         if let sel = vm.currentSelection {
-            HStack(spacing: 8) {
-                Image(systemName: tendencyIcon(sel.tendency))
-                    .foregroundStyle(tendencyColor(sel.tendency))
-                    .imageScale(.large)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(sel.phase.replacingOccurrences(of: "_", with: " ").capitalized)
-                        .font(.subheadline.bold())
-                    HStack(spacing: 6) {
-                        Text("Chart \(sel.chart) of 43")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+            VStack(spacing: 0) {
+
+                // ── Tide height chart ────────────────────────────────────────
+                TideChartView(currentDate: vm.currentDate,
+                              station: vm.tideStation,
+                              events: vm.tideEvents)
+                    .frame(height: 108)
+                    .padding(.horizontal, Spacing.sm)
+                    .padding(.top, Spacing.sm)
+                    .padding(.bottom, Spacing.xs)
+                    .accessibilityElement()
+                    .accessibilityLabel(tideChartLabel)
+
+                Rectangle()
+                    .fill(.white.opacity(0.12))
+                    .frame(height: 0.5)
+
+                // ── Phase info row ───────────────────────────────────────────
+                HStack(spacing: Spacing.sm) {
+                    Image(systemName: tendencyIcon(sel.tendency))
+                        .foregroundStyle(tendencyColor(sel.tendency))
+                        .imageScale(.medium)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(sel.phase.replacingOccurrences(of: "_", with: " ").capitalized)
+                            .font(.stHeadline)
+
                         if let speed = vm.crosshairSpeed {
-                            Text("·")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
                             Text(String(format: "%.1f kn ✛", speed))
-                                .font(.caption2.monospacedDigit())
-                                .foregroundStyle(.primary)
+                                .font(.stMono)
+                                .foregroundStyle(.secondary)
                         }
                     }
+
+                    Spacer(minLength: 0)
                 }
+                .padding(.horizontal, Spacing.md)
+                .padding(.vertical, Spacing.sm)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(phaseRowLabel(sel))
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(.ultraThinMaterial, in: Capsule())
+            .frame(width: 248)
+            .floatingCard()
         }
+    }
+
+    private var tideChartLabel: String {
+        guard let station = vm.tideStation,
+              let h = TideCurve.height(at: vm.currentDate, events: vm.tideEvents) else {
+            return "Tide chart. Data unavailable."
+        }
+        let datum = station.datum == "MLLW" ? "mean lower low water" : "chart datum"
+        return String(format: "Tide %.1f metres at %@, above %@.", h, station.name, datum)
+    }
+
+    private func phaseRowLabel(_ sel: ChartSelection) -> String {
+        let phase = sel.phase.replacingOccurrences(of: "_", with: " ").lowercased()
+        var label = "\(phase) tide."
+        if let speed = vm.crosshairSpeed {
+            label += String(format: " %.1f knots at crosshair.", speed)
+        }
+        return label
     }
 
     private func tendencyIcon(_ tendency: Tendency) -> String {
@@ -38,6 +74,6 @@ struct PhaseIndicatorView: View {
     }
 
     private func tendencyColor(_ tendency: Tendency) -> Color {
-        tendency == .flood ? .blue : .orange
+        tendency == .flood ? .tideFlood : .tideEbb
     }
 }

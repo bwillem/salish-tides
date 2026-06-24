@@ -1,0 +1,1980 @@
+{
+  "year": 2026,
+  "spacing_km": 12.0,
+  "count": 142,
+  "stations": [
+    {
+      "src": "CHS",
+      "id": "07030",
+      "chs_id": "5cebf1df3d0f4a073c4bbd13",
+      "name": "Becher Bay",
+      "lat": 48.3349,
+      "lon": -123.6038,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol1",
+        "Vol2"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "07350",
+      "chs_id": "5cebf1df3d0f4a073c4bbd39",
+      "name": "Bedwell Harbour",
+      "lat": 48.7478,
+      "lon": -123.2273,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol1"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "07480",
+      "chs_id": "5cebf1e13d0f4a073c4bbf83",
+      "name": "Boat Harbour",
+      "lat": 49.09,
+      "lon": -123.7982,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol1"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "07280",
+      "chs_id": "5dd30650e0fdc4b9b4be6b74",
+      "name": "Brentwood Bay",
+      "lat": 48.578,
+      "lon": -123.467,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol1"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "07439",
+      "chs_id": "5dd30650e0fdc4b9b4be6d4e",
+      "name": "Cardale Point",
+      "lat": 49.0167,
+      "lon": -123.6167,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol1"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "07455",
+      "chs_id": "5cebf1e03d0f4a073c4bbd45",
+      "name": "Chemainus",
+      "lat": 48.9256,
+      "lon": -123.7144,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol1"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "07115",
+      "chs_id": "5dd3064fe0fdc4b9b4be691e",
+      "name": "Clover Point",
+      "lat": 48.4038,
+      "lon": -123.3486,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol1",
+        "Vol2"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "07310",
+      "chs_id": "5cebf1df3d0f4a073c4bbd31",
+      "name": "Cowichan Bay",
+      "lat": 48.7404,
+      "lon": -123.6184,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol1"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "07609",
+      "chs_id": "69b2f92d83949b1d977dbe82",
+      "name": "Deas Basin",
+      "lat": 49.1239,
+      "lon": -123.0834,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol1"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "07765",
+      "chs_id": "5dd3064ee0fdc4b9b4be6707",
+      "name": "Deep Cove",
+      "lat": 49.3268,
+      "lon": -122.9485,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol1"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "07710",
+      "chs_id": "5dd3064ee0fdc4b9b4be66ff",
+      "name": "False Creek",
+      "lat": 49.271,
+      "lon": -123.12,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol1"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "07330",
+      "chs_id": "5cebf1df3d0f4a073c4bbd35",
+      "name": "Fulford Harbour",
+      "lat": 48.769,
+      "lon": -123.451,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol1"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "07525",
+      "chs_id": "5cebf1e03d0f4a073c4bbd4d",
+      "name": "Georgina Point",
+      "lat": 48.8725,
+      "lon": -123.2923,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol1"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "07820",
+      "chs_id": "5cebf1de3d0f4a073c4bb950",
+      "name": "Gibsons",
+      "lat": 49.402,
+      "lon": -123.505,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol1"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "07830",
+      "chs_id": "5cebf1de3d0f4a073c4bb952",
+      "name": "Halfmoon Bay",
+      "lat": 49.511,
+      "lon": -123.912,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol1"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "07774",
+      "chs_id": "5dd3064ee0fdc4b9b4be6717",
+      "name": "Indian Arm Head",
+      "lat": 49.4618,
+      "lon": -122.8861,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol1"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "07917",
+      "chs_id": "5cebf1de3d0f4a073c4bb96d",
+      "name": "Nanaimo Harbour",
+      "lat": 49.1628,
+      "lon": -123.9235,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol1"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "07654",
+      "chs_id": "5cebf1e13d0f4a073c4bbf93",
+      "name": "New Westminster",
+      "lat": 49.2,
+      "lon": -122.91,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol1"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "07795",
+      "chs_id": "5cebf1de3d0f4a073c4bb94c",
+      "name": "Point Atkinson",
+      "lat": 49.3375,
+      "lon": -123.2536,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol1"
+      ],
+      "is_reference": true
+    },
+    {
+      "src": "CHS",
+      "id": "07010",
+      "chs_id": "5dd30650e0fdc4b9b4be6c25",
+      "name": "Point No Point",
+      "lat": 48.3951,
+      "lon": -123.9709,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol1"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "07803",
+      "chs_id": "638e5f11330a8d58a5b0882c",
+      "name": "Port Mellon",
+      "lat": 49.5192,
+      "lon": -123.4853,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol1"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "07594",
+      "chs_id": "5cebf1de3d0f4a073c4bb93c",
+      "name": "Sand Heads",
+      "lat": 49.1052,
+      "lon": -123.3042,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol1"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9449932",
+      "name": "Armitage Island, Thatcher Pass",
+      "lat": 48.535,
+      "lon": -122.797,
+      "datum": "MLLW",
+      "kind": "R",
+      "vols": [
+        "Vol1",
+        "Vol2"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9449211",
+      "name": "Bellingham",
+      "lat": 48.745,
+      "lon": -122.495,
+      "datum": "MLLW",
+      "kind": "S",
+      "vols": [
+        "Vol1"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9449679",
+      "name": "Blaine, Semiahmoo Bay",
+      "lat": 48.9917,
+      "lon": -122.765,
+      "datum": "MLLW",
+      "kind": "R",
+      "vols": [
+        "Vol1"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9449424",
+      "name": "CHERRY POINT",
+      "lat": 48.8627,
+      "lon": -122.7586,
+      "datum": "MLLW",
+      "kind": "R",
+      "vols": [
+        "Vol1"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9447929",
+      "name": "Coupeville, Penn Cove, Whidbey Island",
+      "lat": 48.2233,
+      "lon": -122.69,
+      "datum": "MLLW",
+      "kind": "S",
+      "vols": [
+        "Vol1",
+        "Vol2"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9443826",
+      "name": "Crescent Bay",
+      "lat": 48.1617,
+      "lon": -123.725,
+      "datum": "MLLW",
+      "kind": "S",
+      "vols": [
+        "Vol1",
+        "Vol2"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9448614",
+      "name": "Deception Pass St. Park, Bowman Bay, Fidalgo I.",
+      "lat": 48.415,
+      "lon": -122.652,
+      "datum": "MLLW",
+      "kind": "R",
+      "vols": [
+        "Vol1",
+        "Vol2"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9444471",
+      "name": "Dungeness",
+      "lat": 48.1667,
+      "lon": -123.117,
+      "datum": "MLLW",
+      "kind": "S",
+      "vols": [
+        "Vol1",
+        "Vol2"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9449712",
+      "name": "Echo Bay, Sucia Islands",
+      "lat": 48.7567,
+      "lon": -122.897,
+      "datum": "MLLW",
+      "kind": "S",
+      "vols": [
+        "Vol1"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9445016",
+      "name": "Foulweather Bluff",
+      "lat": 47.9267,
+      "lon": -122.617,
+      "datum": "MLLW",
+      "kind": "R",
+      "vols": [
+        "Vol1",
+        "Vol2"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9449880",
+      "name": "Friday Harbor, San Juan Island",
+      "lat": 48.5453,
+      "lon": -123.0125,
+      "datum": "MLLW",
+      "kind": "R",
+      "vols": [
+        "Vol1",
+        "Vol2"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9444705",
+      "name": "Gardiner, Discovery Bay",
+      "lat": 48.0583,
+      "lon": -122.917,
+      "datum": "MLLW",
+      "kind": "S",
+      "vols": [
+        "Vol1",
+        "Vol2"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9447883",
+      "name": "Greenbank, Whidbey Island",
+      "lat": 48.105,
+      "lon": -122.57,
+      "datum": "MLLW",
+      "kind": "R",
+      "vols": [
+        "Vol1",
+        "Vol2"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9449828",
+      "name": "Hanbury Point, Mosquito Pass, San Juan I.",
+      "lat": 48.5817,
+      "lon": -123.17,
+      "datum": "MLLW",
+      "kind": "R",
+      "vols": [
+        "Vol1"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9449639",
+      "name": "POINT ROBERTS, PUGET SOUND",
+      "lat": 48.975,
+      "lon": -123.083,
+      "datum": "MLLW",
+      "kind": "R",
+      "vols": [
+        "Vol1"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9444900",
+      "name": "PORT TOWNSEND",
+      "lat": 48.1112,
+      "lon": -122.7597,
+      "datum": "MLLW",
+      "kind": "R",
+      "vols": [
+        "Vol1",
+        "Vol2"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9444090",
+      "name": "Port Angeles",
+      "lat": 48.125,
+      "lon": -123.44,
+      "datum": "MLLW",
+      "kind": "R",
+      "vols": [
+        "Vol1",
+        "Vol2"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9449982",
+      "name": "Richardson, Lopez Island",
+      "lat": 48.4467,
+      "lon": -122.9,
+      "datum": "MLLW",
+      "kind": "R",
+      "vols": [
+        "Vol1",
+        "Vol2"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9449771",
+      "name": "Rosario, East Sound, Orcas Island",
+      "lat": 48.6467,
+      "lon": -122.87,
+      "datum": "MLLW",
+      "kind": "R",
+      "vols": [
+        "Vol1"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9447985",
+      "name": "Smith Island",
+      "lat": 48.3167,
+      "lon": -122.837,
+      "datum": "MLLW",
+      "kind": "S",
+      "vols": [
+        "Vol1",
+        "Vol2"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9448009",
+      "name": "Spee-Bi-Dah",
+      "lat": 48.0883,
+      "lon": -122.3223,
+      "datum": "MLLW",
+      "kind": "R",
+      "vols": [
+        "Vol1",
+        "Vol2"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "TWC1131",
+      "name": "Stanwood, Stillaguamish River",
+      "lat": 48.2167,
+      "lon": -122.3667,
+      "datum": "MLLW",
+      "kind": "S",
+      "vols": [
+        "Vol1",
+        "Vol2"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9443644",
+      "name": "Twin Rivers",
+      "lat": 48.175,
+      "lon": -123.95,
+      "datum": "MLLW",
+      "kind": "S",
+      "vols": [
+        "Vol1",
+        "Vol2"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9449161",
+      "name": "Village Point, Lummi Island",
+      "lat": 48.7167,
+      "lon": -122.708,
+      "datum": "MLLW",
+      "kind": "R",
+      "vols": [
+        "Vol1"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9449746",
+      "name": "WALDRON ISLAND, PUGET SOUND",
+      "lat": 48.6868,
+      "lon": -123.0376,
+      "datum": "MLLW",
+      "kind": "R",
+      "vols": [
+        "Vol1"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9441187",
+      "name": "ABERDEEN",
+      "lat": 46.9683,
+      "lon": -123.853,
+      "datum": "MLLW",
+      "kind": "R",
+      "vols": [
+        "Vol2"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9446281",
+      "name": "Allyn, Case Inlet",
+      "lat": 47.3833,
+      "lon": -122.823,
+      "datum": "MLLW",
+      "kind": "S",
+      "vols": [
+        "Vol2"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9445388",
+      "name": "Ayock Point",
+      "lat": 47.5083,
+      "lon": -123.052,
+      "datum": "MLLW",
+      "kind": "S",
+      "vols": [
+        "Vol2"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9445133",
+      "name": "Bangor Wharf",
+      "lat": 47.7483,
+      "lon": -122.727,
+      "datum": "MLLW",
+      "kind": "R",
+      "vols": [
+        "Vol2"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9445958",
+      "name": "Bremerton, Sinclair Inlet, Port Orchard",
+      "lat": 47.5617,
+      "lon": -122.623,
+      "datum": "MLLW",
+      "kind": "R",
+      "vols": [
+        "Vol2"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9446807",
+      "name": "Budd Inlet, Olympia Shoal",
+      "lat": 47.0983,
+      "lon": -122.895,
+      "datum": "MLLW",
+      "kind": "R",
+      "vols": [
+        "Vol2"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9446254",
+      "name": "Burton, Quartermaster Hbr. (inside), Vashon I.",
+      "lat": 47.395,
+      "lon": -122.463,
+      "datum": "MLLW",
+      "kind": "S",
+      "vols": [
+        "Vol2"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9447427",
+      "name": "Edmonds",
+      "lat": 47.8133,
+      "lon": -122.383,
+      "datum": "MLLW",
+      "kind": "S",
+      "vols": [
+        "Vol2"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9447659",
+      "name": "Everett",
+      "lat": 47.98,
+      "lon": -122.223,
+      "datum": "MLLW",
+      "kind": "R",
+      "vols": [
+        "Vol2"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9446500",
+      "name": "Home, Von Geldern Cove, Carr Inlet",
+      "lat": 47.275,
+      "lon": -122.758,
+      "datum": "MLLW",
+      "kind": "S",
+      "vols": [
+        "Vol2"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "TWC0959",
+      "name": "Montesano, Chehalis River",
+      "lat": 46.9683,
+      "lon": -123.6,
+      "datum": "MLLW",
+      "kind": "S",
+      "vols": [
+        "Vol2"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9445293",
+      "name": "Pleasant Harbor",
+      "lat": 47.665,
+      "lon": -122.912,
+      "datum": "MLLW",
+      "kind": "S",
+      "vols": [
+        "Vol2"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9446025",
+      "name": "Point Vashon, Vashon Island",
+      "lat": 47.5117,
+      "lon": -122.463,
+      "datum": "MLLW",
+      "kind": "S",
+      "vols": [
+        "Vol2"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9445753",
+      "name": "Port Madison",
+      "lat": 47.705,
+      "lon": -122.525,
+      "datum": "MLLW",
+      "kind": "S",
+      "vols": [
+        "Vol2"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9446804",
+      "name": "SANDY POINT ANDERSON ISLAND, PUGET SOUND",
+      "lat": 47.153,
+      "lon": -122.6751,
+      "datum": "MLLW",
+      "kind": "R",
+      "vols": [
+        "Vol2"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9447130",
+      "name": "SEATTLE (Madison St.), Elliott Bay",
+      "lat": 47.6026,
+      "lon": -122.3393,
+      "datum": "MLLW",
+      "kind": "R",
+      "vols": [
+        "Vol2"
+      ],
+      "is_reference": true
+    },
+    {
+      "src": "NOAA",
+      "id": "9446628",
+      "name": "Shelton, Oakland Bay",
+      "lat": 47.215,
+      "lon": -123.083,
+      "datum": "MLLW",
+      "kind": "S",
+      "vols": [
+        "Vol2"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9446484",
+      "name": "Tacoma, Commencement Bay, Sitcum Waterway",
+      "lat": 47.2667,
+      "lon": -122.4133,
+      "datum": "MLLW",
+      "kind": "R",
+      "vols": [
+        "Vol2"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9445478",
+      "name": "Union",
+      "lat": 47.3583,
+      "lon": -123.098,
+      "datum": "MLLW",
+      "kind": "R",
+      "vols": [
+        "Vol2"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9446489",
+      "name": "Walkers Landing, Pickering Passage",
+      "lat": 47.2817,
+      "lon": -122.923,
+      "datum": "MLLW",
+      "kind": "S",
+      "vols": [
+        "Vol2"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "NOAA",
+      "id": "9446291",
+      "name": "Wauna, Carr Inlet",
+      "lat": 47.3783,
+      "lon": -122.634,
+      "datum": "MLLW",
+      "kind": "R",
+      "vols": [
+        "Vol2"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08060",
+      "chs_id": "5cebf1de3d0f4a073c4bb98b",
+      "name": "Big Bay, Stuart Island",
+      "lat": 50.393,
+      "lon": -125.1352,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol3",
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08210",
+      "chs_id": "5dd3064ee0fdc4b9b4be68a1",
+      "name": "Billy Goat Bay",
+      "lat": 50.398,
+      "lon": -125.865,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol3",
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "07865",
+      "chs_id": "5cebf1de3d0f4a073c4bb95a",
+      "name": "Blind Bay",
+      "lat": 49.716,
+      "lon": -124.179,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol3"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08155",
+      "chs_id": "5dd3064ee0fdc4b9b4be689e",
+      "name": "Blind Channel",
+      "lat": 50.414,
+      "lon": -125.502,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol3",
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08095",
+      "chs_id": "5dd3064ee0fdc4b9b4be6902",
+      "name": "Bloedel - Menzies Bay",
+      "lat": 50.118,
+      "lon": -125.381,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol3",
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08558",
+      "chs_id": "5cebf1e23d0f4a073c4bc066",
+      "name": "Brooksby Point",
+      "lat": 48.982,
+      "lon": -124.985,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol3"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08074",
+      "chs_id": "5cebf1de3d0f4a073c4bb996",
+      "name": "Campbell River",
+      "lat": 50.042,
+      "lon": -125.247,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol3",
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08015",
+      "chs_id": "5cebf1de3d0f4a073c4bb981",
+      "name": "Channel Island",
+      "lat": 50.3167,
+      "lon": -124.75,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol3"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "07965",
+      "chs_id": "5cebf1de3d0f4a073c4bb979",
+      "name": "Comox",
+      "lat": 49.67,
+      "lon": -124.928,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol3"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08630",
+      "chs_id": "5cebf1e23d0f4a073c4bc082",
+      "name": "Cypress Bay",
+      "lat": 49.261,
+      "lon": -125.871,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol3"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "07955",
+      "chs_id": "5cebf1de3d0f4a073c4bb977",
+      "name": "Denman Island",
+      "lat": 49.5345,
+      "lon": -124.8209,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol3"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "07982",
+      "chs_id": "5cebf1de3d0f4a073c4bb97b",
+      "name": "False Bay",
+      "lat": 49.483,
+      "lon": -124.35,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol3"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08565",
+      "chs_id": "5cebf1e23d0f4a073c4bc068",
+      "name": "Franklin River",
+      "lat": 49.108,
+      "lon": -124.812,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol3"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "07940",
+      "chs_id": "5dd30650e0fdc4b9b4be6e1a",
+      "name": "French Creek",
+      "lat": 49.3496,
+      "lon": -124.3588,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol3"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08310",
+      "chs_id": "5cebf1de3d0f4a073c4bb9b0",
+      "name": "Glendale Cove",
+      "lat": 50.6743,
+      "lon": -125.7369,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol3",
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08650",
+      "chs_id": "5cebf1e23d0f4a073c4bc08c",
+      "name": "Gold River",
+      "lat": 49.679,
+      "lon": -126.126,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol3"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08037",
+      "chs_id": "5cebf1de3d0f4a073c4bb985",
+      "name": "Gorge Harbour",
+      "lat": 50.092,
+      "lon": -124.989,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol3",
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08632",
+      "chs_id": "5cebf1e23d0f4a073c4bc084",
+      "name": "Herbert Inlet",
+      "lat": 49.346,
+      "lon": -125.984,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol3"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "07836",
+      "chs_id": "5cebf1de3d0f4a073c4bb954",
+      "name": "Irvines Landing",
+      "lat": 49.633,
+      "lon": -124.058,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol3"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08623",
+      "chs_id": "5cebf1e23d0f4a073c4bc07e",
+      "name": "Kennedy Cove",
+      "lat": 49.14,
+      "lon": -125.671,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol3"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "07885",
+      "chs_id": "5cebf1de3d0f4a073c4bb962",
+      "name": "Lund",
+      "lat": 49.9833,
+      "lon": -124.7667,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol3"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "07895",
+      "chs_id": "5cebf1de3d0f4a073c4bb966",
+      "name": "Mitlenatch",
+      "lat": 49.95,
+      "lon": -124.998,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol3",
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "07930",
+      "chs_id": "5cebf1de3d0f4a073c4bb96f",
+      "name": "Nanoose Bay",
+      "lat": 49.25,
+      "lon": -124.17,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol3"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08050",
+      "chs_id": "5dd3064ee0fdc4b9b4be6891",
+      "name": "Octopus Islands",
+      "lat": 50.282,
+      "lon": -125.224,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol3",
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08065",
+      "chs_id": "5cebf1de3d0f4a073c4bb98d",
+      "name": "Orford Bay",
+      "lat": 50.598,
+      "lon": -124.8644,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol3"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08575",
+      "chs_id": "5cebf1e23d0f4a073c4bc06f",
+      "name": "Port Alberni",
+      "lat": 49.2256,
+      "lon": -124.8136,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol3"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08245",
+      "chs_id": "5cebf1de3d0f4a073c4bb9a6",
+      "name": "Port Neville",
+      "lat": 50.496,
+      "lon": -126.087,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol3",
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "07880",
+      "chs_id": "5cebf1de3d0f4a073c4bb960",
+      "name": "Powell River",
+      "lat": 49.8667,
+      "lon": -124.55,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol3"
+      ],
+      "is_reference": true
+    },
+    {
+      "src": "CHS",
+      "id": "08008",
+      "chs_id": "5cebf1e23d0f4a073c4bbfbd",
+      "name": "Prideaux Haven",
+      "lat": 50.15,
+      "lon": -124.67,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol3"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08025",
+      "chs_id": "5cebf1de3d0f4a073c4bb983",
+      "name": "Redonda Bay",
+      "lat": 50.2605,
+      "lon": -124.9553,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol3",
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08162",
+      "chs_id": "5dd3064ee0fdc4b9b4be6877",
+      "name": "Sidney Bay",
+      "lat": 50.5167,
+      "lon": -125.5833,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol3",
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08588",
+      "chs_id": "5cebf1e23d0f4a073c4bc073",
+      "name": "Stopper Islands",
+      "lat": 48.993,
+      "lon": -125.346,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol3"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08142",
+      "chs_id": "634f0796656e2041f9bf68cb",
+      "name": "Thurlow Point",
+      "lat": 50.4202,
+      "lon": -125.3282,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol3",
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08615",
+      "chs_id": "5cebf1e23d0f4a073c4bc07c",
+      "name": "Tofino",
+      "lat": 49.154,
+      "lon": -125.913,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol3"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08069",
+      "chs_id": "5cebf1de3d0f4a073c4bb98f",
+      "name": "Waddington Harbour",
+      "lat": 50.873,
+      "lon": -124.873,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol3"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "07990",
+      "chs_id": "5cebf1de3d0f4a073c4bb97d",
+      "name": "Welcome Bay",
+      "lat": 49.7,
+      "lon": -124.55,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol3"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08865",
+      "chs_id": "5cebf1e23d0f4a073c4bc0ad",
+      "name": "Adams Harbour",
+      "lat": 51.6833,
+      "lon": -128.1,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08860",
+      "chs_id": "5cebf1e23d0f4a073c4bc0ab",
+      "name": "Addenbroke Island",
+      "lat": 51.605,
+      "lon": -127.826,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08280",
+      "chs_id": "5cebf1de3d0f4a073c4bb9ac",
+      "name": "Alert Bay",
+      "lat": 50.587,
+      "lon": -126.931,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08488",
+      "chs_id": "5cebf1e23d0f4a073c4bc059",
+      "name": "Alison Sound",
+      "lat": 51.161,
+      "lon": -126.982,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08482",
+      "chs_id": "5cebf1de3d0f4a073c4bb931",
+      "name": "Belize Inlet",
+      "lat": 51.122,
+      "lon": -127.274,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08976",
+      "chs_id": "5cebf1e23d0f4a073c4bc0c2",
+      "name": "Bella Bella",
+      "lat": 52.163,
+      "lon": -128.143,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08754",
+      "chs_id": "5dd3064ee0fdc4b9b4be68c5",
+      "name": "Bergh Cove",
+      "lat": 50.537,
+      "lon": -127.624,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08812",
+      "chs_id": "5cebf1e23d0f4a073c4bc0a5",
+      "name": "Boswell Inlet",
+      "lat": 51.372,
+      "lon": -127.469,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08720",
+      "chs_id": "5dd30650e0fdc4b9b4be6d51",
+      "name": "Bunsby Islands",
+      "lat": 50.1176,
+      "lon": -127.5096,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08790",
+      "chs_id": "5cebf1e23d0f4a073c4bc0a1",
+      "name": "Cape Scott",
+      "lat": 50.78,
+      "lon": -128.43,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08325",
+      "chs_id": "5cebf1e23d0f4a073c4bbfbf",
+      "name": "Cedar Island",
+      "lat": 50.6567,
+      "lon": -126.675,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08664",
+      "chs_id": "5dd3064ee0fdc4b9b4be6906",
+      "name": "Ceepeecee",
+      "lat": 49.874,
+      "lon": -126.716,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08714",
+      "chs_id": "5dd30650e0fdc4b9b4be6d4f",
+      "name": "Copp Island",
+      "lat": 50.0459,
+      "lon": -127.1903,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08830",
+      "chs_id": "5dd3064ee0fdc4b9b4be68c9",
+      "name": "Draney Inlet",
+      "lat": 51.476,
+      "lon": -127.551,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08805",
+      "chs_id": "5cebf1e23d0f4a073c4bc0a3",
+      "name": "Egg Island",
+      "lat": 51.249,
+      "lon": -127.836,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08958",
+      "chs_id": "5cebf1e23d0f4a073c4bc0b9",
+      "name": "Forit Bay",
+      "lat": 52.174,
+      "lon": -127.91,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08438",
+      "chs_id": "5cebf1de3d0f4a073c4bb9cb",
+      "name": "Fox Islands",
+      "lat": 51.081,
+      "lon": -127.604,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08458",
+      "chs_id": "5cebf1de3d0f4a073c4bb9cd",
+      "name": "Frederick Sound",
+      "lat": 51.04,
+      "lon": -126.734,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08909",
+      "chs_id": "5dd3064ee0fdc4b9b4be68ce",
+      "name": "Goose Island",
+      "lat": 51.992,
+      "lon": -128.413,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08270",
+      "chs_id": "5dd3064ee0fdc4b9b4be68a6",
+      "name": "Growler Cove",
+      "lat": 50.53,
+      "lon": -126.62,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08736",
+      "chs_id": "5cebf1e23d0f4a073c4bc099",
+      "name": "Hunt Islet",
+      "lat": 50.474,
+      "lon": -128.03,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08384",
+      "chs_id": "5cebf1de3d0f4a073c4bb9be",
+      "name": "Jennis Bay",
+      "lat": 50.913,
+      "lon": -127.026,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08348",
+      "chs_id": "5cebf1e23d0f4a073c4bbfb8",
+      "name": "Kingcome Inlet",
+      "lat": 50.9087,
+      "lon": -126.1994,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08710",
+      "chs_id": "5cebf1e23d0f4a073c4bc090",
+      "name": "Kyuquot",
+      "lat": 50.026,
+      "lon": -127.376,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08258",
+      "chs_id": "5cebf1de3d0f4a073c4bb9aa",
+      "name": "Lagoon Cove",
+      "lat": 50.5977,
+      "lon": -126.319,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08932",
+      "chs_id": "5dd3064ee0fdc4b9b4be68d2",
+      "name": "Larso Bay",
+      "lat": 52.179,
+      "lon": -126.862,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08810",
+      "chs_id": "5cebf1e13d0f4a073c4bbf97",
+      "name": "Leroy Bay",
+      "lat": 51.273,
+      "lon": -127.664,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08870",
+      "chs_id": "5cebf1e23d0f4a073c4bc0b1",
+      "name": "Namu",
+      "lat": 51.8615,
+      "lon": -127.8657,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08750",
+      "chs_id": "5cebf1e23d0f4a073c4bc09b",
+      "name": "Port Alice",
+      "lat": 50.384,
+      "lon": -127.455,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08408",
+      "chs_id": "5cebf1de3d0f4a073c4bb9c7",
+      "name": "Port Hardy",
+      "lat": 50.722,
+      "lon": -127.489,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08394",
+      "chs_id": "5cebf1de3d0f4a073c4bb9c0",
+      "name": "Raynor Group",
+      "lat": 50.886,
+      "lon": -127.243,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08416",
+      "chs_id": "5dd3064ee0fdc4b9b4be68b2",
+      "name": "Shushartie Bay",
+      "lat": 50.856,
+      "lon": -127.859,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08814",
+      "chs_id": "5cebf1e23d0f4a073c4bc0a7",
+      "name": "Smith Inlet",
+      "lat": 51.336,
+      "lon": -127.188,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08912",
+      "chs_id": "5cebf1e23d0f4a073c4bc0b5",
+      "name": "Spider Island",
+      "lat": 51.845,
+      "lon": -128.231,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08917",
+      "chs_id": "5cebf1e13d0f4a073c4bbf99",
+      "name": "Stryker Island",
+      "lat": 52.093,
+      "lon": -128.348,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08364",
+      "chs_id": "5cebf1de3d0f4a073c4bb9b8",
+      "name": "Sullivan Bay",
+      "lat": 50.886,
+      "lon": -126.826,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08426",
+      "chs_id": "5cebf1de3d0f4a073c4bb9c9",
+      "name": "Walker Group",
+      "lat": 50.899,
+      "lon": -127.526,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol4"
+      ],
+      "is_reference": false
+    },
+    {
+      "src": "CHS",
+      "id": "08670",
+      "chs_id": "5cebf1e23d0f4a073c4bc08e",
+      "name": "Zeballos",
+      "lat": 49.979,
+      "lon": -126.846,
+      "datum": "CD",
+      "kind": "wlp",
+      "vols": [
+        "Vol4"
+      ],
+      "is_reference": false
+    }
+  ]
+}

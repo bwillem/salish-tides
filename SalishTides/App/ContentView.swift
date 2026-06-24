@@ -28,10 +28,11 @@ struct ContentView: View {
                 }
                 Spacer()
                 TimelineControlView()
-                    .padding(.horizontal)
-                    .padding(.bottom, 12)
-                    .padding(.top, 10)
-                    .background(.ultraThinMaterial)
+                    .padding(.horizontal, Spacing.lg)
+                    .padding(.vertical, Spacing.md)
+                    .floatingCard()
+                    .padding(.horizontal, Spacing.lg)
+                    .padding(.bottom, Spacing.sm)
             }
         }
         .alert("Setup Error", isPresented: .constant(vm.migrationError != nil)) {
@@ -57,6 +58,7 @@ private struct CrosshairView: View {
             .stroke(.white.opacity(0.75), lineWidth: 1.5)
         }
         .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 
