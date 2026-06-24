@@ -17,4 +17,5 @@ DerivedData/
 
 # Data and local dev artifacts
 data/
+dev/pdfs/
 .claude/
