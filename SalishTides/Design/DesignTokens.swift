@@ -7,10 +7,12 @@ import SwiftUI
 
 extension Color {
 
-    // -- Ocean palette (brand) --
-    static let oceanDeep    = Color(red: 0.10, green: 0.22, blue: 0.36)  // #1A3A5C  migration bg
-    static let oceanMid     = Color(red: 0.13, green: 0.40, blue: 0.67)  // #2166AB  primary
-    static let oceanLight   = Color(red: 0.45, green: 0.68, blue: 0.82)  // #73AECF  secondary
+    // -- App accent --
+    // Drives the global `.tint` and every brand-accent chrome surface (the
+    // "Now" pill, live dot, tape cursor, chart fill). System teal is a native,
+    // self-adapting marine hue — its light / dark / increased-contrast variants
+    // come for free, so accent chrome tracks the system the way Apple's apps do.
+    static let brandAccent = Color.teal
 
     // -- Adaptive surfaces (Day / Night themes) --
     // Splash & migration background: pale sky in Day, deep ocean in Night.
@@ -22,17 +24,20 @@ extension Color {
     })
 
     // -- Tide tendency (flood / ebb / slack) --
-    static let tideFlood = Color(red: 0.13, green: 0.40, blue: 0.67)  // oceanMid — incoming
-    static let tideEbb   = Color(red: 0.87, green: 0.45, blue: 0.08)  // #DE7314  — outgoing
+    // System hues so tendency tracks light / dark / contrast natively.
+    static let tideFlood = Color.teal    // incoming — matches the app accent
+    static let tideEbb   = Color.orange  // outgoing — system orange
     // slack = Color.secondary (system adaptive, sufficient for neutral)
 
     // -- Current speed — diverging blue→yellow→red scale --
     // Thresholds: <0.5  0.5–1.5  1.5–3.0  3.0–4.5  4.5+  knots
-    static let currentCalm       = Color(red: 0.13, green: 0.40, blue: 0.67)  // muted blue
-    static let currentLight      = Color(red: 0.45, green: 0.68, blue: 0.82)  // sky blue
-    static let currentModerate   = Color(red: 0.98, green: 0.85, blue: 0.37)  // amber-yellow (sunlight-safe)
-    static let currentStrong     = Color(red: 0.96, green: 0.43, blue: 0.26)  // orange-red
-    static let currentVeryStrong = Color(red: 0.84, green: 0.19, blue: 0.15)  // deep red
+    // Seeded from Apple's system colors; the map ramp (UIColor.currentSpeedRamp)
+    // is the rendered source of truth — these mirror it for any SwiftUI use.
+    static let currentCalm       = Color.blue
+    static let currentLight      = Color.teal
+    static let currentModerate   = Color.yellow
+    static let currentStrong     = Color.orange
+    static let currentVeryStrong = Color.red
 }
 
 // MARK: - Typography Tokens
@@ -97,15 +102,25 @@ enum Elevation {
 }
 
 extension View {
+    // The floating overlays (phase panel, timeline bar) live in the navigation
+    // layer above the map — exactly what Liquid Glass is for. On iOS 26+ we use
+    // the native `.glassEffect`, which supplies translucency, edge highlight and
+    // shadow as one adaptive material. On iOS 17–25 we fall back to the prior
+    // hand-built ultra-thin-material treatment so older devices look unchanged.
+    @ViewBuilder
     func floatingCard(cornerRadius: CGFloat = Radius.xl) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        return self
-            .background(.ultraThinMaterial, in: shape)
-            .overlay(shape.strokeBorder(Elevation.cardBorderColor, lineWidth: Elevation.cardBorderWidth))
-            .clipShape(shape)
-            .shadow(color: Elevation.cardShadowColor,
-                    radius: Elevation.cardShadowRadius,
-                    y: Elevation.cardShadowYOffset)
+        if #available(iOS 26, *) {
+            self.glassEffect(.regular, in: shape)
+        } else {
+            self
+                .background(.ultraThinMaterial, in: shape)
+                .overlay(shape.strokeBorder(Elevation.cardBorderColor, lineWidth: Elevation.cardBorderWidth))
+                .clipShape(shape)
+                .shadow(color: Elevation.cardShadowColor,
+                        radius: Elevation.cardShadowRadius,
+                        y: Elevation.cardShadowYOffset)
+        }
     }
 }
 
@@ -121,20 +136,25 @@ extension UIColor {
     // saturated so every arrow — especially the mid amber — reads on the light
     // basemap instead of washing out.
     static func currentSpeedRamp(dark: Bool) -> [UIColor] {
-        dark
-        ? [
-            UIColor(red: 0.36, green: 0.64, blue: 0.92, alpha: 1),  // calm   · bright blue (legible on dark water)
-            UIColor(red: 0.55, green: 0.80, blue: 0.92, alpha: 1),  // light  · sky blue
-            UIColor(red: 0.98, green: 0.85, blue: 0.37, alpha: 1),  // mod    · amber
-            UIColor(red: 0.96, green: 0.43, blue: 0.26, alpha: 1),  // strong · orange-red
-            UIColor(red: 0.84, green: 0.19, blue: 0.15, alpha: 1),  // v.str  · deep red
-        ]
-        : [
-            UIColor(red: 0.13, green: 0.45, blue: 0.72, alpha: 1),  // calm   · clear blue
-            UIColor(red: 0.15, green: 0.52, blue: 0.74, alpha: 1),  // light  · ocean blue
-            UIColor(red: 0.80, green: 0.52, blue: 0.05, alpha: 1),  // mod    · dark amber
-            UIColor(red: 0.86, green: 0.35, blue: 0.10, alpha: 1),  // strong · burnt orange
-            UIColor(red: 0.72, green: 0.11, blue: 0.10, alpha: 1),  // v.str  · deep red
-        ]
+        // Native system hues for the diverging calm → very-strong scale.
+        // System colors already brighten in dark mode and darken in light mode
+        // (the same legibility intent the old hand-tuned arrays encoded), so we
+        // resolve each for the map's current theme and hand MapLibre concrete,
+        // theme-correct colors. Verified on both basemaps for arrow legibility.
+        let traits = UITraitCollection(userInterfaceStyle: dark ? .dark : .light)
+        let ramp = [
+            UIColor.systemBlue,    // calm
+            UIColor.systemTeal,    // light
+            UIColor.systemYellow,  // moderate
+            UIColor.systemOrange,  // strong
+            UIColor.systemRed,     // very strong
+        ].map { $0.resolvedColor(with: traits) }
+        guard !dark else { return ramp }
+        // On the pale Day basemap, system yellow — the diverging midpoint — lacks
+        // contrast against light water, so darken just the moderate bucket toward
+        // amber. Verified against the light basemap; the rest stay pure system.
+        var light = ramp
+        light[2] = UIColor(red: 0.80, green: 0.55, blue: 0.05, alpha: 1)  // amber
+        return light
     }
 }
