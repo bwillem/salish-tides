@@ -12,6 +12,7 @@ struct SalishTidesApp: App {
                 .environment(viewModel)
                 .environment(settings)
                 .environment(network)
+                .tint(.brandAccent)
                 .preferredColorScheme(settings.appearance.colorScheme)
         }
     }
