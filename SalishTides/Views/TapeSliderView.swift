@@ -8,6 +8,9 @@ struct TapeSliderView: View {
     @Environment(AppSettings.self) private var settings
     @Binding var offsetHours: Int
     let sessionAnchor: Date
+    // Continuous offset (hours from sessionAnchor) emitted live during a drag —
+    // drives the bound tide chart. onCommit fires once after the hour snap.
+    let onScrub: (Double) -> Void
     let onCommit: () -> Void
 
     @State private var dragTranslation: CGFloat = 0
@@ -47,6 +50,7 @@ struct TapeSliderView: View {
             DragGesture(minimumDistance: 2)
                 .onChanged { v in
                     dragTranslation = v.translation.width
+                    onScrub(displayedOffset)
                 }
                 .onEnded { v in
                     // Compute final continuous position and snap to nearest hour

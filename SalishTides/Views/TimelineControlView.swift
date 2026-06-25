@@ -6,7 +6,11 @@ struct TimelineControlView: View {
     @State private var offsetHours: Int = 0
     @State private var sessionAnchor: Date = .now
 
-    private var isNow: Bool { offsetHours == 0 }
+    // Reflects the live scrub position (displayDate), not just the committed
+    // offset, so the dot/pill respond as the user drags.
+    private var isNow: Bool {
+        abs(vm.displayDate.timeIntervalSince(sessionAnchor)) < 60
+    }
 
     var body: some View {
         VStack(spacing: Spacing.sm) {
@@ -32,10 +36,12 @@ struct TimelineControlView: View {
             // ── Time tape slider ─────────────────────────────────────────────
             TapeSliderView(
                 offsetHours: $offsetHours,
-                sessionAnchor: sessionAnchor
-            ) {
-                applyOffset()
-            }
+                sessionAnchor: sessionAnchor,
+                onScrub: { offset in
+                    vm.scrub(to: sessionAnchor.addingTimeInterval(offset * 3600))
+                },
+                onCommit: { applyOffset() }
+            )
             .frame(height: 36)
         }
         .onAppear { jumpToNow() }
@@ -50,7 +56,7 @@ struct TimelineControlView: View {
                     .fill(Color.oceanLight)
                     .frame(width: 6, height: 6)
             }
-            Text(settings.formatTimelineDate(vm.currentDate))
+            Text(settings.formatTimelineDate(vm.displayDate))
                 .font(.stClock)
         }
         .accessibilityElement(children: .ignore)
@@ -58,7 +64,7 @@ struct TimelineControlView: View {
     }
 
     private var timeLabel: String {
-        let time = settings.formatTimelineDate(vm.currentDate)
+        let time = settings.formatTimelineDate(vm.displayDate)
         return isNow ? "Now, \(time)" : time
     }
 
