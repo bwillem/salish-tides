@@ -17,6 +17,9 @@ final class MapViewModel {
     var migrationError: String?
     var visibleViewport: ChartBounds?
     var crosshairSpeed: Double?
+    /// Flow direction (compass degrees, 0 = N) of the current at the crosshair,
+    /// from the same nearest vector as `crosshairSpeed`.
+    var crosshairDirection: Double?
 
     // Nearest tide station to the crosshair + its hi/lo events spanning the
     // visible time window (drives TideChartView).
@@ -217,7 +220,9 @@ final class MapViewModel {
         currentSelections = selections
         // Crosshair readout uses the full-resolution set; only the rendered
         // layer is down-sampled.
-        crosshairSpeed = nearestSpeed(in: vectors, viewport: visibleViewport)
+        let crosshairVector = nearestVector(in: vectors, viewport: visibleViewport)
+        crosshairSpeed = crosshairVector?.speedKnots
+        crosshairDirection = crosshairVector?.direction_deg
         currentVectors = thinned(vectors, for: visibleViewport)
 
         await updateTides(for: date, generation: generation)
@@ -299,7 +304,7 @@ final class MapViewModel {
     // (the data has no slack vectors; current exists only where there's flow).
     private let crosshairMaxDistanceDeg = 0.015  // ≈ 1.6 km
 
-    private func nearestSpeed(in vectors: [CurrentVector], viewport: ChartBounds?) -> Double? {
+    private func nearestVector(in vectors: [CurrentVector], viewport: ChartBounds?) -> CurrentVector? {
         guard let vp = viewport else { return nil }
         let cLat = (vp.lat_min + vp.lat_max) / 2
         let cLon = (vp.lon_min + vp.lon_max) / 2
@@ -313,6 +318,6 @@ final class MapViewModel {
         guard let nearest = vectors.filter({ $0.isSignificant }).min(by: { dist2($0) < dist2($1) }),
               dist2(nearest) <= crosshairMaxDistanceDeg * crosshairMaxDistanceDeg
         else { return nil }
-        return nearest.speedKnots
+        return nearest
     }
 }
