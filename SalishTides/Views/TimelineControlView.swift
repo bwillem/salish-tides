@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TimelineControlView: View {
     @Environment(MapViewModel.self) private var vm
+    @Environment(AppSettings.self) private var settings
     @State private var offsetHours: Int = 0
     @State private var sessionAnchor: Date = .now
 
@@ -37,7 +38,7 @@ struct TimelineControlView: View {
             }
             .frame(height: 36)
         }
-        .onAppear { sessionAnchor = .now }
+        .onAppear { jumpToNow() }
     }
 
     // MARK: - Readout (information only)
@@ -49,8 +50,7 @@ struct TimelineControlView: View {
                     .fill(Color.oceanLight)
                     .frame(width: 6, height: 6)
             }
-            Text(vm.currentDate,
-                 format: .dateTime.month(.abbreviated).day().hour().minute())
+            Text(settings.formatTimelineDate(vm.currentDate))
                 .font(.stClock)
         }
         .accessibilityElement(children: .ignore)
@@ -58,7 +58,7 @@ struct TimelineControlView: View {
     }
 
     private var timeLabel: String {
-        let time = vm.currentDate.formatted(date: .abbreviated, time: .shortened)
+        let time = settings.formatTimelineDate(vm.currentDate)
         return isNow ? "Now, \(time)" : time
     }
 
@@ -81,7 +81,7 @@ struct TimelineControlView: View {
     // MARK: - Actions
 
     private func jumpToNow() {
-        sessionAnchor = .now
+        sessionAnchor = Self.topOfCurrentHour()
         offsetHours = 0
         Task { await vm.setTime(sessionAnchor) }
     }
@@ -89,5 +89,12 @@ struct TimelineControlView: View {
     private func applyOffset() {
         let date = sessionAnchor.addingTimeInterval(Double(offsetHours) * 3600)
         Task { await vm.setTime(date) }
+    }
+
+    // The tape steps in whole hours, so "now" is the top of the current hour —
+    // the actual hourly chart being shown — not the live wall-clock minute.
+    private static func topOfCurrentHour() -> Date {
+        let cal = Calendar.current
+        return cal.date(from: cal.dateComponents([.year, .month, .day, .hour], from: .now)) ?? .now
     }
 }

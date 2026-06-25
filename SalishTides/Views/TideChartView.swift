@@ -162,7 +162,7 @@ struct TideChartView: View {
                     if abs(tx - cx) > 22 {
                         let hr = cal.component(.hour, from: tick)
                         ctx.draw(
-                            Text(String(format: "%02d:00", hr))
+                            Text(settings.hourTickLabel(hour: hr))
                                 .font(.system(size: 9, design: .monospaced))
                                 .foregroundStyle(.primary.opacity(0.45)),
                             at: CGPoint(x: tx, y: size.height - 3),

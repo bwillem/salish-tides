@@ -25,6 +25,11 @@ struct SettingsView: View {
                             Text(unit.label).tag(unit)
                         }
                     }
+                    Picker("Clock", selection: $settings.clockFormat) {
+                        ForEach(ClockFormat.allCases) { format in
+                            Text(format.label).tag(format)
+                        }
+                    }
                 }
 
                 // ── Map & Display ────────────────────────────────────────
