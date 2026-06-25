@@ -13,6 +13,9 @@ import numpy as np
 PDF_DIR = "/Users/bryan/salish-tides/dev/pdfs"
 
 VOLUMES = {
+    1: {"pdf": "Salish Sea Tidal Current Atlas Volume 1 Version 1.01.pdf",
+        "regions": "ABCDEFGH", "maps": 43, "regionA_start": 19,
+        "bounds": (47.5, 50.0, -124.6, -122.0)},
     2: {"pdf": "Salish Sea Tidal Current Atlas Volume 2 Version 1.01.pdf",
         "regions": "ABCDEF", "maps": 64, "regionA_start": 19,
         "bounds": (46.8, 48.5, -123.95, -122.0)},
@@ -76,9 +79,17 @@ def build_georef(page):
         minutes = float(m.group(1))
         if minutes >= 60:
             continue
-        if t['bbox'][3] > bottom_y:        # bottom edge → longitude
+        is_bottom = t['bbox'][3] > bottom_y
+        is_left = t['bbox'][0] < left_x
+        if is_bottom and is_left:
+            # Bottom-left corner label satisfies both edges (it's the corner
+            # latitude OR longitude tick) — ambiguous, and assigning it to the
+            # wrong axis corrupts that axis's fit. Skip it; the remaining ticks
+            # fit fine and extrapolate over the dropped one.
+            continue
+        if is_bottom:                      # bottom edge → longitude
             lon_labels.append((t['x'], minutes))
-        elif t['bbox'][0] < left_x:        # left edge → latitude
+        elif is_left:                      # left edge → latitude
             lat_labels.append((t['y'], minutes))
 
     # Anchor the first tick's whole degree by its side of the degree label
@@ -156,7 +167,14 @@ def extract_arrows(page):
         if length < 1:
             continue
         compass = (90 - math.degrees(math.atan2(dy, dx))) % 360
-        arrows.append({'cx': cx, 'cy': cy, 'length_px': length, 'direction_deg': compass})
+        # Store the shaft MIDPOINT (geometric centre of the arrow). The polygon
+        # centroid is biased toward the wide arrowhead, so the stored point lands
+        # near the tip and a symmetric ±half-length render leaves the tail
+        # sticking out. The atlas centres arrows on their sample points (base
+        # anchoring measured worse against the water mask), so the midpoint is
+        # both the true centre for rendering and the right velocity-field sample.
+        mx, my = (bx + tip.x) / 2, (by + tip.y) / 2
+        arrows.append({'cx': mx, 'cy': my, 'length_px': length, 'direction_deg': compass})
     return arrows
 
 
