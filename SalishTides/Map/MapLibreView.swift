@@ -7,8 +7,9 @@ struct MapLibreView: UIViewRepresentable {
     @Environment(AppSettings.self) private var settings
     @Environment(\.colorScheme) private var colorScheme
 
-    // Day / Night basemap styles (see DESIGN.md §2.3).
-    static func styleURL(for scheme: ColorScheme) -> URL? {
+    // Day / Night basemap styles (see DESIGN.md §2.3). Pure bundle lookup —
+    // nonisolated so the (also nonisolated) MapStyleLoader can call it.
+    nonisolated static func styleURL(for scheme: ColorScheme) -> URL? {
         let name = scheme == .dark ? "stub-style-dark" : "stub-style-light"
         return Bundle.main.url(forResource: name, withExtension: "json")
     }

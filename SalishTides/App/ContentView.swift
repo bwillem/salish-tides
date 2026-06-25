@@ -6,10 +6,13 @@ struct ContentView: View {
     @Environment(NetworkMonitor.self) private var network
     @State private var showingSettings = false
 
-    // When a network style is shown while online, its tiles enter the ambient
-    // cache — record it so it stays selectable offline.
+    // When a network style is shown while *confirmed* online, its tiles enter
+    // the ambient cache — record it so it stays selectable offline. Gating on
+    // didConfirmOnline avoids marking from the optimistic launch default.
     private func recordIfOnline() {
-        if network.isOnline { settings.markOfflineReady(settings.basemap) }
+        if network.isOnline, network.didConfirmOnline {
+            settings.markOfflineReady(settings.basemap)
+        }
     }
 
     var body: some View {
@@ -60,6 +63,7 @@ struct ContentView: View {
         .onAppear { recordIfOnline() }
         .onChange(of: settings.basemap) { recordIfOnline() }
         .onChange(of: network.isOnline) { recordIfOnline() }
+        .onChange(of: network.didConfirmOnline) { recordIfOnline() }
     }
 }
 
