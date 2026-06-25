@@ -26,7 +26,7 @@ actor VectorDatabase {
     // The DB is a pure derived cache rebuilt from bundled JSON, so dropping
     // is always safe — DatabaseMigrator repopulates it.
     // v4: corrected Vol 2-4 georeferencing (degree-crossing/landscape fix).
-    private static let schemaVersion = 4
+    private static let schemaVersion = 5
 
     private init() {}
 

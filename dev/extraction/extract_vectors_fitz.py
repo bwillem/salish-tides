@@ -1,0 +1,235 @@
+#!/usr/bin/env python3
+"""Extract current vectors from the Salish Sea Atlas using PyMuPDF (fitz).
+
+Port of the original working Vol 1 extractor, generalized per volume. Arrows are
+black drawing paths with exactly 7 line-segment items; position is the path
+centroid; georeferencing is a least-squares fit over all gridline minute labels
+with monotonicity-based degree assignment. Writes one map_<chart>_<region>.json
+per page (array of {lat,lon,speed_ms,direction_deg}).
+"""
+import fitz, math, json, re, os, sys
+import numpy as np
+
+PDF_DIR = "/Users/bryan/salish-tides/dev/pdfs"
+
+VOLUMES = {
+    2: {"pdf": "Salish Sea Tidal Current Atlas Volume 2 Version 1.01.pdf",
+        "regions": "ABCDEF", "maps": 64, "regionA_start": 19,
+        "bounds": (46.8, 48.5, -123.95, -122.0)},
+    3: {"pdf": "Salish Sea Tidal Current Atlas Volume 3 Version 1.0.pdf",
+        "regions": "ABCDEFGH", "maps": 43, "regionA_start": 19,
+        "bounds": (48.8, 51.3, -126.6, -123.5)},
+    4: {"pdf": "Salish Sea Tidal Current Atlas Volume 4 Version 1.0.pdf",
+        "regions": "ABCDEFGH", "maps": 69, "regionA_start": 19,
+        "bounds": (49.5, 52.6, -129.6, -124.7)},
+}
+
+
+def text_items(page):
+    items = []
+    for b in page.get_text('dict')['blocks']:
+        if 'lines' not in b:
+            continue
+        for line in b['lines']:
+            for span in line['spans']:
+                t = span['text'].strip()
+                if t:
+                    bb = span['bbox']
+                    items.append({'text': t, 'x': (bb[0]+bb[2])/2, 'y': (bb[1]+bb[3])/2, 'bbox': bb})
+    return items
+
+
+def build_georef(page):
+    ti = text_items(page)
+    W, H = page.rect.width, page.rect.height
+    # Degree labels carry both a value and a position. The position is the
+    # meridian/parallel; minute ticks on either side belong to different whole
+    # degrees. (Vol 4 Region G's "51°N" sits ABOVE its ticks, so they are
+    # 50°55'… not 51°55' — assigning by value alone puts G/H 1° too far north.)
+    lon_deg = lat_deg = None
+    lon_deg_x = lat_deg_y = None
+    for t in ti:
+        m = re.match(r'(\d+)°W', t['text'])
+        if m:
+            lon_deg = int(m.group(1))
+            lon_deg_x = t['x']
+        m = re.match(r'(\d+)°N', t['text'])
+        if m:
+            lat_deg = int(m.group(1))
+            lat_deg_y = t['y']
+    if lon_deg is None or lat_deg is None:
+        return None
+
+    # Latitude labels hug the left edge; longitude labels sit on the bottom
+    # border. A tight bottom threshold (proven to give ~1.4% on-land for the
+    # 747-tall portrait pages) avoids spurious minute-like text in the map.
+    # Landscape pages (Vol 4 Region F, 612 tall) put the labels relatively
+    # higher, so use a lower fraction there.
+    bottom_frac = 0.85 if W > H else 0.90
+    bottom_y = H * bottom_frac
+    left_x = W * 0.14
+    lon_labels, lat_labels = [], []
+    for t in ti:
+        m = re.match(r"(\d+\.?\d*)'", t['text'])
+        if not m:
+            continue
+        minutes = float(m.group(1))
+        if minutes >= 60:
+            continue
+        if t['bbox'][3] > bottom_y:        # bottom edge → longitude
+            lon_labels.append((t['x'], minutes))
+        elif t['bbox'][0] < left_x:        # left edge → latitude
+            lat_labels.append((t['y'], minutes))
+
+    # Anchor the first tick's whole degree by its side of the degree label
+    # (handles charts whose ticks all sit on one side of the labelled line, e.g.
+    # Vol 4 Region G where 51°N is north of every tick → they are 50°xx). Then
+    # walk the rest by monotonicity (lon increases W→E; lat decreases N→S),
+    # which absorbs degree crossings without trusting the label's exact x/y.
+    lon_labels.sort(key=lambda p: p[0])
+    lon_points = []
+    for x, minutes in lon_labels:
+        if not lon_points:
+            deg = lon_deg if x <= lon_deg_x else lon_deg - 1
+            val = -(deg + minutes/60)
+        else:
+            prev = lon_points[-1][1]
+            cands = [-(d + minutes/60) for d in (lon_deg-2, lon_deg-1, lon_deg, lon_deg+1)]
+            valid = [c for c in cands if c > prev]
+            val = min(valid) if valid else -(lon_deg + minutes/60)
+        lon_points.append((x, val))
+
+    lat_labels.sort(key=lambda p: p[0])
+    lat_points = []
+    for y, minutes in lat_labels:
+        if not lat_points:
+            deg = lat_deg if y <= lat_deg_y else lat_deg - 1
+            val = deg + minutes/60
+        else:
+            prev = lat_points[-1][1]
+            cands = [d + minutes/60 for d in (lat_deg-2, lat_deg-1, lat_deg, lat_deg+1)]
+            valid = [c for c in cands if c < prev]
+            val = max(valid) if valid else lat_deg + minutes/60
+        lat_points.append((y, val))
+
+    if len(lon_points) < 2 or len(lat_points) < 2:
+        return None
+    lon_fit = np.polyfit([p[0] for p in lon_points], [p[1] for p in lon_points], 1)
+    lat_fit = np.polyfit([p[0] for p in lat_points], [p[1] for p in lat_points], 1)
+    return {'lon_fit': lon_fit, 'lat_fit': lat_fit}
+
+
+def find_inset_rects(page):
+    insets = []
+    for p in page.get_drawings():
+        rect = p['rect']
+        if p.get('color') == (0.0, 0.0, 0.0) and not p.get('fill') and len(p['items']) == 1:
+            if 80 < rect.width < 400 and 80 < rect.height < 400 and (p.get('width') or 0) > 0.5:
+                insets.append(rect)
+    uniq = []
+    for r in insets:
+        if not any(abs(r.x0-u.x0) < 5 and abs(r.y0-u.y0) < 5 for u in uniq):
+            uniq.append(r)
+    return uniq
+
+
+def extract_arrows(page):
+    insets = find_inset_rects(page)
+    arrows = []
+    for p in page.get_drawings():
+        if p.get('color') != (0.0, 0.0, 0.0) or len(p['items']) != 7:
+            continue
+        items = p['items']
+        if not all(it[0] == 'l' and hasattr(it[1], 'x') for it in items):
+            continue
+        pts = [it[1] for it in items]
+        cx = sum(q.x for q in pts)/len(pts)
+        cy = sum(q.y for q in pts)/len(pts)
+        if any(r.x0 <= cx <= r.x1 and r.y0 <= cy <= r.y1 for r in insets):
+            continue
+        tip = items[3][1]
+        bs = items[0][1]
+        be = items[6][2] if hasattr(items[6][2], 'x') else items[6][1]
+        bx, by = (bs.x+be.x)/2, (bs.y+be.y)/2
+        dx, dy = tip.x - bx, -(tip.y - by)
+        length = math.hypot(dx, dy)
+        if length < 1:
+            continue
+        compass = (90 - math.degrees(math.atan2(dy, dx))) % 360
+        arrows.append({'cx': cx, 'cy': cy, 'length_px': length, 'direction_deg': compass})
+    return arrows
+
+
+def find_scale(page, arrows):
+    ti = text_items(page)
+    insets = find_inset_rects(page)
+    scales = []
+    for t in ti:
+        m = re.match(r'([\d.]+)\s*m/s', t['text'])
+        if m and not any(r.x0 <= t['x'] <= r.x1 and r.y0 <= t['y'] <= r.y1 for r in insets):
+            scales.append({'v': float(m.group(1)), 'x': t['x'], 'y': t['y']})
+    if not scales:
+        return None
+    scales.sort(key=lambda s: s['y'])
+    main = scales[0]
+    best, bd = None, 1e9
+    for a in arrows:
+        d = math.hypot(a['cx']-main['x'], a['cy']-main['y'])
+        if d < bd and d < 100:
+            bd, best = d, a
+    if best and best['length_px'] > 5:
+        return main['v'] / best['length_px']
+    return main['v'] / 39.0
+
+
+def process(doc, page_idx, bounds, fb_geo, fb_scale):
+    page = doc[page_idx]
+    geo = build_georef(page) or fb_geo
+    if geo is None:
+        return None, fb_geo, fb_scale
+    arrows = extract_arrows(page)
+    if not arrows:
+        return [], geo, fb_scale
+    scale = find_scale(page, arrows) or fb_scale or (1.0/39.0)
+    lonf, latf = geo['lon_fit'], geo['lat_fit']
+    la0, la1, lo0, lo1 = bounds
+    out = []
+    for a in arrows:
+        lon = lonf[0]*a['cx'] + lonf[1]
+        lat = latf[0]*a['cy'] + latf[1]
+        spd = a['length_px']*scale
+        if lat < la0 or lat > la1 or lon < lo0 or lon > lo1 or spd > 8.0:
+            continue
+        out.append({'lat': round(lat, 5), 'lon': round(lon, 5),
+                    'speed_ms': round(spd, 3), 'direction_deg': round(a['direction_deg'], 1)})
+    return out, geo, scale
+
+
+def main():
+    vol = int(sys.argv[1])
+    outdir = sys.argv[2]
+    cfg = VOLUMES[vol]
+    os.makedirs(outdir, exist_ok=True)
+    doc = fitz.open(os.path.join(PDF_DIR, cfg['pdf']))
+    regions = cfg['regions']
+    maps = cfg['maps']
+    a_start = cfg['regionA_start'] or 19
+    total = 0
+    for ri, region in enumerate(regions):
+        start = a_start + ri*maps
+        fb_geo = fb_scale = None
+        for i in range(maps):
+            idx = start + i
+            chart = i + 1
+            vecs, fb_geo, fb_scale = process(doc, idx, cfg['bounds'], fb_geo, fb_scale)
+            if vecs is None:
+                vecs = []
+            with open(os.path.join(outdir, f"map_{chart}_{region}.json"), 'w') as f:
+                json.dump(vecs, f, separators=(',', ':'))
+            total += len(vecs)
+        print(f"  region {region}: done")
+    print(f"Vol {vol}: {total} vectors -> {outdir}")
+
+
+if __name__ == '__main__':
+    main()

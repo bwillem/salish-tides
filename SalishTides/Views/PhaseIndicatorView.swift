@@ -9,7 +9,7 @@ struct PhaseIndicatorView: View {
             VStack(spacing: 0) {
 
                 // ── Tide height chart ────────────────────────────────────────
-                TideChartView(currentDate: vm.currentDate,
+                TideChartView(currentDate: vm.displayDate,
                               station: vm.tideStation,
                               events: vm.tideEvents)
                     .frame(height: 108)
@@ -33,14 +33,18 @@ struct PhaseIndicatorView: View {
                         Text(sel.phase.replacingOccurrences(of: "_", with: " ").capitalized)
                             .font(.stHeadline)
 
-                        if let speed = vm.crosshairSpeed {
-                            HStack(spacing: Spacing.xxs) {
-                                Image(systemName: "scope")
+                        // Em dash when the crosshair is on land / off coverage —
+                        // there's no current speed to report there.
+                        HStack(spacing: Spacing.xxs) {
+                            Image(systemName: "scope")
+                            if let speed = vm.crosshairSpeed {
                                 Text(settings.formatSpeed(knots: speed))
+                            } else {
+                                Text("—")
                             }
-                            .font(.stMono)
-                            .foregroundStyle(.secondary)
                         }
+                        .font(.stMono)
+                        .foregroundStyle(.secondary)
                     }
 
                     Spacer(minLength: 0)
@@ -57,7 +61,7 @@ struct PhaseIndicatorView: View {
 
     private var tideChartLabel: String {
         guard let station = vm.tideStation,
-              let h = TideCurve.height(at: vm.currentDate, events: vm.tideEvents) else {
+              let h = TideCurve.height(at: vm.displayDate, events: vm.tideEvents) else {
             return "Tide chart. Data unavailable."
         }
         let datum = station.datum == "MLLW" ? "mean lower low water" : "chart datum"
@@ -71,6 +75,8 @@ struct PhaseIndicatorView: View {
         var label = "\(phase) tide."
         if let speed = vm.crosshairSpeed {
             label += " \(settings.formatSpeed(knots: speed)) at crosshair."
+        } else {
+            label += " No current at crosshair."
         }
         return label
     }
