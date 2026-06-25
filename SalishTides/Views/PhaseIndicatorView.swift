@@ -15,7 +15,17 @@ struct PhaseIndicatorView: View {
                     .accessibilityElement()
                     .accessibilityLabel(tideChartLabel)
 
-                // Phase state labels the chart it sits under.
+                // Provenance: which station the curve is from + its datum.
+                // Sits directly under the chart it labels.
+                if let station = vm.tideStation {
+                    Text("\(station.name) · \(station.datum)")
+                        .font(.stCaption)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+
+                // Phase state.
                 HStack(spacing: Spacing.xs) {
                     Image(systemName: tendencyIcon(sel.tendency))
                         .font(.stPhase.weight(.semibold))
@@ -26,15 +36,6 @@ struct PhaseIndicatorView: View {
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("\(phaseText(sel)) tide.")
-
-                // Provenance: which station the curve is from + its datum.
-                if let station = vm.tideStation {
-                    Text("\(station.name) · \(station.datum)")
-                        .font(.stCaption)
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
             }
             .padding(Spacing.md)
             .frame(width: 248)
