@@ -5,6 +5,7 @@ import CoreLocation
 struct MapLibreView: UIViewRepresentable {
     @Environment(MapViewModel.self) private var vm
     @Environment(AppSettings.self) private var settings
+    @Environment(MapController.self) private var mapController
     @Environment(\.colorScheme) private var colorScheme
 
     // The bundled Standard basemap, per Day / Night (see DESIGN.md §2.3). Pure
@@ -30,7 +31,9 @@ struct MapLibreView: UIViewRepresentable {
         let mapView = MLNMapView(frame: .zero)
         mapView.delegate = context.coordinator
         mapView.showsUserLocation = true
-        mapView.compassView.compassVisibility = .adaptive
+        // We render our own compass control (top-left stack), so hide the
+        // built-in one.
+        mapView.compassView.compassVisibility = .hidden
         mapView.minimumZoomLevel = 7
         mapView.maximumZoomLevel = 14
 
@@ -38,6 +41,7 @@ struct MapLibreView: UIViewRepresentable {
         let center = CLLocationCoordinate2D(latitude: 48.8, longitude: -123.2)
         mapView.setCenter(center, zoomLevel: 9.5, animated: false)
 
+        mapController.mapView = mapView
         context.coordinator.lastScheme = colorScheme
         context.coordinator.appliedBasemap = settings.basemap
         mapView.styleURL = desiredStyleURL(for: colorScheme)
@@ -59,9 +63,14 @@ struct MapLibreView: UIViewRepresentable {
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onViewportChange: { [vm] bounds in
-            Task { await vm.updateViewport(bounds) }
-        })
+        Coordinator(
+            onViewportChange: { [vm] bounds in
+                Task { await vm.updateViewport(bounds) }
+            },
+            onBearingChange: { [mapController] bearing in
+                Task { @MainActor in mapController.bearing = bearing }
+            }
+        )
     }
 
     // MLNMapViewDelegate is an ObjC protocol with no @MainActor annotation; Swift 6 rejects
@@ -79,9 +88,12 @@ struct MapLibreView: UIViewRepresentable {
         // Developer basemap selection currently applied; reload only on change.
         nonisolated(unsafe) var appliedBasemap: Basemap?
         private let onViewportChange: (ChartBounds) -> Void
+        private let onBearingChange: (Double) -> Void
 
-        init(onViewportChange: @escaping (ChartBounds) -> Void) {
+        init(onViewportChange: @escaping (ChartBounds) -> Void,
+             onBearingChange: @escaping (Double) -> Void) {
             self.onViewportChange = onViewportChange
+            self.onBearingChange = onBearingChange
         }
 
         // Setting styleURL tears down the added source/layers; stash the vectors
@@ -107,6 +119,12 @@ struct MapLibreView: UIViewRepresentable {
                 lon_max: b.ne.longitude
             )
             onViewportChange(viewport)
+            onBearingChange(mapView.direction)
+        }
+
+        // Live updates while the user rotates, so the compass tracks smoothly.
+        func mapViewRegionIsChanging(_ mapView: MLNMapView) {
+            onBearingChange(mapView.direction)
         }
 
         func updateVectors(_ vectors: [CurrentVector], on mapView: MLNMapView) {

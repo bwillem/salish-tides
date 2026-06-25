@@ -26,6 +26,7 @@
 		5DB2319BABC9FB829D843F6A /* TideChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E02E5CB168CDB0660201216E /* TideChartView.swift */; };
 		5FECA4D7D218CCCFA6B36A93 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DDA2FAF2D0189860F478A7C /* AppSettings.swift */; };
 		674193FB48B28EB47DDE9EF9 /* MapLibreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 705E9152F8BEA1FA75608D3F /* MapLibreView.swift */; };
+		79DB6E5EBB8738AF5B7CECFE /* MapController.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC0C2E94595CF5DDCD144C35 /* MapController.swift */; };
 		8892B94C18ABFFDE44949FD5 /* atlas_index_vol3.json in Resources */ = {isa = PBXBuildFile; fileRef = 1F71279AD0BA5885E48ABD65 /* atlas_index_vol3.json */; };
 		8A09E69E3A83AA62722D3822 /* ocean-dark.json in Resources */ = {isa = PBXBuildFile; fileRef = 29431B00732877DA2E615BF3 /* ocean-dark.json */; };
 		9CEBBFBDEB99CD300FC775BF /* TideDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = D25E37F6E08BDAD0D7CB5885 /* TideDatabase.swift */; };
@@ -76,6 +77,7 @@
 		AA074DF096B9F67F83B4959E /* MapStyleLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapStyleLoader.swift; sourceTree = "<group>"; };
 		B460FF242F858B027A672B40 /* TimelineControlView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineControlView.swift; sourceTree = "<group>"; };
 		B534466B629735C3AFD88226 /* CurrentVector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrentVector.swift; sourceTree = "<group>"; };
+		BC0C2E94595CF5DDCD144C35 /* MapController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapController.swift; sourceTree = "<group>"; };
 		BF78D89E101E6B88EB6D487E /* PhaseIndicatorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhaseIndicatorView.swift; sourceTree = "<group>"; };
 		D191057D343E390CB41EAF3B /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
 		D25E37F6E08BDAD0D7CB5885 /* TideDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TideDatabase.swift; sourceTree = "<group>"; };
@@ -226,6 +228,7 @@
 			isa = PBXGroup;
 			children = (
 				6E351A5A0241F5F0CB272A0D /* Basemap.swift */,
+				BC0C2E94595CF5DDCD144C35 /* MapController.swift */,
 				705E9152F8BEA1FA75608D3F /* MapLibreView.swift */,
 				AA074DF096B9F67F83B4959E /* MapStyleLoader.swift */,
 			);
@@ -357,6 +360,7 @@
 				570A422AFA165A8582E8CC3E /* CurrentVector.swift in Sources */,
 				5447EAD323169BC3E88B2FF6 /* DatabaseMigrator.swift in Sources */,
 				B3E0A98667446BD785E78FBB /* DesignTokens.swift in Sources */,
+				79DB6E5EBB8738AF5B7CECFE /* MapController.swift in Sources */,
 				674193FB48B28EB47DDE9EF9 /* MapLibreView.swift in Sources */,
 				08E5BFDB78B9E55E1DA9E61D /* MapStyleLoader.swift in Sources */,
 				1D5038B1FFB6DE1A54FE8E25 /* MapViewModel.swift in Sources */,
