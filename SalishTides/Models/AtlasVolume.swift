@@ -28,7 +28,7 @@ let atlasVolumes: [VolumeSpec] = [
         mapSubdirectory: "maps_vol2",
         maxChart: 64,
         regions: ["A", "B", "C", "D", "E", "F"],
-        bounds: ChartBounds(lat_min: 46.9, lat_max: 48.5, lon_min: -123.9, lon_max: -122.1),
+        bounds: ChartBounds(lat_min: 47.0, lat_max: 48.45, lon_min: -123.25, lon_max: -122.15),
         atlasIndexResource: "atlas_index_vol2"
     ),
     VolumeSpec(
@@ -39,7 +39,7 @@ let atlasVolumes: [VolumeSpec] = [
         mapSubdirectory: "maps_vol3",
         maxChart: 43,
         regions: ["A", "B", "C", "D", "E", "F", "G", "H"],
-        bounds: ChartBounds(lat_min: 49.0, lat_max: 51.2, lon_min: -125.5, lon_max: -123.5),
+        bounds: ChartBounds(lat_min: 49.1, lat_max: 50.65, lon_min: -125.4, lon_max: -123.6),
         atlasIndexResource: "atlas_index_vol3"
     ),
     VolumeSpec(
@@ -48,7 +48,7 @@ let atlasVolumes: [VolumeSpec] = [
         mapSubdirectory: "maps_vol4",
         maxChart: 69,
         regions: ["A", "B", "C", "D", "E", "F", "G", "H"],
-        bounds: ChartBounds(lat_min: 49.8, lat_max: 52.2, lon_min: -129.1, lon_max: -125.0),
+        bounds: ChartBounds(lat_min: 49.85, lat_max: 51.15, lon_min: -128.2, lon_max: -125.0),
         atlasIndexResource: "atlas_index_vol4"
     ),
 ]
