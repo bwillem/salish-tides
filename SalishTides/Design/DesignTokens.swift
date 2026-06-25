@@ -23,6 +23,15 @@ extension Color {
             : UIColor(red: 0.86, green: 0.91, blue: 0.95, alpha: 1)   // pale sky
     })
 
+    // Secondary "ink" for muted captions on the glass cards. Brighter than the
+    // system `secondaryLabel` (≈60% in dark) so provenance text stays legible on
+    // the dark material per principle #1, while still sitting below `.primary`.
+    static let inkSecondary = Color(uiColor: UIColor { trait in
+        trait.userInterfaceStyle == .dark
+            ? UIColor(white: 1, alpha: 0.80)
+            : UIColor(white: 0, alpha: 0.58)
+    })
+
     // -- Tide tendency (flood / ebb / slack) --
     // System hues so tendency tracks light / dark / contrast natively.
     static let tideFlood = Color.teal    // incoming — matches the app accent
@@ -43,17 +52,20 @@ extension Font {
     // Splash / hero
     static let stDisplay  = Font.system(.largeTitle,  design: .default).weight(.bold)
 
-    // Phase name headline in the capsule badge
-    static let stHeadline = Font.system(.subheadline, design: .default).weight(.bold)
+    // Hero current-speed readout — the primary datum in the phase card. Large
+    // monospaced digits so the value reads at a glance and doesn't jump while
+    // scrubbing; the unit ("kn") rides smaller beside it.
+    static let stReadout     = Font.system(.title,   design: .default).weight(.bold).monospacedDigit()
+    static let stReadoutUnit = Font.system(.callout, design: .default).weight(.medium)
+
+    // Tide phase label under the chart (and its tendency arrow)
+    static let stPhase    = Font.system(.subheadline, design: .default)
 
     // Timeline date/time (monospaced so digits don't jump)
     static let stClock    = Font.system(.headline,    design: .default).monospacedDigit()
 
     // Secondary labels (chart number, phase in timeline)
     static let stCaption  = Font.system(.caption,     design: .monospaced)
-
-    // Speed readout, offset label — fixed-width data
-    static let stMono     = Font.system(.caption2,    design: .monospaced).monospacedDigit()
 }
 
 // MARK: - Spacing Scale
