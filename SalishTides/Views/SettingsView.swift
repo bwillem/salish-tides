@@ -85,8 +85,8 @@ private struct DataSourcesView: View {
             }
 
             Section("Tidal Currents") {
-                LabeledContent("Atlas", value: "Canadian Current Atlas")
-                Text("Current vectors are derived from the Canadian Hydrographic Service current atlas volumes for the Salish Sea.")
+                LabeledContent("Atlas", value: "Salish Sea Tidal Current Atlas")
+                Text("Current vectors are extracted from the four-volume Salish Sea Tidal Current Atlas, covering tidal currents across the Salish Sea (BC / WA).")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
