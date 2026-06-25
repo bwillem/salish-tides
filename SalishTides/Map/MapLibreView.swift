@@ -125,13 +125,13 @@ struct MapLibreView: UIViewRepresentable {
 
             let shaftLayer = MLNLineStyleLayer(identifier: shaftLayerID, source: source)
             shaftLayer.lineColor = speedColorExpression(dark: dark)
-            shaftLayer.lineWidth = NSExpression(format: "TERNARY(speed_knots < 1.5, 1.0, TERNARY(speed_knots < 3.0, 1.8, 3.0))")
+            shaftLayer.lineWidth = NSExpression(format: "TERNARY(speed_knots < 1.5, 1.4, TERNARY(speed_knots < 3.0, 1.8, 3.0))")
             shaftLayer.lineCap = NSExpression(forConstantValue: "round")
             shaftLayer.predicate = NSPredicate(format: "arrow_type == 'shaft'")
 
             let barbLayer = MLNLineStyleLayer(identifier: barbLayerID, source: source)
             barbLayer.lineColor = speedColorExpression(dark: dark)
-            barbLayer.lineWidth = NSExpression(format: "TERNARY(speed_knots < 1.5, 0.8, TERNARY(speed_knots < 3.0, 1.4, 2.5))")
+            barbLayer.lineWidth = NSExpression(format: "TERNARY(speed_knots < 1.5, 1.1, TERNARY(speed_knots < 3.0, 1.4, 2.5))")
             barbLayer.predicate = NSPredicate(format: "arrow_type == 'barb'")
 
             style.addLayer(shaftLayer)
