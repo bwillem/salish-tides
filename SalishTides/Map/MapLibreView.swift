@@ -5,20 +5,36 @@ import CoreLocation
 struct MapLibreView: UIViewRepresentable {
     @Environment(MapViewModel.self) private var vm
     @Environment(AppSettings.self) private var settings
+    @Environment(MapController.self) private var mapController
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
 
-    // Day / Night basemap styles (see DESIGN.md §2.3).
-    static func styleURL(for scheme: ColorScheme) -> URL? {
-        let name = scheme == .dark ? "stub-style-dark" : "stub-style-light"
+    // The bundled Standard basemap, per Day / Night (see DESIGN.md §2.3). Pure
+    // bundle lookup — nonisolated so the (also nonisolated) MapStyleLoader can
+    // call it. Doubles as the universal fallback when an online style fails.
+    nonisolated static func styleURL(for scheme: ColorScheme) -> URL? {
+        let name = scheme == .dark ? "standard-dark" : "standard-light"
         return Bundle.main.url(forResource: name, withExtension: "json")
     }
 
+    // Resolved style for the selected basemap + current appearance. MapTiler
+    // styles inject the key from the bundled JSON; .standard / failures fall
+    // back to the bundled Standard style above.
+    private func desiredStyleURL(for scheme: ColorScheme) -> URL? {
+        MapStyleLoader.styleURL(for: settings.basemap, dark: scheme == .dark)
+    }
+
     func makeUIView(context: Context) -> MLNMapView {
+        // Grow the ambient cache so a day's viewing survives offline (default is
+        // ~50 MB). This is what makes online styles render offline afterward.
+        MLNOfflineStorage.shared.setMaximumAmbientCacheSize(256 * 1024 * 1024, withCompletionHandler: { _ in })
+
         let mapView = MLNMapView(frame: .zero)
         mapView.delegate = context.coordinator
         mapView.showsUserLocation = true
-        mapView.compassView.compassVisibility = .adaptive
+        // We render our own compass control (top-left stack), so hide the
+        // built-in one.
+        mapView.compassView.compassVisibility = .hidden
         mapView.minimumZoomLevel = 7
         mapView.maximumZoomLevel = 14
 
@@ -26,19 +42,23 @@ struct MapLibreView: UIViewRepresentable {
         let center = CLLocationCoordinate2D(latitude: 48.8, longitude: -123.2)
         mapView.setCenter(center, zoomLevel: 9.5, animated: false)
 
+        mapController.mapView = mapView
         context.coordinator.lastScheme = colorScheme
-        mapView.styleURL = Self.styleURL(for: colorScheme)
+        context.coordinator.appliedBasemap = settings.basemap
+        mapView.styleURL = desiredStyleURL(for: colorScheme)
 
         return mapView
     }
 
     func updateUIView(_ mapView: MLNMapView, context: Context) {
-        // Swap the basemap when the system appearance flips, re-applying the
-        // current vectors once the new style finishes loading.
-        if context.coordinator.lastScheme != colorScheme {
+        // Reload the basemap on a Day/Night flip or a Map Style change,
+        // re-applying the current vectors once the new style finishes loading.
+        if context.coordinator.lastScheme != colorScheme
+            || context.coordinator.appliedBasemap != settings.basemap {
             context.coordinator.lastScheme = colorScheme
+            context.coordinator.appliedBasemap = settings.basemap
             context.coordinator.prepareForStyleReload(vm.currentVectors)
-            mapView.styleURL = Self.styleURL(for: colorScheme)
+            mapView.styleURL = desiredStyleURL(for: colorScheme)
         }
         context.coordinator.updateVectors(vm.currentVectors, on: mapView)
         // Push the latest velocity field to the particle layer. Read here so
@@ -53,9 +73,20 @@ struct MapLibreView: UIViewRepresentable {
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onViewportChange: { [vm] bounds in
-            Task { await vm.updateViewport(bounds) }
-        })
+        Coordinator(
+            onViewportChange: { [vm] bounds in
+                Task { await vm.updateViewport(bounds) }
+            },
+            onBearingChange: { [mapController] bearing in
+                // Only write on an actual change: mapViewRegionIsChanging fires
+                // every frame during pan/zoom too, and ContentView observes
+                // `bearing`, so a redundant write would re-render the overlay
+                // ~60×/sec while panning.
+                Task { @MainActor in
+                    if mapController.bearing != bearing { mapController.bearing = bearing }
+                }
+            }
+        )
     }
 
     // MLNMapViewDelegate is an ObjC protocol with no @MainActor annotation; Swift 6 rejects
@@ -66,6 +97,7 @@ struct MapLibreView: UIViewRepresentable {
         private let shaftLayerID = "salish-shafts"
         private let barbLayerID = "salish-barbs"
         private let particleLayerID = "salish-particles"
+        private let slackLayerID = "salish-slack"
         nonisolated(unsafe) private var pendingVectors: [CurrentVector]?
         // The custom particle layer, re-created on each style (re)load. Held so
         // updateUIView can push the latest velocity field to it.
@@ -73,10 +105,15 @@ struct MapLibreView: UIViewRepresentable {
         // Tracks the basemap appearance currently applied, so we only reload the
         // style on an actual Day/Night flip.
         nonisolated(unsafe) var lastScheme: ColorScheme?
+        // Developer basemap selection currently applied; reload only on change.
+        nonisolated(unsafe) var appliedBasemap: Basemap?
         private let onViewportChange: (ChartBounds) -> Void
+        private let onBearingChange: (Double) -> Void
 
-        init(onViewportChange: @escaping (ChartBounds) -> Void) {
+        init(onViewportChange: @escaping (ChartBounds) -> Void,
+             onBearingChange: @escaping (Double) -> Void) {
             self.onViewportChange = onViewportChange
+            self.onBearingChange = onBearingChange
         }
 
         // Setting styleURL tears down the added source/layers; stash the vectors
@@ -102,6 +139,12 @@ struct MapLibreView: UIViewRepresentable {
                 lon_max: b.ne.longitude
             )
             onViewportChange(viewport)
+            onBearingChange(mapView.direction)
+        }
+
+        // Live updates while the user rotates, so the compass tracks smoothly.
+        func mapViewRegionIsChanging(_ mapView: MLNMapView) {
+            onBearingChange(mapView.direction)
         }
 
         func updateVectors(_ vectors: [CurrentVector], on mapView: MLNMapView) {
@@ -141,6 +184,7 @@ struct MapLibreView: UIViewRepresentable {
             if let s = mapView.style {
                 s.layer(withIdentifier: shaftLayerID)?.isVisible = showArrows
                 s.layer(withIdentifier: barbLayerID)?.isVisible = showArrows
+                s.layer(withIdentifier: slackLayerID)?.isVisible = showArrows
             }
             particleLayer?.setActive(!showArrows)
         }
@@ -159,21 +203,33 @@ struct MapLibreView: UIViewRepresentable {
 
             let shaftLayer = MLNLineStyleLayer(identifier: shaftLayerID, source: source)
             shaftLayer.lineColor = speedColorExpression(dark: dark)
-            shaftLayer.lineWidth = NSExpression(format: "TERNARY(speed_knots < 1.5, 1.0, TERNARY(speed_knots < 3.0, 1.8, 3.0))")
+            shaftLayer.lineWidth = NSExpression(format: "TERNARY(speed_knots < 1.5, 1.4, TERNARY(speed_knots < 3.0, 1.8, 3.0))")
             shaftLayer.lineCap = NSExpression(forConstantValue: "round")
             shaftLayer.predicate = NSPredicate(format: "arrow_type == 'shaft'")
 
             let barbLayer = MLNLineStyleLayer(identifier: barbLayerID, source: source)
             barbLayer.lineColor = speedColorExpression(dark: dark)
-            barbLayer.lineWidth = NSExpression(format: "TERNARY(speed_knots < 1.5, 0.8, TERNARY(speed_knots < 3.0, 1.4, 2.5))")
+            barbLayer.lineWidth = NSExpression(format: "TERNARY(speed_knots < 1.5, 1.1, TERNARY(speed_knots < 3.0, 1.4, 2.5))")
             barbLayer.predicate = NSPredicate(format: "arrow_type == 'barb'")
 
-            // Visibility is driven by the selected current style (re-applied
-            // below), so a Day/Night style reload restores the right mode.
+            // Slack/weak grid points (speed 0, no direction) render as small
+            // faint dots — exactly how the atlas draws them — so weak-current
+            // areas read as "charted, slack" rather than missing data.
+            let slackLayer = MLNCircleStyleLayer(identifier: slackLayerID, source: source)
+            slackLayer.circleColor = NSExpression(forConstantValue: UIColor.currentSpeedRamp(dark: dark)[0])
+            slackLayer.circleRadius = NSExpression(forConstantValue: 1.4)
+            slackLayer.circleOpacity = NSExpression(forConstantValue: 0.5)
+            slackLayer.predicate = NSPredicate(format: "arrow_type == 'slack'")
+
+            // Arrow + slack visibility is driven by the selected current style
+            // (re-applied below), so a Day/Night style reload restores the right
+            // mode. Particles are the default, so the static arrows start hidden.
             let showArrows = lastStyleMode == .arrows
             shaftLayer.isVisible = showArrows
             barbLayer.isVisible = showArrows
+            slackLayer.isVisible = showArrows
 
+            style.addLayer(slackLayer)
             style.addLayer(shaftLayer)
             style.addLayer(barbLayer)
 
@@ -193,18 +249,37 @@ struct MapLibreView: UIViewRepresentable {
             source.shape = MLNShapeCollectionFeature(shapes: buildFeatures(from: vectors))
         }
 
-        private func buildFeatures(from vectors: [CurrentVector]) -> [MLNPolylineFeature] {
-            var features: [MLNPolylineFeature] = []
+        private func buildFeatures(from vectors: [CurrentVector]) -> [MLNShape] {
+            var features: [MLNShape] = []
             features.reserveCapacity(vectors.count * 3)
 
-            let halfDeg = 0.005       // ~500 m at Salish Sea latitudes
-            // barb = 35% of full shaft (2×halfDeg) → 0.70 × halfDeg
-            let barbFraction = 0.70
+            // Slack grid points: zero speed, no direction → a plain dot.
+            for v in vectors where v.speed_ms == 0 {
+                let pt = MLNPointFeature()
+                pt.coordinate = CLLocationCoordinate2D(latitude: v.lat, longitude: v.lon)
+                pt.attributes = ["arrow_type": "slack"]
+                features.append(pt)
+            }
+
+            let baseHalfDeg = 0.005   // ~500 m; the half-length of a ~1 kn arrow
 
             for v in vectors where v.isSignificant {
                 let θ = v.direction_deg * .pi / 180
+
+                // Tail length encodes speed: faster current → longer arrow, slower
+                // → shorter stub. Capped at 1.6× so the fastest don't overrun their
+                // neighbours (reached ~3.7 kn); the 0.5 base keeps the slowest
+                // visible. speedKnots ≥ 0, so the scale never drops below 0.5.
+                let lengthScale = min(0.5 + v.speedKnots * 0.30, 1.6)
+                let halfDeg = baseHalfDeg * lengthScale
                 let dLat = cos(θ) * halfDeg
                 let dLon = sin(θ) * halfDeg
+
+                // Arrowhead is the constant 0.70× of the reference half-length so
+                // it stays a fixed size as the tail grows — but never longer than
+                // this arrow's own half-shaft, so short slow arrows don't become an
+                // oversized head on a stub.
+                let barbLen = min(halfDeg, baseHalfDeg) * 0.70
 
                 let tail = CLLocationCoordinate2D(latitude: v.lat - dLat, longitude: v.lon - dLon)
                 let tip  = CLLocationCoordinate2D(latitude: v.lat + dLat, longitude: v.lon + dLon)
@@ -216,7 +291,6 @@ struct MapLibreView: UIViewRepresentable {
 
                 // Two barbs at ±25° from the reversed direction
                 let backθ = θ + .pi
-                let barbLen = halfDeg * barbFraction
                 for spread in [-0.4363, 0.4363] {
                     let βθ = backθ + spread
                     var barb = [

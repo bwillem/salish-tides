@@ -25,8 +25,9 @@ actor VectorDatabase {
     // so existing installs can't be left with a stale layout or stale data.
     // The DB is a pure derived cache rebuilt from bundled JSON, so dropping
     // is always safe — DatabaseMigrator repopulates it.
-    // v4: corrected Vol 2-4 georeferencing (degree-crossing/landscape fix).
-    private static let schemaVersion = 5
+    // v8: slack dot markers (atlas draws these where current is below the
+    // min-arrow threshold), subsampled to ~2 km, so weak areas are not blank.
+    private static let schemaVersion = 8
 
     private init() {}
 

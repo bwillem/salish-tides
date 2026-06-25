@@ -14,11 +14,14 @@ REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 DATA = os.path.join(REPO, "data")
 RESOURCES = os.path.join(REPO, "SalishTides", "Resources")
 
+# Vol 1's index keeps the unsuffixed "atlas_index" resource name; 2-4 are suffixed.
 VOLUMES = {
+    1: "maps",
     2: "maps_vol2",
     3: "maps_vol3",
     4: "maps_vol4",
 }
+INDEX_NAME = {1: "atlas_index", 2: "atlas_index_vol2", 3: "atlas_index_vol3", 4: "atlas_index_vol4"}
 
 NAME_RE = re.compile(r"^map_(\d+)_([A-H])\.json$")
 
@@ -55,7 +58,7 @@ def main():
     for vol, subdir in VOLUMES.items():
         map_dir = os.path.join(DATA, subdir)
         entries = build_index(map_dir)
-        out = os.path.join(RESOURCES, f"atlas_index_vol{vol}.json")
+        out = os.path.join(RESOURCES, f"{INDEX_NAME[vol]}.json")
         with open(out, "w") as f:
             json.dump({"index": entries}, f, separators=(",", ":"))
         print(f"Vol {vol}: {len(entries)} entries -> {os.path.relpath(out, REPO)}")

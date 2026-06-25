@@ -11,6 +11,9 @@ DerivedData/
 .swiftpm/xcode/
 .swiftpm/configuration/
 
+# Local secrets (API keys) — never commit
+/Config/Secrets.xcconfig
+
 # macOS
 .DS_Store
 **/.DS_Store
@@ -27,3 +30,5 @@ __pycache__/
 
 # Pinned per-worktree Xcode DerivedData (parallel agents / sims)
 .ddata/
+# Local build output (xcodebuild -derivedDataPath)
+/build/

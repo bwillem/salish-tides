@@ -53,7 +53,7 @@ struct TimelineControlView: View {
         HStack(spacing: 5) {
             if isNow {
                 Circle()
-                    .fill(Color.oceanLight)
+                    .fill(.tint)
                     .frame(width: 6, height: 6)
             }
             Text(settings.formatTimelineDate(vm.displayDate))
@@ -77,7 +77,7 @@ struct TimelineControlView: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, Spacing.md)
                 .padding(.vertical, Spacing.xs)
-                .background(Color.oceanMid, in: Capsule())
+                .background(.tint, in: Capsule())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Return to now")

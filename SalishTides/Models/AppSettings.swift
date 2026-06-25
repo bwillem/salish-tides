@@ -172,6 +172,18 @@ final class AppSettings {
         didSet { defaults.set(currentStyle.rawValue, forKey: Keys.currentStyle) }
     }
 
+    /// Selected base map style (see Settings → Map Style).
+    var basemap: Basemap {
+        didSet { defaults.set(basemap.rawValue, forKey: Keys.basemap) }
+    }
+
+    /// Raw values of network styles that have been viewed online and are thus
+    /// cached for offline use. Lets the picker stay usable offline for styles
+    /// the user already has, while gating ones they don't.
+    private(set) var offlineReadyStyles: Set<String> {
+        didSet { defaults.set(Array(offlineReadyStyles), forKey: Keys.offlineReadyStyles) }
+    }
+
     // Mirrors the accessibility / power state; updated via notifications so
     // `effectiveCurrentStyle` re-evaluates (and observers re-render) when the
     // user toggles Reduce Motion or Low Power Mode while the app is running.
@@ -193,6 +205,8 @@ final class AppSettings {
         self.appearance = defaults.string(forKey: Keys.appearance).flatMap(AppearanceMode.init) ?? .system
         self.clockFormat = defaults.string(forKey: Keys.clockFormat).flatMap(ClockFormat.init) ?? .twentyFourHour
         self.currentStyle = defaults.string(forKey: Keys.currentStyle).flatMap(CurrentStyle.init) ?? .particles
+        self.basemap    = defaults.string(forKey: Keys.basemap).flatMap(Basemap.init) ?? .standard
+        self.offlineReadyStyles = Set(defaults.stringArray(forKey: Keys.offlineReadyStyles) ?? [])
         // Bool keys default to `true` (feature visible) when never set.
         self.showCrosshair = defaults.object(forKey: Keys.showCrosshair) as? Bool ?? true
 
@@ -209,6 +223,21 @@ final class AppSettings {
                        object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.lowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled }
         }
+    }
+
+    // MARK: Basemap availability
+
+    /// Whether `basemap` can be selected right now: the bundled standard style
+    /// always; network styles only when online or already cached offline.
+    func isSelectable(_ basemap: Basemap, online: Bool) -> Bool {
+        !basemap.requiresNetwork || online || offlineReadyStyles.contains(basemap.rawValue)
+    }
+
+    /// Record that a network style has been shown online (so its tiles are now
+    /// in the ambient cache and it stays selectable offline). Idempotent.
+    func markOfflineReady(_ basemap: Basemap) {
+        guard basemap.requiresNetwork, !offlineReadyStyles.contains(basemap.rawValue) else { return }
+        offlineReadyStyles.insert(basemap.rawValue)
     }
 
     // MARK: Formatting helpers
@@ -261,5 +290,7 @@ final class AppSettings {
         static let appearance    = "settings.appearance"
         static let clockFormat   = "settings.clockFormat"
         static let currentStyle  = "settings.currentStyle"
+        static let basemap       = "settings.basemap"
+        static let offlineReadyStyles = "settings.offlineReadyStyles"
     }
 }

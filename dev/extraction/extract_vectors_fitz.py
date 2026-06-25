@@ -12,7 +12,13 @@ import numpy as np
 
 PDF_DIR = "/Users/bryan/salish-tides/dev/pdfs"
 
+# Slack dots are pure visual fill; keep ~1 per cell of this size (~2 km).
+SLACK_GRID_DEG = 0.018
+
 VOLUMES = {
+    1: {"pdf": "Salish Sea Tidal Current Atlas Volume 1 Version 1.01.pdf",
+        "regions": "ABCDEFGH", "maps": 43, "regionA_start": 19,
+        "bounds": (47.5, 50.0, -124.6, -122.0)},
     2: {"pdf": "Salish Sea Tidal Current Atlas Volume 2 Version 1.01.pdf",
         "regions": "ABCDEF", "maps": 64, "regionA_start": 19,
         "bounds": (46.8, 48.5, -123.95, -122.0)},
@@ -76,9 +82,17 @@ def build_georef(page):
         minutes = float(m.group(1))
         if minutes >= 60:
             continue
-        if t['bbox'][3] > bottom_y:        # bottom edge → longitude
+        is_bottom = t['bbox'][3] > bottom_y
+        is_left = t['bbox'][0] < left_x
+        if is_bottom and is_left:
+            # Bottom-left corner label satisfies both edges (it's the corner
+            # latitude OR longitude tick) — ambiguous, and assigning it to the
+            # wrong axis corrupts that axis's fit. Skip it; the remaining ticks
+            # fit fine and extrapolate over the dropped one.
+            continue
+        if is_bottom:                      # bottom edge → longitude
             lon_labels.append((t['x'], minutes))
-        elif t['bbox'][0] < left_x:        # left edge → latitude
+        elif is_left:                      # left edge → latitude
             lat_labels.append((t['y'], minutes))
 
     # Anchor the first tick's whole degree by its side of the degree label
@@ -119,9 +133,9 @@ def build_georef(page):
     return {'lon_fit': lon_fit, 'lat_fit': lat_fit}
 
 
-def find_inset_rects(page):
+def find_inset_rects(draws):
     insets = []
-    for p in page.get_drawings():
+    for p in draws:
         rect = p['rect']
         if p.get('color') == (0.0, 0.0, 0.0) and not p.get('fill') and len(p['items']) == 1:
             if 80 < rect.width < 400 and 80 < rect.height < 400 and (p.get('width') or 0) > 0.5:
@@ -133,10 +147,33 @@ def find_inset_rects(page):
     return uniq
 
 
-def extract_arrows(page):
-    insets = find_inset_rects(page)
+def extract_slack_marks(draws, insets, W, H):
+    """Tiny single-quad marks the atlas draws where current is below the
+    minimum-arrow threshold (slack/weak). They carry position only (no
+    direction). Capturing them — as zero-speed points — replicates the atlas:
+    a dot at slack, an arrow at flow. Without them, weak-current cells (which
+    shift with the tidal phase) read as missing data."""
+    marks = []
+    for p in draws:
+        if p.get('color') != (0.0, 0.0, 0.0) or len(p['items']) != 1:
+            continue
+        if p['items'][0][0] != 'qu':
+            continue
+        r = p['rect']
+        if r.width >= 5 or r.height >= 5:
+            continue
+        cx, cy = (r.x0 + r.x1) / 2, (r.y0 + r.y1) / 2
+        if not (W * 0.13 < cx < W * 0.93 and H * 0.08 < cy < H * 0.93):
+            continue
+        if any(rr.x0 <= cx <= rr.x1 and rr.y0 <= cy <= rr.y1 for rr in insets):
+            continue
+        marks.append((cx, cy))
+    return marks
+
+
+def extract_arrows(draws, insets):
     arrows = []
-    for p in page.get_drawings():
+    for p in draws:
         if p.get('color') != (0.0, 0.0, 0.0) or len(p['items']) != 7:
             continue
         items = p['items']
@@ -156,13 +193,19 @@ def extract_arrows(page):
         if length < 1:
             continue
         compass = (90 - math.degrees(math.atan2(dy, dx))) % 360
-        arrows.append({'cx': cx, 'cy': cy, 'length_px': length, 'direction_deg': compass})
+        # Store the shaft MIDPOINT (geometric centre of the arrow). The polygon
+        # centroid is biased toward the wide arrowhead, so the stored point lands
+        # near the tip and a symmetric ±half-length render leaves the tail
+        # sticking out. The atlas centres arrows on their sample points (base
+        # anchoring measured worse against the water mask), so the midpoint is
+        # both the true centre for rendering and the right velocity-field sample.
+        mx, my = (bx + tip.x) / 2, (by + tip.y) / 2
+        arrows.append({'cx': mx, 'cy': my, 'length_px': length, 'direction_deg': compass})
     return arrows
 
 
-def find_scale(page, arrows):
+def find_scale(page, arrows, insets):
     ti = text_items(page)
-    insets = find_inset_rects(page)
     scales = []
     for t in ti:
         m = re.match(r'([\d.]+)\s*m/s', t['text'])
@@ -187,10 +230,12 @@ def process(doc, page_idx, bounds, fb_geo, fb_scale):
     geo = build_georef(page) or fb_geo
     if geo is None:
         return None, fb_geo, fb_scale
-    arrows = extract_arrows(page)
+    draws = page.get_drawings()
+    insets = find_inset_rects(draws)
+    arrows = extract_arrows(draws, insets)
     if not arrows:
         return [], geo, fb_scale
-    scale = find_scale(page, arrows) or fb_scale or (1.0/39.0)
+    scale = find_scale(page, arrows, insets) or fb_scale or (1.0/39.0)
     lonf, latf = geo['lon_fit'], geo['lat_fit']
     la0, la1, lo0, lo1 = bounds
     out = []
@@ -202,6 +247,23 @@ def process(doc, page_idx, bounds, fb_geo, fb_scale):
             continue
         out.append({'lat': round(lat, 5), 'lon': round(lon, 5),
                     'speed_ms': round(spd, 3), 'direction_deg': round(a['direction_deg'], 1)})
+    # Slack/weak grid points → zero-speed dots (no direction), so weak-current
+    # areas show as the atlas draws them rather than as missing data. They're
+    # pure visual fill, so subsample to a coarse grid (~1.3 km) to keep the data
+    # small; one dot per cell still reads as continuous coverage.
+    W, H = page.rect.width, page.rect.height
+    slack_seen = set()
+    for cx, cy in extract_slack_marks(draws, insets, W, H):
+        lon = lonf[0]*cx + lonf[1]
+        lat = latf[0]*cy + latf[1]
+        if lat < la0 or lat > la1 or lon < lo0 or lon > lo1:
+            continue
+        key = (round(lat / SLACK_GRID_DEG), round(lon / SLACK_GRID_DEG))
+        if key in slack_seen:
+            continue
+        slack_seen.add(key)
+        out.append({'lat': round(lat, 5), 'lon': round(lon, 5),
+                    'speed_ms': 0.0, 'direction_deg': 0.0})
     return out, geo, scale
 
 

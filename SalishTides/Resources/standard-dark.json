@@ -12,15 +12,6 @@
       "tileSize": 256,
       "attribution": "© OpenStreetMap contributors © CARTO",
       "maxzoom": 19
-    },
-    "openseamap": {
-      "type": "raster",
-      "tiles": [
-        "https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png"
-      ],
-      "tileSize": 256,
-      "attribution": "© OpenSeaMap contributors",
-      "maxzoom": 18
     }
   },
   "layers": [
@@ -35,12 +26,6 @@
       "id": "carto-dark-tiles",
       "type": "raster",
       "source": "carto-dark"
-    },
-    {
-      "id": "openseamap-tiles",
-      "type": "raster",
-      "source": "openseamap",
-      "minzoom": 10
     }
   ]
 }

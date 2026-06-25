@@ -8,7 +8,6 @@ struct TideChartView: View {
     @Environment(AppSettings.self) private var settings
 
     let currentDate: Date
-    let station: TideStation?
     let events: [TideEvent]
 
     // Visible window: ±windowHalfHours on each side of cursor
@@ -89,8 +88,8 @@ struct TideChartView: View {
             fill.closeSubpath()
             ctx.fill(fill, with: .linearGradient(
                 Gradient(stops: [
-                    .init(color: Color.oceanMid.opacity(0.55), location: 0),
-                    .init(color: Color.oceanMid.opacity(0.06), location: 1),
+                    .init(color: Color.brandAccent.opacity(0.55), location: 0),
+                    .init(color: Color.brandAccent.opacity(0.06), location: 1),
                 ]),
                 startPoint: CGPoint(x: 0, y: chartTop),
                 endPoint:   CGPoint(x: 0, y: chartBot)
@@ -124,25 +123,8 @@ struct TideChartView: View {
                 at: CGPoint(x: cx + 6, y: labelY),
                 anchor: .leading
             )
-
-            // ── Station provenance (name top-left, datum tag top-right) ─────
-            // Split so neither collides with the always-centred cursor label.
-            if let station {
-                ctx.draw(
-                    Text(station.name)
-                        .font(.system(size: 8, design: .monospaced))
-                        .foregroundStyle(.primary.opacity(0.45)),
-                    at: CGPoint(x: chartLeft + 1, y: chartTop + 1),
-                    anchor: .topLeading
-                )
-                ctx.draw(
-                    Text(station.datum)
-                        .font(.system(size: 8, design: .monospaced))
-                        .foregroundStyle(.primary.opacity(0.40)),
-                    at: CGPoint(x: chartRight - 3, y: chartTop + 1),
-                    anchor: .topTrailing
-                )
-            }
+            // Station provenance (name + datum) is rendered as a caption below
+            // the chart in PhaseIndicatorView, so it never overlaps the curve.
 
             // ── X-axis: time labels every 3h aligned to clock hours ─────────
             let cal = Calendar.salish

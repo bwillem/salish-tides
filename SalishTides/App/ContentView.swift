@@ -3,7 +3,18 @@ import SwiftUI
 struct ContentView: View {
     @Environment(MapViewModel.self) private var vm
     @Environment(AppSettings.self) private var settings
+    @Environment(NetworkMonitor.self) private var network
+    @Environment(MapController.self) private var mapController
     @State private var showingSettings = false
+
+    // When a network style is shown while *confirmed* online, its tiles enter
+    // the ambient cache — record it so it stays selectable offline. Gating on
+    // didConfirmOnline avoids marking from the optimistic launch default.
+    private func recordIfOnline() {
+        if network.isOnline, network.didConfirmOnline {
+            settings.markOfflineReady(settings.basemap)
+        }
+    }
 
     var body: some View {
         Group {
@@ -25,13 +36,28 @@ struct ContentView: View {
             }
             VStack(spacing: 0) {
                 HStack(alignment: .top) {
-                    SettingsButton { showingSettings = true }
-                        .padding(.leading)
-                        .padding(.top, Spacing.sm)
+                    // Top-left control cluster: settings, compass (only when
+                    // rotated), locate.
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        SettingsButton { showingSettings = true }
+                        if !mapController.isNorthUp {
+                            CompassButton(bearing: mapController.bearing) {
+                                mapController.resetNorth()
+                            }
+                            .transition(.scale.combined(with: .opacity))
+                        }
+                        LocateButton { mapController.recenterOnUser() }
+                    }
+                    .animation(.snappy, value: mapController.isNorthUp)
+                    .padding(.leading)
+                    .padding(.top, Spacing.sm)
                     Spacer()
-                    PhaseIndicatorView()
-                        .padding(.trailing)
-                        .padding(.top, Spacing.sm)
+                    VStack(alignment: .trailing, spacing: Spacing.sm) {
+                        PhaseIndicatorView()
+                        CurrentSpeedView()
+                    }
+                    .padding(.trailing)
+                    .padding(.top, Spacing.sm)
                 }
                 Spacer()
                 TimelineControlView()
@@ -50,6 +76,10 @@ struct ContentView: View {
         .sheet(isPresented: $showingSettings) {
             SettingsView()
         }
+        .onAppear { recordIfOnline() }
+        .onChange(of: settings.basemap) { recordIfOnline() }
+        .onChange(of: network.isOnline) { recordIfOnline() }
+        .onChange(of: network.didConfirmOnline) { recordIfOnline() }
     }
 }
 
@@ -68,6 +98,50 @@ private struct SettingsButton: View {
         }
         .floatingCard(cornerRadius: Radius.lg)
         .accessibilityLabel("Settings")
+    }
+}
+
+/// Compass control — a needle (red north / muted south) rotated so north always
+/// points up-screen as the map turns. Tap to animate back to north-up.
+private struct CompassButton: View {
+    let bearing: Double
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Image(systemName: "arrowtriangle.up.fill")
+                    .foregroundStyle(.red)
+                    .offset(y: -4.5)
+                Image(systemName: "arrowtriangle.down.fill")
+                    .foregroundStyle(.secondary)
+                    .offset(y: 4.5)
+            }
+            .font(.system(size: 9))
+            .rotationEffect(.degrees(-bearing))
+            .frame(width: 44, height: 44)
+        }
+        .floatingCard(cornerRadius: Radius.lg)
+        .accessibilityLabel("Compass")
+        .accessibilityValue("\(Int(bearing.rounded()))°")
+        .accessibilityHint("Rotates the map back to north")
+    }
+}
+
+/// Locate control — centers and follows the user's location (Maps-style).
+private struct LocateButton: View {
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "location.fill")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(.primary)
+                .frame(width: 44, height: 44)
+        }
+        .floatingCard(cornerRadius: Radius.lg)
+        .accessibilityLabel("Locate me")
+        .accessibilityHint("Centers the map on your location")
     }
 }
 
