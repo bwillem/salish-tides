@@ -7,8 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0428DEAC804FB2FCD2285E6E /* ocean-light.json in Resources */ = {isa = PBXBuildFile; fileRef = 2A78F6D08450A43684299A05 /* ocean-light.json */; };
 		063221F80851C1FDC5A9257C /* atlas_lookup_vol2_2026.json in Resources */ = {isa = PBXBuildFile; fileRef = FD04BD2129588FF977B70226 /* atlas_lookup_vol2_2026.json */; };
 		086279564982225F48B141F0 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 190464A173F749BB0A3B786E /* SettingsView.swift */; };
+		08E5BFDB78B9E55E1DA9E61D /* MapStyleLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA074DF096B9F67F83B4959E /* MapStyleLoader.swift */; };
 		1D5038B1FFB6DE1A54FE8E25 /* MapViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F6AC464A41AEC5AA01D5BB8 /* MapViewModel.swift */; };
 		1F1918795868670251164A0C /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC4BE54595E9CB5FA8F715B3 /* ContentView.swift */; };
 		23763E8BE56345AE4D3C891E /* atlas_index_vol4.json in Resources */ = {isa = PBXBuildFile; fileRef = 83BD3EE7B3E3404AA899666B /* atlas_index_vol4.json */; };
@@ -25,11 +27,14 @@
 		674193FB48B28EB47DDE9EF9 /* MapLibreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 705E9152F8BEA1FA75608D3F /* MapLibreView.swift */; };
 		7520224CBC1D4DB9F00958A9 /* stub-style-dark.json in Resources */ = {isa = PBXBuildFile; fileRef = CD8D20EF2AD7E3CD9EDB203B /* stub-style-dark.json */; };
 		8892B94C18ABFFDE44949FD5 /* atlas_index_vol3.json in Resources */ = {isa = PBXBuildFile; fileRef = 1F71279AD0BA5885E48ABD65 /* atlas_index_vol3.json */; };
+		8A09E69E3A83AA62722D3822 /* ocean-dark.json in Resources */ = {isa = PBXBuildFile; fileRef = 29431B00732877DA2E615BF3 /* ocean-dark.json */; };
 		9CEBBFBDEB99CD300FC775BF /* TideDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = D25E37F6E08BDAD0D7CB5885 /* TideDatabase.swift */; };
 		A14E261EEF019763C5C3ED1C /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 4C2D431933E482A18FCC18F9 /* GRDB */; };
+		A5343BB0E832A96634DF63E2 /* satellite.json in Resources */ = {isa = PBXBuildFile; fileRef = 632144FBBD0ECA8853896747 /* satellite.json */; };
 		A5373274BBC15D93DDE7A47B /* Basemap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E351A5A0241F5F0CB272A0D /* Basemap.swift */; };
 		B3E0A98667446BD785E78FBB /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 808EEF6FA5FE567E488AA3D5 /* DesignTokens.swift */; };
 		B6D335F727B47E81AF9DE1A6 /* stub-style-light.json in Resources */ = {isa = PBXBuildFile; fileRef = DE459FEAE5C7A0A226439742 /* stub-style-light.json */; };
+		C768CFA66D7E07064485173C /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D191057D343E390CB41EAF3B /* NetworkMonitor.swift */; };
 		CC1DE4A9F7C994DD5459CB22 /* TapeSliderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28E631FED305377F6178516B /* TapeSliderView.swift */; };
 		CD10BDF599A8B4DC91FC583E /* TideStation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EE458C039CC8A1CCE1AD9D9 /* TideStation.swift */; };
 		D02F6CEBAD38ED7BCD07D911 /* MapLibre in Frameworks */ = {isa = PBXBuildFile; productRef = 42B0127065AEDC608BD0C4A4 /* MapLibre */; };
@@ -45,12 +50,15 @@
 		1E2E5511446438A2D163BF38 /* atlas_lookup_2026.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = atlas_lookup_2026.json; sourceTree = "<group>"; };
 		1F71279AD0BA5885E48ABD65 /* atlas_index_vol3.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = atlas_index_vol3.json; sourceTree = "<group>"; };
 		28E631FED305377F6178516B /* TapeSliderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TapeSliderView.swift; sourceTree = "<group>"; };
+		29431B00732877DA2E615BF3 /* ocean-dark.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "ocean-dark.json"; sourceTree = "<group>"; };
+		2A78F6D08450A43684299A05 /* ocean-light.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "ocean-light.json"; sourceTree = "<group>"; };
 		2DB51EF67918D47D54D0733D /* atlas_lookup_vol4_2026.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = atlas_lookup_vol4_2026.json; sourceTree = "<group>"; };
 		33F90FC333D8D0174AF1A089 /* AtlasLookupTable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtlasLookupTable.swift; sourceTree = "<group>"; };
 		34E23098B238D68AE7C4E0CA /* AtlasVolume.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtlasVolume.swift; sourceTree = "<group>"; };
 		3DDA2FAF2D0189860F478A7C /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		4FA576D80059DF72E4354E26 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		57507473C7B77D54DECBB9A0 /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
+		632144FBBD0ECA8853896747 /* satellite.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = satellite.json; sourceTree = "<group>"; };
 		6E351A5A0241F5F0CB272A0D /* Basemap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Basemap.swift; sourceTree = "<group>"; };
 		6EE458C039CC8A1CCE1AD9D9 /* TideStation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TideStation.swift; sourceTree = "<group>"; };
 		6F8AC975A9DE6B660C38E780 /* SalishTidesApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SalishTidesApp.swift; sourceTree = "<group>"; };
@@ -62,10 +70,12 @@
 		9F6AC464A41AEC5AA01D5BB8 /* MapViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapViewModel.swift; sourceTree = "<group>"; };
 		9F7E80F4511F77B96813E4D3 /* DatabaseMigrator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseMigrator.swift; sourceTree = "<group>"; };
 		A89FE39742D2A11DF361182D /* VectorDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VectorDatabase.swift; sourceTree = "<group>"; };
+		AA074DF096B9F67F83B4959E /* MapStyleLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapStyleLoader.swift; sourceTree = "<group>"; };
 		B460FF242F858B027A672B40 /* TimelineControlView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineControlView.swift; sourceTree = "<group>"; };
 		B534466B629735C3AFD88226 /* CurrentVector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrentVector.swift; sourceTree = "<group>"; };
 		BF78D89E101E6B88EB6D487E /* PhaseIndicatorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhaseIndicatorView.swift; sourceTree = "<group>"; };
 		CD8D20EF2AD7E3CD9EDB203B /* stub-style-dark.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "stub-style-dark.json"; sourceTree = "<group>"; };
+		D191057D343E390CB41EAF3B /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
 		D25E37F6E08BDAD0D7CB5885 /* TideDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TideDatabase.swift; sourceTree = "<group>"; };
 		DE459FEAE5C7A0A226439742 /* stub-style-light.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "stub-style-light.json"; sourceTree = "<group>"; };
 		E02E5CB168CDB0660201216E /* TideChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TideChartView.swift; sourceTree = "<group>"; };
@@ -113,6 +123,16 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		496B88DF779A28478CDB2D85 /* styles */ = {
+			isa = PBXGroup;
+			children = (
+				29431B00732877DA2E615BF3 /* ocean-dark.json */,
+				2A78F6D08450A43684299A05 /* ocean-light.json */,
+				632144FBBD0ECA8853896747 /* satellite.json */,
+			);
+			path = styles;
+			sourceTree = "<group>";
+		};
 		55010ED328A3C0DF7CF2AFA3 /* Data */ = {
 			isa = PBXGroup;
 			children = (
@@ -156,6 +176,7 @@
 				33F90FC333D8D0174AF1A089 /* AtlasLookupTable.swift */,
 				34E23098B238D68AE7C4E0CA /* AtlasVolume.swift */,
 				B534466B629735C3AFD88226 /* CurrentVector.swift */,
+				D191057D343E390CB41EAF3B /* NetworkMonitor.swift */,
 				6EE458C039CC8A1CCE1AD9D9 /* TideStation.swift */,
 			);
 			path = Models;
@@ -173,6 +194,7 @@
 				2DB51EF67918D47D54D0733D /* atlas_lookup_vol4_2026.json */,
 				CD8D20EF2AD7E3CD9EDB203B /* stub-style-dark.json */,
 				DE459FEAE5C7A0A226439742 /* stub-style-light.json */,
+				496B88DF779A28478CDB2D85 /* styles */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -202,6 +224,7 @@
 			children = (
 				6E351A5A0241F5F0CB272A0D /* Basemap.swift */,
 				705E9152F8BEA1FA75608D3F /* MapLibreView.swift */,
+				AA074DF096B9F67F83B4959E /* MapStyleLoader.swift */,
 			);
 			path = Map;
 			sourceTree = "<group>";
@@ -285,6 +308,9 @@
 				3002DAB5B09EDAE4506050FB /* atlas_lookup_2026.json in Resources */,
 				063221F80851C1FDC5A9257C /* atlas_lookup_vol2_2026.json in Resources */,
 				D14AD78CBA4B0066C42F056B /* atlas_lookup_vol4_2026.json in Resources */,
+				8A09E69E3A83AA62722D3822 /* ocean-dark.json in Resources */,
+				0428DEAC804FB2FCD2285E6E /* ocean-light.json in Resources */,
+				A5343BB0E832A96634DF63E2 /* satellite.json in Resources */,
 				7520224CBC1D4DB9F00958A9 /* stub-style-dark.json in Resources */,
 				B6D335F727B47E81AF9DE1A6 /* stub-style-light.json in Resources */,
 			);
@@ -328,7 +354,9 @@
 				5447EAD323169BC3E88B2FF6 /* DatabaseMigrator.swift in Sources */,
 				B3E0A98667446BD785E78FBB /* DesignTokens.swift in Sources */,
 				674193FB48B28EB47DDE9EF9 /* MapLibreView.swift in Sources */,
+				08E5BFDB78B9E55E1DA9E61D /* MapStyleLoader.swift in Sources */,
 				1D5038B1FFB6DE1A54FE8E25 /* MapViewModel.swift in Sources */,
+				C768CFA66D7E07064485173C /* NetworkMonitor.swift in Sources */,
 				28CEED760DB3C36FC29C60ED /* PhaseIndicatorView.swift in Sources */,
 				FB3737835F764AD3A85B61BE /* SalishTidesApp.swift in Sources */,
 				086279564982225F48B141F0 /* SettingsView.swift in Sources */,

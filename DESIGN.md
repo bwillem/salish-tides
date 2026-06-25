@@ -102,6 +102,43 @@ the single source of truth — re-evaluated whenever the style reloads). The Day
 ramp is darker and more saturated so the mid "amber" arrow reads on the light
 basemap rather than washing out; the Night ramp stays bright for the dark map.
 
+### 2.4 Map Style (offline-first, online-enhanced)
+
+The basemap follows an **offline-first, progressively-enhanced** model: the app
+must work 100% offline, but light up richer maps when a connection exists
+(Starlink, dock WiFi). User-selectable in **Settings → Map Style** (`Basemap`).
+
+| Style | Source | Offline? | Light / Dark |
+|-------|--------|----------|--------------|
+| **Standard** | Bundled stub (`stub-style-{light,dark}.json`) | Always (the offline baseline) | per-theme stubs |
+| **Ocean** | MapTiler bathymetry (`ocean-{light,dark}.json`) | After viewing online (ambient cache) | bundled pair |
+| **Satellite** | MapTiler imagery (`satellite.json`) | After viewing online | single (imagery is theme-agnostic) |
+
+**Key mechanics:**
+- **Style JSONs are bundled** in `Resources/styles/` (tiny text). Each carries a
+  `{{MAPTILER_KEY}}` placeholder; `MapStyleLoader` injects `MapConfig.maptilerKey`
+  at load and writes a temp file MapLibre loads. **The key is never committed** —
+  it lives in the gitignored `Config/Secrets.xcconfig`. No key → falls back to the
+  Standard stub, so a fresh checkout always renders.
+- **Light + dark are bundled together** so a Day→Night flip works offline: if a
+  sailor cached Ocean in daylight then loses signal at dusk, the dark Ocean still
+  renders (it reuses the same cached tiles, only the colour JSON differs).
+- **Caching is automatic** via MapLibre's ambient cache (raised to 256 MB in
+  `MapLibreView`). Tiles are cached as you view them online — no explicit
+  download/progress. Coverage = waters you've actually looked at.
+- **Reachability** (`NetworkMonitor`, `NWPathMonitor`) gates the picker: a network
+  style is selectable only when online **or** already cached
+  (`AppSettings.offlineReadyStyles`, recorded when a style is shown online).
+  Otherwise the row is disabled with an **"Online only"** caption — but any style
+  you've already used stays swappable offline.
+- The **dark Ocean** variant is an authored colour remap of the light Ocean style
+  (same bathymetry tiles, darkened water/land, lightened labels).
+
+> The Standard stub still streams CARTO + OpenSeaMap rasters, so it is not *truly*
+> offline yet — a real bundled baseline (PMTiles bathymetry, backlog #1) is the
+> next milestone. MapTiler online is the enhancement layer; a future SalishSeaCast
+> current model will hang off the same `NetworkMonitor` plumbing.
+
 ---
 
 ## 3. Typography

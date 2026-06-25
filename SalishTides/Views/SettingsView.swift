@@ -6,6 +6,7 @@ import SwiftUI
 /// navigation title, and a single confirming **Done** action.
 struct SettingsView: View {
     @Environment(AppSettings.self) private var settings
+    @Environment(NetworkMonitor.self) private var network
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -50,24 +51,15 @@ struct SettingsView: View {
                     Text("Switches the full Day / Night theme — basemap, panels, and current-arrow colours. System follows your device setting.")
                 }
 
-                // ── Basemap (developer) ──────────────────────────────────
+                // ── Map Style ────────────────────────────────────────────
                 Section {
-                    Picker("Style", selection: $settings.basemap) {
-                        Text(Basemap.system.label).tag(Basemap.system)
-                        Section("Light") {
-                            ForEach(Basemap.light) { Text($0.label).tag($0) }
-                        }
-                        Section("Dark") {
-                            ForEach(Basemap.dark) { Text($0.label).tag($0) }
-                        }
+                    ForEach(Basemap.allCases) { style in
+                        mapStyleRow(style)
                     }
-                    .pickerStyle(.navigationLink)
                 } header: {
-                    Text("Basemap (Developer)")
+                    Text("Map Style")
                 } footer: {
-                    Text(MapConfig.maptilerKey.isEmpty
-                         ? "Water-first MapTiler styles for evaluating the basemap. Add MAPTILER_KEY in Config/Secrets.xcconfig to load them; without a key every option shows the offline Day/Night stub."
-                         : "Water-first MapTiler styles for evaluating the basemap. Loaded from MapTiler — requires a network connection.")
+                    Text("Standard works fully offline. Ocean and Satellite stream from MapTiler when online and are cached for offline use over waters you've viewed.")
                 }
 
                 // ── About ────────────────────────────────────────────────
@@ -84,6 +76,32 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+
+    /// A Map Style row: tappable + checkmark when selectable; greyed with an
+    /// "Online only" caption when it needs network it doesn't have.
+    @ViewBuilder
+    private func mapStyleRow(_ style: Basemap) -> some View {
+        let selectable = settings.isSelectable(style, online: network.isOnline)
+        Button {
+            settings.basemap = style
+        } label: {
+            HStack {
+                Text(style.label)
+                    .foregroundStyle(selectable ? .primary : .secondary)
+                Spacer()
+                if settings.basemap == style {
+                    Image(systemName: "checkmark")
+                        .foregroundStyle(.tint)
+                } else if !selectable {
+                    Text("Online only")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .contentShape(.rect)
+        }
+        .disabled(!selectable)
     }
 
     private static var appVersion: String {
@@ -133,4 +151,5 @@ private struct DataSourcesView: View {
 #Preview {
     SettingsView()
         .environment(AppSettings())
+        .environment(NetworkMonitor())
 }

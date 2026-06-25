@@ -113,9 +113,16 @@ final class AppSettings {
     var appearance: AppearanceMode {
         didSet { defaults.set(appearance.rawValue, forKey: Keys.appearance) }
     }
-    /// Developer-facing base map style selection (see Settings → Basemap).
+    /// Selected base map style (see Settings → Map Style).
     var basemap: Basemap {
         didSet { defaults.set(basemap.rawValue, forKey: Keys.basemap) }
+    }
+
+    /// Raw values of network styles that have been viewed online and are thus
+    /// cached for offline use. Lets the picker stay usable offline for styles
+    /// the user already has, while gating ones they don't.
+    private(set) var offlineReadyStyles: Set<String> {
+        didSet { defaults.set(Array(offlineReadyStyles), forKey: Keys.offlineReadyStyles) }
     }
 
     private let defaults: UserDefaults
@@ -125,9 +132,25 @@ final class AppSettings {
         self.speedUnit  = defaults.string(forKey: Keys.speedUnit).flatMap(SpeedUnit.init) ?? .knots
         self.heightUnit = defaults.string(forKey: Keys.heightUnit).flatMap(HeightUnit.init) ?? .metres
         self.appearance = defaults.string(forKey: Keys.appearance).flatMap(AppearanceMode.init) ?? .system
-        self.basemap    = defaults.string(forKey: Keys.basemap).flatMap(Basemap.init) ?? .system
+        self.basemap    = defaults.string(forKey: Keys.basemap).flatMap(Basemap.init) ?? .standard
+        self.offlineReadyStyles = Set(defaults.stringArray(forKey: Keys.offlineReadyStyles) ?? [])
         // Bool keys default to `true` (feature visible) when never set.
         self.showCrosshair = defaults.object(forKey: Keys.showCrosshair) as? Bool ?? true
+    }
+
+    // MARK: Basemap availability
+
+    /// Whether `basemap` can be selected right now: the bundled standard style
+    /// always; network styles only when online or already cached offline.
+    func isSelectable(_ basemap: Basemap, online: Bool) -> Bool {
+        !basemap.requiresNetwork || online || offlineReadyStyles.contains(basemap.rawValue)
+    }
+
+    /// Record that a network style has been shown online (so its tiles are now
+    /// in the ambient cache and it stays selectable offline). Idempotent.
+    func markOfflineReady(_ basemap: Basemap) {
+        guard basemap.requiresNetwork, !offlineReadyStyles.contains(basemap.rawValue) else { return }
+        offlineReadyStyles.insert(basemap.rawValue)
     }
 
     // MARK: Formatting helpers
@@ -150,5 +173,6 @@ final class AppSettings {
         static let showCrosshair = "settings.showCrosshair"
         static let appearance    = "settings.appearance"
         static let basemap       = "settings.basemap"
+        static let offlineReadyStyles = "settings.offlineReadyStyles"
     }
 }

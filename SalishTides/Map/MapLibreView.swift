@@ -13,14 +13,18 @@ struct MapLibreView: UIViewRepresentable {
         return Bundle.main.url(forResource: name, withExtension: "json")
     }
 
-    // Resolved basemap: a developer-selected MapTiler style when a MapTiler key
-    // is configured, otherwise the per-scheme offline stub above.
+    // Resolved style for the selected basemap + current appearance. MapTiler
+    // styles inject the key from the bundled JSON; .standard / failures fall
+    // back to the per-scheme offline stub above.
     private func desiredStyleURL(for scheme: ColorScheme) -> URL? {
-        settings.basemap.styleURL(key: MapConfig.maptilerKey)
-            ?? Self.styleURL(for: scheme)
+        MapStyleLoader.styleURL(for: settings.basemap, dark: scheme == .dark)
     }
 
     func makeUIView(context: Context) -> MLNMapView {
+        // Grow the ambient cache so a day's viewing survives offline (default is
+        // ~50 MB). This is what makes online styles render offline afterward.
+        MLNOfflineStorage.shared.setMaximumAmbientCacheSize(256 * 1024 * 1024, withCompletionHandler: { _ in })
+
         let mapView = MLNMapView(frame: .zero)
         mapView.delegate = context.coordinator
         mapView.showsUserLocation = true
@@ -40,7 +44,7 @@ struct MapLibreView: UIViewRepresentable {
     }
 
     func updateUIView(_ mapView: MLNMapView, context: Context) {
-        // Reload the basemap on a Day/Night flip or a developer basemap change,
+        // Reload the basemap on a Day/Night flip or a Map Style change,
         // re-applying the current vectors once the new style finishes loading.
         if context.coordinator.lastScheme != colorScheme
             || context.coordinator.appliedBasemap != settings.basemap {
