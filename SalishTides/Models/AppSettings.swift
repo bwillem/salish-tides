@@ -1,6 +1,24 @@
 import SwiftUI
 import Observation
 
+// MARK: - Salish Sea local time
+
+extension TimeZone {
+    /// Every tide/current time in the app is shown in Salish Sea local time —
+    /// the app is region-specific, so times are "local to the water" regardless
+    /// of the device's timezone. The underlying data is tz-agnostic (UTC).
+    static let salish = TimeZone(identifier: "America/Vancouver")!
+}
+
+extension Calendar {
+    /// Gregorian calendar fixed to `TimeZone.salish`.
+    static let salish: Calendar = {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = .salish
+        return c
+    }()
+}
+
 // MARK: - Unit & Appearance Choices
 
 /// Current-speed display unit. Canonical storage everywhere is knots
@@ -91,6 +109,23 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
     }
 }
 
+/// Clock format for every time display (timeline readout, tape, chart axis).
+/// Defaults to 24-hour — standard for marine/nautical use.
+enum ClockFormat: String, CaseIterable, Identifiable {
+    case twentyFourHour, twelveHour
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .twentyFourHour: "24-hour"
+        case .twelveHour:     "12-hour"
+        }
+    }
+
+    var is24Hour: Bool { self == .twentyFourHour }
+}
+
 // MARK: - Settings Store
 
 /// App-wide user preferences, persisted to `UserDefaults` and observed by the
@@ -113,6 +148,9 @@ final class AppSettings {
     var appearance: AppearanceMode {
         didSet { defaults.set(appearance.rawValue, forKey: Keys.appearance) }
     }
+    var clockFormat: ClockFormat {
+        didSet { defaults.set(clockFormat.rawValue, forKey: Keys.clockFormat) }
+    }
 
     private let defaults: UserDefaults
 
@@ -121,6 +159,7 @@ final class AppSettings {
         self.speedUnit  = defaults.string(forKey: Keys.speedUnit).flatMap(SpeedUnit.init) ?? .knots
         self.heightUnit = defaults.string(forKey: Keys.heightUnit).flatMap(HeightUnit.init) ?? .metres
         self.appearance = defaults.string(forKey: Keys.appearance).flatMap(AppearanceMode.init) ?? .system
+        self.clockFormat = defaults.string(forKey: Keys.clockFormat).flatMap(ClockFormat.init) ?? .twentyFourHour
         // Bool keys default to `true` (feature visible) when never set.
         self.showCrosshair = defaults.object(forKey: Keys.showCrosshair) as? Bool ?? true
     }
@@ -139,10 +178,40 @@ final class AppSettings {
         return "\(v.formatted(.number.precision(.fractionLength(fractionDigits)))) \(heightUnit.abbreviation)"
     }
 
+    /// Compact hour-tick label for the tape and chart axis: "17:00" / "5 PM".
+    /// Cheap (no `DateFormatter`) — these are redrawn every frame while dragging.
+    func hourTickLabel(hour: Int) -> String {
+        if clockFormat.is24Hour {
+            return String(format: "%02d:00", hour)
+        }
+        let h = hour % 12 == 0 ? 12 : hour % 12
+        return "\(h) \(hour < 12 ? "AM" : "PM")"
+    }
+
+    /// Timeline readout, e.g. "Jun 24 at 17:00" / "Jun 24 at 5:00 PM".
+    func formatTimelineDate(_ date: Date) -> String {
+        var dayStyle = Date.FormatStyle.dateTime.month(.abbreviated).day()
+        dayStyle.timeZone = .salish
+        return "\(date.formatted(dayStyle)) at \(formatClock(date))"
+    }
+
+    /// Time-of-day only: "17:00" / "5:00 PM".
+    func formatClock(_ date: Date) -> String {
+        let cal = Calendar.salish
+        let h = cal.component(.hour, from: date)
+        let m = cal.component(.minute, from: date)
+        if clockFormat.is24Hour {
+            return String(format: "%02d:%02d", h, m)
+        }
+        let h12 = h % 12 == 0 ? 12 : h % 12
+        return String(format: "%d:%02d %@", h12, m, h < 12 ? "AM" : "PM")
+    }
+
     private enum Keys {
         static let speedUnit     = "settings.speedUnit"
         static let heightUnit    = "settings.heightUnit"
         static let showCrosshair = "settings.showCrosshair"
         static let appearance    = "settings.appearance"
+        static let clockFormat   = "settings.clockFormat"
     }
 }

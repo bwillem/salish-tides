@@ -19,19 +19,17 @@ struct ChartSelection: Sendable {
     let tendency: Tendency
 }
 
-// Chart selection is a table lookup keyed to America/Vancouver local hour.
-// Do NOT use device-local calendar — the table is keyed to Pacific time with DST baked in.
+// Chart selection is a table lookup keyed to Salish Sea local hour.
+// Do NOT use a device-local calendar — the table is keyed to Pacific time with
+// DST baked in (see `Calendar.salish`).
 final class ChartSelector: Sendable {
     let volume: Int
     private let table: AtlasLookupTable
-    private let cal: Calendar
+    private let cal = Calendar.salish
 
     init(volume: Int, table: AtlasLookupTable) {
         self.volume = volume
         self.table = table
-        var c = Calendar(identifier: .gregorian)
-        c.timeZone = TimeZone(identifier: "America/Vancouver")!
-        self.cal = c
     }
 
     func selection(for date: Date) -> ChartSelection? {
