@@ -4,6 +4,13 @@ import CoreLocation
 
 struct MapLibreView: UIViewRepresentable {
     @Environment(MapViewModel.self) private var vm
+    @Environment(\.colorScheme) private var colorScheme
+
+    // Day / Night basemap styles (see DESIGN.md §2.3).
+    static func styleURL(for scheme: ColorScheme) -> URL? {
+        let name = scheme == .dark ? "stub-style-dark" : "stub-style-light"
+        return Bundle.main.url(forResource: name, withExtension: "json")
+    }
 
     func makeUIView(context: Context) -> MLNMapView {
         let mapView = MLNMapView(frame: .zero)
@@ -17,14 +24,20 @@ struct MapLibreView: UIViewRepresentable {
         let center = CLLocationCoordinate2D(latitude: 48.8, longitude: -123.2)
         mapView.setCenter(center, zoomLevel: 9.5, animated: false)
 
-        if let styleURL = Bundle.main.url(forResource: "stub-style", withExtension: "json") {
-            mapView.styleURL = styleURL
-        }
+        context.coordinator.lastScheme = colorScheme
+        mapView.styleURL = Self.styleURL(for: colorScheme)
 
         return mapView
     }
 
     func updateUIView(_ mapView: MLNMapView, context: Context) {
+        // Swap the basemap when the system appearance flips, re-applying the
+        // current vectors once the new style finishes loading.
+        if context.coordinator.lastScheme != colorScheme {
+            context.coordinator.lastScheme = colorScheme
+            context.coordinator.prepareForStyleReload(vm.currentVectors)
+            mapView.styleURL = Self.styleURL(for: colorScheme)
+        }
         context.coordinator.updateVectors(vm.currentVectors, on: mapView)
     }
 
@@ -42,10 +55,19 @@ struct MapLibreView: UIViewRepresentable {
         private let shaftLayerID = "salish-shafts"
         private let barbLayerID = "salish-barbs"
         nonisolated(unsafe) private var pendingVectors: [CurrentVector]?
+        // Tracks the basemap appearance currently applied, so we only reload the
+        // style on an actual Day/Night flip.
+        nonisolated(unsafe) var lastScheme: ColorScheme?
         private let onViewportChange: (ChartBounds) -> Void
 
         init(onViewportChange: @escaping (ChartBounds) -> Void) {
             self.onViewportChange = onViewportChange
+        }
+
+        // Setting styleURL tears down the added source/layers; stash the vectors
+        // so didFinishLoading re-applies them onto the new style.
+        func prepareForStyleReload(_ vectors: [CurrentVector]) {
+            pendingVectors = vectors
         }
 
         func mapView(_ mapView: MLNMapView, didFinishLoading style: MLNStyle) {
@@ -79,14 +101,18 @@ struct MapLibreView: UIViewRepresentable {
             let source = MLNShapeSource(identifier: sourceID, shapes: [], options: nil)
             style.addSource(source)
 
+            // Re-runs on every style (re)load, so a Day/Night flip picks up the
+            // matching ramp automatically.
+            let dark = (lastScheme ?? .dark) == .dark
+
             let shaftLayer = MLNLineStyleLayer(identifier: shaftLayerID, source: source)
-            shaftLayer.lineColor = speedColorExpression()
+            shaftLayer.lineColor = speedColorExpression(dark: dark)
             shaftLayer.lineWidth = NSExpression(format: "TERNARY(speed_knots < 1.5, 1.0, TERNARY(speed_knots < 3.0, 1.8, 3.0))")
             shaftLayer.lineCap = NSExpression(forConstantValue: "round")
             shaftLayer.predicate = NSPredicate(format: "arrow_type == 'shaft'")
 
             let barbLayer = MLNLineStyleLayer(identifier: barbLayerID, source: source)
-            barbLayer.lineColor = speedColorExpression()
+            barbLayer.lineColor = speedColorExpression(dark: dark)
             barbLayer.lineWidth = NSExpression(format: "TERNARY(speed_knots < 1.5, 0.8, TERNARY(speed_knots < 3.0, 1.4, 2.5))")
             barbLayer.predicate = NSPredicate(format: "arrow_type == 'barb'")
 
@@ -140,18 +166,15 @@ struct MapLibreView: UIViewRepresentable {
             return features
         }
 
-        private func speedColorExpression() -> NSExpression {
-            NSExpression(format: """
+        private func speedColorExpression(dark: Bool) -> NSExpression {
+            let c = UIColor.currentSpeedRamp(dark: dark)
+            return NSExpression(format: """
                 TERNARY(speed_knots < 0.5, %@,
                 TERNARY(speed_knots < 1.5, %@,
                 TERNARY(speed_knots < 3.0, %@,
                 TERNARY(speed_knots < 4.5, %@, %@))))
             """,
-            UIColor(red: 0.13, green: 0.40, blue: 0.67, alpha: 1),
-            UIColor(red: 0.45, green: 0.68, blue: 0.82, alpha: 1),
-            UIColor(red: 1.00, green: 1.00, blue: 0.75, alpha: 1),
-            UIColor(red: 0.96, green: 0.43, blue: 0.26, alpha: 1),
-            UIColor(red: 0.84, green: 0.19, blue: 0.15, alpha: 1))
+            c[0], c[1], c[2], c[3], c[4])
         }
     }
 }

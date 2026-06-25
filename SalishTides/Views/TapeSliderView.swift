@@ -116,7 +116,7 @@ struct TapeSliderView: View {
                 var p = Path()
                 p.move(to:    CGPoint(x: x, y: 0))
                 p.addLine(to: CGPoint(x: x, y: tickH))
-                ctx.stroke(p, with: .color(.white.opacity(tickAlpha)), lineWidth: 1.0)
+                ctx.stroke(p, with: .color(.primary.opacity(tickAlpha)), lineWidth: 1.0)
             }
 
             // Clock-hour label on 3-hour marks (skip the "now" tick — cursor implies it)
@@ -128,7 +128,7 @@ struct TapeSliderView: View {
                 ctx.draw(
                     Text(String(format: "%02d:00", hour))
                         .font(.system(size: 9, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.40)),
+                        .foregroundStyle(.primary.opacity(0.40)),
                     at: CGPoint(x: x, y: totalH - 2),
                     anchor: .bottom
                 )
@@ -136,7 +136,7 @@ struct TapeSliderView: View {
         }
 
         // ── Centre cursor ────────────────────────────────────────────────────
-        let cursorColor: Color = atNow ? .white : Color.tideEbb
+        let cursorColor: Color = atNow ? .primary : Color.tideEbb
 
         var line = Path()
         line.move(to:    CGPoint(x: cx, y: 0))

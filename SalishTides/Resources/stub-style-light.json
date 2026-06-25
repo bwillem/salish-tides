@@ -1,13 +1,13 @@
 {
   "version": 8,
-  "name": "Salish Tides",
+  "name": "Salish Tides — Day",
   "sources": {
-    "carto-dark": {
+    "carto-light": {
       "type": "raster",
       "tiles": [
-        "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-        "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-        "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png"
+        "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png",
+        "https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png",
+        "https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png"
       ],
       "tileSize": 256,
       "attribution": "© OpenStreetMap contributors © CARTO",
@@ -28,13 +28,13 @@
       "id": "background",
       "type": "background",
       "paint": {
-        "background-color": "#1a3a5c"
+        "background-color": "#dbe7f0"
       }
     },
     {
-      "id": "carto-dark-tiles",
+      "id": "carto-light-tiles",
       "type": "raster",
-      "source": "carto-dark"
+      "source": "carto-light"
     },
     {
       "id": "openseamap-tiles",
