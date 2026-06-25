@@ -168,21 +168,24 @@ struct MapLibreView: UIViewRepresentable {
             }
 
             let baseHalfDeg = 0.005   // ~500 m; the half-length of a ~1 kn arrow
-            // Arrowhead size is pinned to the *base* length (not the speed-scaled
-            // length below), so only the tail grows with speed — the barbs don't.
-            // barb = 35% of the full reference shaft (2×baseHalfDeg) → 0.70 ×.
-            let barbLen = baseHalfDeg * 0.70
 
             for v in vectors where v.isSignificant {
                 let θ = v.direction_deg * .pi / 180
 
                 // Tail length encodes speed: faster current → longer arrow, slower
-                // → shorter stub. Clamped so the slowest vectors stay visible and
-                // the fastest don't overrun their neighbours (cap reached ~3.7 kn).
-                let lengthScale = min(max(0.5 + v.speedKnots * 0.30, 0.5), 1.6)
+                // → shorter stub. Capped at 1.6× so the fastest don't overrun their
+                // neighbours (reached ~3.7 kn); the 0.5 base keeps the slowest
+                // visible. speedKnots ≥ 0, so the scale never drops below 0.5.
+                let lengthScale = min(0.5 + v.speedKnots * 0.30, 1.6)
                 let halfDeg = baseHalfDeg * lengthScale
                 let dLat = cos(θ) * halfDeg
                 let dLon = sin(θ) * halfDeg
+
+                // Arrowhead is the constant 0.70× of the reference half-length so
+                // it stays a fixed size as the tail grows — but never longer than
+                // this arrow's own half-shaft, so short slow arrows don't become an
+                // oversized head on a stub.
+                let barbLen = min(halfDeg, baseHalfDeg) * 0.70
 
                 let tail = CLLocationCoordinate2D(latitude: v.lat - dLat, longitude: v.lon - dLon)
                 let tip  = CLLocationCoordinate2D(latitude: v.lat + dLat, longitude: v.lon + dLon)
@@ -192,7 +195,7 @@ struct MapLibreView: UIViewRepresentable {
                 shaftFeature.attributes = ["speed_knots": v.speedKnots, "arrow_type": "shaft"]
                 features.append(shaftFeature)
 
-                // Two barbs at ±25° from the reversed direction (constant size)
+                // Two barbs at ±25° from the reversed direction
                 let backθ = θ + .pi
                 for spread in [-0.4363, 0.4363] {
                     let βθ = backθ + spread

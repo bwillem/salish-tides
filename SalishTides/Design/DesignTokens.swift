@@ -29,15 +29,9 @@ extension Color {
     static let tideEbb   = Color.orange  // outgoing — system orange
     // slack = Color.secondary (system adaptive, sufficient for neutral)
 
-    // -- Current speed — diverging blue→yellow→red scale --
-    // Thresholds: <0.5  0.5–1.5  1.5–3.0  3.0–4.5  4.5+  knots
-    // Seeded from Apple's system colors; the map ramp (UIColor.currentSpeedRamp)
-    // is the rendered source of truth — these mirror it for any SwiftUI use.
-    static let currentCalm       = Color.blue
-    static let currentLight      = Color.teal
-    static let currentModerate   = Color.yellow
-    static let currentStrong     = Color.orange
-    static let currentVeryStrong = Color.red
+    // The current-speed scale is rendered only on the map; its single source of
+    // truth is UIColor.currentSpeedRamp (below). No SwiftUI Color mirror exists
+    // because nothing consumes one — add it there if a SwiftUI use ever appears.
 }
 
 // MARK: - Typography Tokens
@@ -111,7 +105,9 @@ extension View {
     func floatingCard(cornerRadius: CGFloat = Radius.xl) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         if #available(iOS 26, *) {
-            self.glassEffect(.regular, in: shape)
+            // Clip the content to the shape too: glassEffect masks the material to
+            // the shape but not the view's own content, which the fallback clips.
+            self.glassEffect(.regular, in: shape).clipShape(shape)
         } else {
             self
                 .background(.ultraThinMaterial, in: shape)
@@ -132,9 +128,9 @@ extension View {
 extension UIColor {
     // Current-speed ramp for the map arrows, per theme. Buckets:
     // <0.5  <1.5  <3.0  <4.5  4.5+ knots (calm → very strong).
-    // Night is tuned for the dark basemap (bright); Day is darker / more
-    // saturated so every arrow — especially the mid amber — reads on the light
-    // basemap instead of washing out.
+    // Seeded from Apple's system colors resolved for the theme, so the ramp
+    // adapts like the rest of the UI; the only hand-tuned bucket is the Day
+    // moderate one, darkened so it doesn't wash out on the pale basemap.
     static func currentSpeedRamp(dark: Bool) -> [UIColor] {
         // Native system hues for the diverging calm → very-strong scale.
         // System colors already brighten in dark mode and darken in light mode
