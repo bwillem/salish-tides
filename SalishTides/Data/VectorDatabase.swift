@@ -25,8 +25,9 @@ actor VectorDatabase {
     // so existing installs can't be left with a stale layout or stale data.
     // The DB is a pure derived cache rebuilt from bundled JSON, so dropping
     // is always safe — DatabaseMigrator repopulates it.
-    // v6: all volumes re-extracted via PyMuPDF, midpoint-anchored positions.
-    private static let schemaVersion = 6
+    // v7: added slack/weak-current dot markers (atlas draws these where current
+    // is below the min-arrow threshold) so weak areas are not blank.
+    private static let schemaVersion = 7
 
     private init() {}
 

@@ -71,6 +71,7 @@ struct MapLibreView: UIViewRepresentable {
         private let sourceID = "salish-vectors"
         private let shaftLayerID = "salish-shafts"
         private let barbLayerID = "salish-barbs"
+        private let slackLayerID = "salish-slack"
         nonisolated(unsafe) private var pendingVectors: [CurrentVector]?
         // Tracks the basemap appearance currently applied, so we only reload the
         // style on an actual Day/Night flip.
@@ -135,6 +136,16 @@ struct MapLibreView: UIViewRepresentable {
             barbLayer.lineWidth = NSExpression(format: "TERNARY(speed_knots < 1.5, 1.1, TERNARY(speed_knots < 3.0, 1.4, 2.5))")
             barbLayer.predicate = NSPredicate(format: "arrow_type == 'barb'")
 
+            // Slack/weak grid points (speed 0, no direction) render as small
+            // faint dots — exactly how the atlas draws them — so weak-current
+            // areas read as "charted, slack" rather than missing data.
+            let slackLayer = MLNCircleStyleLayer(identifier: slackLayerID, source: source)
+            slackLayer.circleColor = NSExpression(forConstantValue: UIColor.currentSpeedRamp(dark: dark)[0])
+            slackLayer.circleRadius = NSExpression(forConstantValue: 1.4)
+            slackLayer.circleOpacity = NSExpression(forConstantValue: 0.5)
+            slackLayer.predicate = NSPredicate(format: "arrow_type == 'slack'")
+
+            style.addLayer(slackLayer)
             style.addLayer(shaftLayer)
             style.addLayer(barbLayer)
         }
@@ -144,9 +155,17 @@ struct MapLibreView: UIViewRepresentable {
             source.shape = MLNShapeCollectionFeature(shapes: buildFeatures(from: vectors))
         }
 
-        private func buildFeatures(from vectors: [CurrentVector]) -> [MLNPolylineFeature] {
-            var features: [MLNPolylineFeature] = []
+        private func buildFeatures(from vectors: [CurrentVector]) -> [MLNShape] {
+            var features: [MLNShape] = []
             features.reserveCapacity(vectors.count * 3)
+
+            // Slack grid points: zero speed, no direction → a plain dot.
+            for v in vectors where v.speed_ms == 0 {
+                let pt = MLNPointFeature()
+                pt.coordinate = CLLocationCoordinate2D(latitude: v.lat, longitude: v.lon)
+                pt.attributes = ["arrow_type": "slack"]
+                features.append(pt)
+            }
 
             let baseHalfDeg = 0.005   // ~500 m; the half-length of a ~1 kn arrow
             // Arrowhead size is pinned to the *base* length (not the speed-scaled
