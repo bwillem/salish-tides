@@ -5,6 +5,8 @@ import SwiftUI
 // Heights are interpolated from the nearest station's hi/lo predictions, in
 // that station's own datum (MLLW for NOAA, Chart Datum for CHS).
 struct TideChartView: View {
+    @Environment(AppSettings.self) private var settings
+
     let currentDate: Date
     let station: TideStation?
     let events: [TideEvent]
@@ -19,7 +21,12 @@ struct TideChartView: View {
     private let topPad:    CGFloat = 8
 
     var body: some View {
-        Canvas { ctx, size in
+        // Heights are stored in metres; convert to the user's unit up front so
+        // the domain, curve, axis ticks, and labels are all in display units.
+        let unit = settings.heightUnit
+        let conv: (Double) -> Double = unit.value(fromMetres:)
+
+        return Canvas { ctx, size in
             guard events.count >= 2 else {
                 drawPlaceholder(ctx: ctx, size: size)
                 return
@@ -35,9 +42,9 @@ struct TideChartView: View {
 
             // Dynamic y-domain from the visible samples (real tides go negative
             // below MLLW and ~5 m at Chart Datum — a fixed 0–5 domain won't do).
-            let heights = samples.map(\.height)
+            let heights = samples.map { conv($0.height) }
             let lo = heights.min()!, hi = heights.max()!
-            let pad = max(0.3, (hi - lo) * 0.15)
+            let pad = max(conv(0.3), (hi - lo) * 0.15)
             let yMin = lo - pad, yMax = hi + pad
 
             let chartLeft  = leftPad
@@ -59,7 +66,7 @@ struct TideChartView: View {
 
             // ── Horizontal grid lines (adaptive step) ───────────────────────
             let range = yMax - yMin
-            let gridStep = range > 5 ? 2.0 : 1.0
+            let gridStep = Self.niceStep(range)
             var grid = Path()
             var gridLevels: [Double] = []
             var m = (yMin / gridStep).rounded(.up) * gridStep
@@ -73,7 +80,7 @@ struct TideChartView: View {
             ctx.stroke(grid, with: .color(.primary.opacity(0.10)), lineWidth: 0.5)
 
             // ── Tide curve ──────────────────────────────────────────────────
-            let pts = samples.map { CGPoint(x: xOf($0.date), y: yOf($0.height)) }
+            let pts = samples.map { CGPoint(x: xOf($0.date), y: yOf(conv($0.height))) }
 
             var fill = Path()
             fill.move(to: CGPoint(x: pts[0].x, y: chartBot))
@@ -101,7 +108,7 @@ struct TideChartView: View {
             cursor.addLine(to: CGPoint(x: cx, y: chartBot))
             ctx.stroke(cursor, with: .color(.primary.opacity(0.90)), lineWidth: 1.5)
 
-            let currentH = TideCurve.height(at: currentDate, events: events) ?? 0
+            let currentH = conv(TideCurve.height(at: currentDate, events: events) ?? 0)
             let cy = yOf(currentH)
             let dotR: CGFloat = 4
             ctx.fill(
@@ -111,7 +118,7 @@ struct TideChartView: View {
 
             let labelY = cy < chartTop + 20 ? cy + 14 : cy - 10
             ctx.draw(
-                Text(String(format: "%.1fm", currentH))
+                Text(String(format: "%.1f%@", currentH, unit.abbreviation))
                     .font(.system(size: 10, design: .monospaced).weight(.semibold))
                     .foregroundStyle(.primary),
                 at: CGPoint(x: cx + 6, y: labelY),
@@ -171,11 +178,12 @@ struct TideChartView: View {
             }
 
             // ── Y-axis: height labels ───────────────────────────────────────
+            let axisDecimals = gridStep < 1 ? 1 : 0
             for level in gridLevels {
                 let y = yOf(level)
                 guard y >= chartTop && y <= chartBot else { continue }
                 ctx.draw(
-                    Text(String(format: "%.0fm", level))
+                    Text(String(format: "%.\(axisDecimals)f%@", level, unit.abbreviation))
                         .font(.system(size: 9, design: .monospaced))
                         .foregroundStyle(.primary.opacity(0.35)),
                     at: CGPoint(x: chartLeft - 3, y: y),
@@ -183,6 +191,18 @@ struct TideChartView: View {
                 )
             }
         }
+    }
+
+    /// A "nice" axis interval (…0.5, 1, 2, 5, 10…) giving ~4 grid divisions
+    /// across `range`. Unit-agnostic, so it produces sensible ticks whether the
+    /// domain is in metres (~2–5) or feet (~7–16).
+    private static func niceStep(_ range: Double) -> Double {
+        guard range > 0 else { return 1 }
+        let rough = range / 4
+        let magnitude = pow(10, (log10(rough)).rounded(.down))
+        let normalized = rough / magnitude
+        let step: Double = normalized < 1.5 ? 1 : normalized < 3 ? 2 : normalized < 7 ? 5 : 10
+        return step * magnitude
     }
 
     private func drawPlaceholder(ctx: GraphicsContext, size: CGSize) {

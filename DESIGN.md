@@ -92,8 +92,8 @@ The app follows the **system appearance** and ships two full themes — **Day**
   the chart and tape ink flip with the theme. The `GraphicsContext` resolves
   semantic colors against the view's color scheme.
 - **Adaptive colors live as one token** (`Color.appBackground`, defined with a
-  `UIColor` dynamic provider in `DesignTokens.swift`); brand colors
-  (`oceanMid` fill, current-speed scale) stay constant across themes.
+  `UIColor` dynamic provider in `DesignTokens.swift`); the `oceanMid` chart fill
+  stays constant, while the current-speed ramp is per-theme (`currentSpeedRamp`).
 - The basemap switches via `MapLibreView` observing `@Environment(\.colorScheme)`
   and swapping `styleURL`; vectors are re-applied on the new style.
 
@@ -241,8 +241,10 @@ the map visible around and beneath them.
 - **Speed available:** shows crosshair speed with `✛` suffix
 - **Tide data unavailable:** chart shows a "Tide data unavailable" placeholder
 
-**Open design issues:**
-- The `✛` suffix character is non-standard and may not read naturally on VoiceOver
+**Speed readout:** value is formatted by `AppSettings.formatSpeed(knots:)` so it
+honours the user's unit (kn / km·h / m·s — see §9). The crosshair association is
+shown with the `scope` SF Symbol, not the former non-standard `✛` glyph (which
+did not read naturally on VoiceOver).
 
 ### 5.2 Timeline Control Bar
 
@@ -300,6 +302,40 @@ Rendered by MapLibre, not SwiftUI. Color is controlled by `speedColorExpression(
 **Caption:** "Loading charts… N%" in `.stMono`-equivalent caption
 
 **Note:** This screen shows only on first launch (migration). Second launch goes directly to the map. No need to optimize for repeat views.
+
+### 5.6 Settings Button & Sheet
+
+**Entry point** (`SettingsButton`, in `ContentView`): a floating gear
+(`gearshape`) in the **top-left**, mirroring the phase panel top-right so the two
+upper corners read as a deliberate pair. Uses the shared `.floatingCard()`
+surface at `Radius.lg` and a fixed **44×44 pt** frame — meets the HIG minimum
+target. Inset `.padding(.leading)` + `Spacing.sm` from the safe area.
+
+**Sheet** (`SettingsView`): a standard grouped `Form` in a `NavigationStack`,
+following the iOS HIG settings pattern — sections of related controls, system
+`Picker`/`Toggle`, inline navigation title, single confirming **Done** button
+(`.confirmationAction`).
+
+```
+Settings                                    Done
+┌──────────────────────────────────────────────┐
+│  UNITS                                         │
+│   Current speed                      Knots ⌄   │
+│   Tide height                       Metres ⌄   │
+│  MAP & DISPLAY                                  │
+│   Crosshair                               ●──  │
+│  APPEARANCE                                     │
+│   [ System | Light | Dark ]                    │
+│  ABOUT                                          │
+│   Version                          1.0 (1)     │
+│   Data Sources                            >    │
+└──────────────────────────────────────────────┘
+```
+
+**Data Sources** (`DataSourcesView`, pushed from About): NOAA CO-OPS / CHS IWLS
+tide attribution, the Salish Sea Tidal Current Atlas, MapLibre basemap credit, and the
+"not for navigation" disclaimer. In-app provenance is expected at App Store
+review for a navigation aid.
 
 ---
 
@@ -378,12 +414,44 @@ its "Tide data unavailable" placeholder.
 
 ---
 
-## 8. Open Design Backlog
+## 8. Settings & User Preferences
+
+User preferences live in `AppSettings` (`Models/AppSettings.swift`), an
+`@Observable` store persisted to `UserDefaults` and injected through the SwiftUI
+environment — the same pattern as `MapViewModel`, so both SwiftUI views and the
+`MapLibreView` representable react without prop-drilling.
+
+| Preference | Type | Default | Affects |
+|-----------|------|---------|---------|
+| `speedUnit` | knots / km·h / m·s | knots | Phase panel speed readout + VoiceOver |
+| `heightUnit` | metres / feet | metres | Tide chart cursor, y-axis, VoiceOver |
+| `showCrosshair` | Bool | on | `CrosshairView` visibility |
+| `appearance` | system / light / dark | system | `.preferredColorScheme` on the root → drives the full Day/Night theme (§2.3) |
+
+**Canonical units never change in storage.** Currents are stored in knots
+(`CurrentVector.speedKnots`) and tide heights in metres (station datum);
+conversion happens only at the readout via `AppSettings.formatSpeed/​formatHeight`
+or the `SpeedUnit`/`HeightUnit` `value(from:)` helpers. Never persist a converted
+value — round-tripping loses precision.
+
+**Appearance default is `.system`.** Because `.preferredColorScheme` sets the
+`colorScheme` environment that every surface observes, the override switches the
+**whole** Day/Night theme — basemap, panels, chart/tape ink, crosshair, and the
+per-theme current-arrow ramp (§2.3) — not just the chrome.
+
+---
+
+## 9. Open Design Backlog
+
+**Resolved in the settings/HIG-audit pass:**
+- ✅ Settings + About surface (§5.6) — data-source attribution now in-app
+- ✅ Non-standard `✛` speed suffix → `scope` SF Symbol (§5.1)
+- ✅ Unit preferences (speed / height) with a unit-agnostic tide-chart axis
 
 | Priority | Item | Notes |
 |----------|------|-------|
 | High | Real nautical basemap | CARTO raster (Day/Night) is a placeholder. Need PMTiles + a proper chart style with depth/seamark data. |
 | Medium | Speed legend | Users need a legend to understand the 5-color current scale (per-theme — see `currentSpeedRamp`) |
 | Low | VoiceOver audit | Labels are in place (§6.2); verify reading order + adjustable tape on-device with the Accessibility Inspector |
-| Low | Haptic feedback | Add impact feedback to tape hour-snaps and the Now button |
-| Low | Portrait layout | Verify timeline + phase panel don't overlap in portrait on smaller iPads |
+| Low | Haptic feedback | Add impact feedback to tape hour-snaps and the return-to-now control |
+| Low | Portrait layout | Verify timeline + phase panel + settings button don't overlap in portrait on smaller iPads |
