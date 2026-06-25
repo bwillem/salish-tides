@@ -21,6 +21,15 @@ extension Color {
             : UIColor(red: 0.86, green: 0.91, blue: 0.95, alpha: 1)   // pale sky
     })
 
+    // Secondary "ink" for muted captions on the glass cards. Brighter than the
+    // system `secondaryLabel` (≈60% in dark) so provenance text stays legible on
+    // the dark material per principle #1, while still sitting below `.primary`.
+    static let inkSecondary = Color(uiColor: UIColor { trait in
+        trait.userInterfaceStyle == .dark
+            ? UIColor(white: 1, alpha: 0.80)
+            : UIColor(white: 0, alpha: 0.58)
+    })
+
     // -- Tide tendency (flood / ebb / slack) --
     static let tideFlood = Color(red: 0.13, green: 0.40, blue: 0.67)  // oceanMid — incoming
     static let tideEbb   = Color(red: 0.87, green: 0.45, blue: 0.08)  // #DE7314  — outgoing

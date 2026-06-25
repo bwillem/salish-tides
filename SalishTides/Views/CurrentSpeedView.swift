@@ -14,14 +14,14 @@ struct CurrentSpeedView: View {
             HStack(alignment: .center, spacing: Spacing.xs) {
                 Image(systemName: "scope")
                     .font(.stReadoutUnit)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.inkSecondary)
                 if let speed = vm.crosshairSpeed {
                     HStack(alignment: .firstTextBaseline, spacing: Spacing.xxs) {
                         Text(speedValue(speed))
                             .font(.stReadout)
                         Text(settings.speedUnit.abbreviation)
                             .font(.stReadoutUnit)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.inkSecondary)
                     }
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)

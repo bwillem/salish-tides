@@ -22,7 +22,7 @@ struct PhaseIndicatorView: View {
                     if let station = vm.tideStation {
                         Text("\(station.name) · \(station.datum)")
                             .font(.stCaption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.inkSecondary)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
                     }
