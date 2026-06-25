@@ -87,13 +87,27 @@ Run by UBC-MOAD. ERDDAP server: <https://salishsea.eos.ubc.ca/erddap/>
 - Accuracy is astronomical-tide only (no wind/freshwater) — same as the atlas,
   so no regression, and it now resolves the bays.
 
-## Decision that gates everything
+## PoC findings (2026-06) → pivot to email-first
 
-- **(a)** Email UBC-MOAD for a ready-made constituent/ellipse grid (fastest), or
-- **(b)** DIY: ERDDAP hindcast slice + `utide` on a small test region (e.g. just
-  Bellingham Bay) to prove the predictor end-to-end first.
+Ran a minimal end-to-end DIY probe (`dev/model/poc_bellingham.py`, plus grid +
+mask checks). What we learned:
 
-Lean (a) first, (b) as fallback.
+- **Coverage confirmed.** The NEMO grid (`ubcSSnBathymetryV21-08`, 398×898,
+  lat 46.86–51.10, lon −126.40 to −121.32) covers the whole domain. A 17×17 block
+  around Bellingham Bay has 115 water cells (34 in the inner bay) with real
+  surface currents up to ~0.14–0.29 m/s — **the model resolves the bays the atlas
+  omits.**
+- **Archive is ample.** Green hindcast `ubcSSg3D{u,v}GridFields1hV21-11` is hourly
+  **2007→2026 (170,784 steps)** — far more than enough for harmonic analysis.
+- **DIY is impractical at scale.** ERDDAP single-point extraction from the chunked
+  3-D dataset is ~20 min/point; a per-cell time-series pull over the grid is
+  infeasible, and the full 3-D field is ~TB to download. Plus land-mask handling
+  (our first test node was masked → all-zero).
+
+**Decision: pivot to (a) — email UBC-MOAD** for their already-computed constituent/
+ellipse grid. Draft ready at `dev/model/ubc-moad-email-draft.md`. DIY (b) stays the
+documented fallback if they can't share it; the predictor + on-device pieces are
+unchanged regardless of how we source the constituents.
 
 ## Sources
 
