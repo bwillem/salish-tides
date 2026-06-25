@@ -35,7 +35,7 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
 
     // GPU layout mirrors the Metal `Particle` struct (16 bytes).
     private struct GPUParticle {
-        var pos: SIMD2<Float>   // normalized field coords: x→lon, y→lat (north=0)
+        var pos: SIMD2<Float>   // global Web-Mercator world coords, [0,1]×[0,1]
         var age: Float          // seconds lived
         var pad: Float = 0
     }
@@ -53,7 +53,7 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
         var count: UInt32
     }
 
-    // Render uniforms (10 floats; matrix passed separately). Order must match the
+    // Render uniforms (15 floats; matrix passed separately). Order must match the
     // Metal `RenderUniforms` struct exactly.
     private struct RenderUniforms {
         var lonMin: Float
@@ -255,29 +255,36 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
         let vpH = Float(context.size.height)
         let worldSize = Float(512.0 * pow(2.0, context.zoomLevel))
 
-        // 1. Advection on our own command buffer: current → next.
-        inFlight.wait()
-        var advect = AdvectUniforms(
-            speedK: speedPx, worldSize: worldSize,
-            lonMin: Float(bounds.lon_min), latMax: Float(bounds.lat_max),
-            lonSpan: lonSpan, latSpan: latSpan,
-            lifetime: lifetime, minMag: minMag,
-            frame: frame, count: UInt32(particleCount))
-        if let cb = queue.makeCommandBuffer(), let ce = cb.makeComputeCommandEncoder() {
-            ce.setComputePipelineState(advectPipeline)
-            ce.setBuffer(particleBuffers[current], offset: 0, index: 0)
-            ce.setBuffer(particleBuffers[next], offset: 0, index: 1)
-            ce.setBytes(&advect, length: MemoryLayout<AdvectUniforms>.stride, index: 2)
-            ce.setTexture(texture, index: 0)
-            ce.setSamplerState(samplerState, index: 0)
-            let tg = min(advectPipeline.maxTotalThreadsPerThreadgroup, 64)
-            ce.dispatchThreads(MTLSize(width: particleCount, height: 1, depth: 1),
-                               threadsPerThreadgroup: MTLSize(width: tg, height: 1, depth: 1))
-            ce.endEncoding()
-            cb.addCompletedHandler { [inFlight] _ in inFlight.signal() }
-            cb.commit()
-        } else {
-            inFlight.signal()
+        // 1. Advection on our own command buffer: current → next. Acquire the
+        //    in-flight slot without blocking — draw() runs inside MapLibre's render
+        //    callback on the main thread, so if the GPU is genuinely backed up
+        //    (≥2 compute buffers still running) we skip advection for this frame and
+        //    re-render the existing buffer rather than stall the UI. Particles pause
+        //    for that frame; the swap below is gated on the same flag.
+        let didAdvect = inFlight.wait(timeout: .now()) == .success
+        if didAdvect {
+            var advect = AdvectUniforms(
+                speedK: speedPx, worldSize: worldSize,
+                lonMin: Float(bounds.lon_min), latMax: Float(bounds.lat_max),
+                lonSpan: lonSpan, latSpan: latSpan,
+                lifetime: lifetime, minMag: minMag,
+                frame: frame, count: UInt32(particleCount))
+            if let cb = queue.makeCommandBuffer(), let ce = cb.makeComputeCommandEncoder() {
+                ce.setComputePipelineState(advectPipeline)
+                ce.setBuffer(particleBuffers[current], offset: 0, index: 0)
+                ce.setBuffer(particleBuffers[next], offset: 0, index: 1)
+                ce.setBytes(&advect, length: MemoryLayout<AdvectUniforms>.stride, index: 2)
+                ce.setTexture(texture, index: 0)
+                ce.setSamplerState(samplerState, index: 0)
+                let tg = min(advectPipeline.maxTotalThreadsPerThreadgroup, 64)
+                ce.dispatchThreads(MTLSize(width: particleCount, height: 1, depth: 1),
+                                   threadsPerThreadgroup: MTLSize(width: tg, height: 1, depth: 1))
+                ce.endEncoding()
+                cb.addCompletedHandler { [inFlight] _ in inFlight.signal() }
+                cb.commit()
+            } else {
+                inFlight.signal()
+            }
         }
 
         // 2. Render last frame's positions (buffer `current`, fully computed) as
@@ -304,7 +311,9 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
         // Six vertices per particle → one screen-space-expanded quad (thick streak).
         renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: particleCount * 6)
 
-        current = next
+        // Only promote the freshly written buffer if we actually advected; a
+        // skipped frame keeps rendering `current` until the GPU catches up.
+        if didAdvect { current = next }
     }
 
     // MARK: - Setup
