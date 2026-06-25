@@ -1,3 +1,4 @@
+import CoreLocation
 import MapLibre
 import Observation
 
@@ -30,8 +31,13 @@ final class MapController {
         mapView.setCamera(camera, animated: true)
     }
 
-    /// Center on and follow the user's location (the Maps "locate" button).
+    /// Center on the user's location at the current zoom (the Maps "locate"
+    /// button). Uses `setCenter` rather than `.follow` tracking, which would
+    /// zoom in to its own default level — too close for a planning chart.
     func recenterOnUser() {
-        mapView?.setUserTrackingMode(.follow, animated: true)
+        guard let mapView,
+              let coordinate = mapView.userLocation?.coordinate,
+              CLLocationCoordinate2DIsValid(coordinate) else { return }
+        mapView.setCenter(coordinate, animated: true)
     }
 }
