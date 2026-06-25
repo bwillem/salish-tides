@@ -126,6 +126,9 @@ final class MapViewModel {
         guard snapped != currentDate else { return }
 
         if Date().timeIntervalSince(lastScrubLoadAt) >= scrubThrottle {
+            // Supersede any pending trailing load — otherwise an older hour could
+            // fire after this one and win on loadGeneration (stale map state).
+            scrubLoadTask?.cancel()
             lastScrubLoadAt = Date()
             currentDate = snapped
             Task { await loadVectors(for: snapped) }
