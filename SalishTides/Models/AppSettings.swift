@@ -125,7 +125,7 @@ final class AppSettings {
         self.speedUnit  = defaults.string(forKey: Keys.speedUnit).flatMap(SpeedUnit.init) ?? .knots
         self.heightUnit = defaults.string(forKey: Keys.heightUnit).flatMap(HeightUnit.init) ?? .metres
         self.appearance = defaults.string(forKey: Keys.appearance).flatMap(AppearanceMode.init) ?? .system
-        self.basemap    = defaults.string(forKey: Keys.basemap).flatMap(Basemap.init) ?? .ocean
+        self.basemap    = defaults.string(forKey: Keys.basemap).flatMap(Basemap.init) ?? .system
         // Bool keys default to `true` (feature visible) when never set.
         self.showCrosshair = defaults.object(forKey: Keys.showCrosshair) as? Bool ?? true
     }

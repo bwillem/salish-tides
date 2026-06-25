@@ -10,47 +10,53 @@ enum MapConfig {
     }
 }
 
-/// Selectable base map styles, for trying out different looks during
-/// development. Three light + three dark MapTiler styles; resolves to the
-/// offline stub style when no MapTiler key is configured.
+/// Base map style for the chart. `.system` keeps the app's offline Day/Night
+/// stub basemap (the shipping default); the rest are MapTiler styles for
+/// evaluating water-first looks during development. No street basemaps — this
+/// is a boating app, so the options are bathymetric / imagery / minimal.
+/// MapTiler styles need a `MAPTILER_KEY`; without one they fall back to the
+/// offline stub, so the app always renders.
 enum Basemap: String, CaseIterable, Identifiable {
-    // Light
-    case ocean, topo, streets
-    // Dark
-    case datavizDark, streetsDark, basicDark
+    /// Offline Day/Night stub basemap (default — see MapLibreView).
+    case system
+
+    // Light / day
+    case ocean, topographic, satellite
+    // Dark / night
+    case datavizDark, satelliteHybrid
 
     var id: String { rawValue }
 
-    static let light: [Basemap] = [.ocean, .topo, .streets]
-    static let dark:  [Basemap] = [.datavizDark, .streetsDark, .basicDark]
+    static let light: [Basemap] = [.ocean, .topographic, .satellite]
+    static let dark:  [Basemap] = [.datavizDark, .satelliteHybrid]
 
     var label: String {
         switch self {
-        case .ocean:       "Ocean"
-        case .topo:        "Topographic"
-        case .streets:     "Streets"
-        case .datavizDark: "Dataviz Dark"
-        case .streetsDark: "Streets Dark"
-        case .basicDark:   "Basic Dark"
+        case .system:          "Default (Day / Night)"
+        case .ocean:           "Ocean — bathymetry"
+        case .topographic:     "Topographic"
+        case .satellite:       "Satellite"
+        case .datavizDark:     "Dataviz Dark"
+        case .satelliteHybrid: "Satellite Hybrid"
         }
     }
 
-    /// MapTiler hosted style id (`.../maps/<id>/style.json`).
-    private var maptilerStyleID: String {
+    /// MapTiler hosted style id (`.../maps/<id>/style.json`); `nil` for `.system`.
+    private var maptilerStyleID: String? {
         switch self {
-        case .ocean:       "ocean"
-        case .topo:        "topo-v2"
-        case .streets:     "streets-v2"
-        case .datavizDark: "dataviz-dark"
-        case .streetsDark: "streets-v2-dark"
-        case .basicDark:   "basic-v2-dark"
+        case .system:          nil
+        case .ocean:           "ocean"
+        case .topographic:     "topo-v2"
+        case .satellite:       "satellite"
+        case .datavizDark:     "dataviz-dark"
+        case .satelliteHybrid: "hybrid"
         }
     }
 
-    /// Hosted MapTiler style URL, or `nil` when no key is configured — callers
-    /// then fall back to the per-scheme offline stub style.
+    /// Hosted MapTiler style URL, or `nil` for the offline default / when no
+    /// key is configured — callers fall back to the per-scheme stub style.
     func styleURL(key: String) -> URL? {
-        guard !key.isEmpty else { return nil }
-        return URL(string: "https://api.maptiler.com/maps/\(maptilerStyleID)/style.json?key=\(key)")
+        guard let id = maptilerStyleID, !key.isEmpty else { return nil }
+        return URL(string: "https://api.maptiler.com/maps/\(id)/style.json?key=\(key)")
     }
 }

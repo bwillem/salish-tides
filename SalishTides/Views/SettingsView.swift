@@ -53,6 +53,7 @@ struct SettingsView: View {
                 // ── Basemap (developer) ──────────────────────────────────
                 Section {
                     Picker("Style", selection: $settings.basemap) {
+                        Text(Basemap.system.label).tag(Basemap.system)
                         Section("Light") {
                             ForEach(Basemap.light) { Text($0.label).tag($0) }
                         }
@@ -65,8 +66,8 @@ struct SettingsView: View {
                     Text("Basemap (Developer)")
                 } footer: {
                     Text(MapConfig.maptilerKey.isEmpty
-                         ? "Set MAPTILER_KEY in Config/Secrets.xcconfig to load these styles. Without a key, the offline stub style is shown for all options."
-                         : "Switch the map’s base style to compare options. Loaded from MapTiler — requires a network connection.")
+                         ? "Water-first MapTiler styles for evaluating the basemap. Add MAPTILER_KEY in Config/Secrets.xcconfig to load them; without a key every option shows the offline Day/Night stub."
+                         : "Water-first MapTiler styles for evaluating the basemap. Loaded from MapTiler — requires a network connection.")
                 }
 
                 // ── About ────────────────────────────────────────────────
