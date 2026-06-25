@@ -4,7 +4,12 @@ import Observation
 @MainActor
 @Observable
 final class MapViewModel {
+    // Committed/loaded hour — drives the (hourly) current-chart vectors.
     var currentDate: Date = .now
+    // Live, continuous time under the scrubbing cursor — drives the tide chart
+    // and the readout every frame. Equal to currentDate when not scrubbing.
+    // The map does NOT observe this, so per-frame updates stay cheap.
+    var displayDate: Date = .now
     var currentVectors: [CurrentVector] = []
     var currentSelections: [ChartSelection] = []
     var isMigrating = false
@@ -34,6 +39,13 @@ final class MapViewModel {
     // pan/zoom into a single reload once movement settles.
     private var viewportReloadTask: Task<Void, Never>?
     private let viewportDebounce: Duration = .milliseconds(200)
+
+    // Throttles current-chart reloads while scrubbing the timeline: the tide
+    // chart scrolls smoothly every frame, but the hourly vectors reload at most
+    // ~11×/s (leading + trailing edge), each guarded by loadGeneration.
+    private var scrubLoadTask: Task<Void, Never>?
+    private var lastScrubLoadAt = Date.distantPast
+    private let scrubThrottle: TimeInterval = 0.09
 
     // Target arrow count across the longer screen axis. Down-sampling bins
     // vectors into a grid sized from the viewport span, so on-screen density
@@ -99,8 +111,43 @@ final class MapViewModel {
     }
 
     func setTime(_ date: Date) async {
+        scrubLoadTask?.cancel()
         currentDate = date
+        displayDate = date
         await loadVectors(for: date)
+    }
+
+    // Live scrub from the timeline tape. Updates displayDate every frame (cheap —
+    // only the tide chart and readout observe it) and throttles the heavier
+    // current-chart reload to hour granularity so the map stays smooth.
+    func scrub(to date: Date) {
+        displayDate = date
+        let snapped = Self.snapToHour(date)
+        guard snapped != currentDate else { return }
+
+        if Date().timeIntervalSince(lastScrubLoadAt) >= scrubThrottle {
+            lastScrubLoadAt = Date()
+            currentDate = snapped
+            Task { await loadVectors(for: snapped) }
+        } else {
+            // Trailing edge: make sure the latest hour loads even mid-throttle.
+            scrubLoadTask?.cancel()
+            scrubLoadTask = Task { [weak self] in
+                try? await Task.sleep(for: .milliseconds(90))
+                guard !Task.isCancelled, let self else { return }
+                self.lastScrubLoadAt = Date()
+                self.currentDate = snapped
+                await self.loadVectors(for: snapped)
+            }
+        }
+    }
+
+    private static func snapToHour(_ date: Date) -> Date {
+        let cal = Calendar.salish
+        let c = cal.dateComponents([.year, .month, .day, .hour, .minute], from: date)
+        var top = c; top.minute = 0; top.second = 0
+        let base = cal.date(from: top) ?? date
+        return (c.minute ?? 0) >= 30 ? base.addingTimeInterval(3600) : base
     }
 
     func updateViewport(_ bounds: ChartBounds) {
@@ -189,8 +236,10 @@ final class MapViewModel {
             tideStation = nil; tideEvents = []
             return
         }
-        let from = date.addingTimeInterval(-18 * 3600)
-        let to = date.addingTimeInterval(18 * 3600)
+        // Wide enough to cover the live scrub: the chart centre (displayDate) can
+        // run ahead of the throttled currentDate during a fast drag.
+        let from = date.addingTimeInterval(-30 * 3600)
+        let to = date.addingTimeInterval(30 * 3600)
         let events = (try? await TideDatabase.shared.events(stationID: station.id, from: from, to: to)) ?? []
         // A newer load started while we were awaiting — drop these stale results.
         guard generation == loadGeneration else { return }
@@ -242,17 +291,25 @@ final class MapViewModel {
         return contains ? 0 : 1
     }
 
+    // Beyond this, the nearest current vector is too far to be "under" the
+    // crosshair — i.e. it's on land or off the atlas coverage, so report no speed
+    // (the data has no slack vectors; current exists only where there's flow).
+    private let crosshairMaxDistanceDeg = 0.015  // ≈ 1.6 km
+
     private func nearestSpeed(in vectors: [CurrentVector], viewport: ChartBounds?) -> Double? {
         guard let vp = viewport else { return nil }
         let cLat = (vp.lat_min + vp.lat_max) / 2
         let cLon = (vp.lon_min + vp.lon_max) / 2
-        return vectors
-            .filter { $0.isSignificant }
-            .min(by: {
-                let d1 = ($0.lat - cLat) * ($0.lat - cLat) + ($0.lon - cLon) * ($0.lon - cLon)
-                let d2 = ($1.lat - cLat) * ($1.lat - cLat) + ($1.lon - cLon) * ($1.lon - cLon)
-                return d1 < d2
-            })
-            .map { $0.speedKnots }
+        // Scale longitude by cos(lat) so distances are true-angular, not skewed.
+        let cosLat = cos(cLat * .pi / 180)
+        func dist2(_ v: CurrentVector) -> Double {
+            let dLat = v.lat - cLat
+            let dLon = (v.lon - cLon) * cosLat
+            return dLat * dLat + dLon * dLon
+        }
+        guard let nearest = vectors.filter({ $0.isSignificant }).min(by: { dist2($0) < dist2($1) }),
+              dist2(nearest) <= crosshairMaxDistanceDeg * crosshairMaxDistanceDeg
+        else { return nil }
+        return nearest.speedKnots
     }
 }
