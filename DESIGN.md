@@ -260,28 +260,40 @@ the map visible around and beneath them.
 
 **Location:** Top-right, `.padding(.trailing)` + `.padding(.top, 8)` from safe area  
 **Surface:** Floating card (§4.1b), fixed `width: 248`  
-**Composition:** tide height chart on top, hairline divider, phase row below
+**Composition:** two groups separated by spacing alone (no divider) — the tide
+chart + its phase state on top, then the current-speed hero.
 
 **Anatomy:**
 ```
 ╭──────────────────────────────╮
 │  [TideChartView — 108 pt]     │  ← station name · datum, curve, cursor height
-│  ──────────────────────────   │  ← 0.5 pt divider, white @ 12%
-│  [icon] Phase Name            │
-│         X.X kn ✛              │
+│  ↑ Phase Name                 │  ← tide group: tendency + phase, tied to chart
+│                               │  ← separation by spacing (Spacing.lg), no line
+│  ✛ X.X kn                     │  ← HERO: crosshair speed (.stReadout, large/bold)
 ╰──────────────────────────────╯
 ```
 
+**Information hierarchy & grouping:**
+- The **current speed at the crosshair is the primary datum** — large, bold
+  `.stReadout` with a smaller `.stReadoutUnit` unit beside it. It scales down
+  (`minimumScaleFactor`) rather than wrap at large Dynamic Type (fixed 248 pt).
+- The **tide phase + tendency** is conceptually part of the chart (it names the
+  state the curve shows), so it sits **directly under the chart** as one group.
+- The two groups are separated by **spacing only** — no hairline divider — in
+  keeping with the matte/purposeful principle (§1). The size jump from the small
+  phase label to the big readout reinforces the break.
+
 **States:**
-- **Normal:** flood icon (arrow.up.circle.fill, `.tideFlood`) or ebb icon (arrow.down.circle.fill, `.tideEbb`)
+- **Normal:** plain tendency arrow on the phase line — `arrow.up` `.tideFlood` (flood) or `arrow.down` `.tideEbb` (ebb). Not the filled-circle variants.
 - **No selection:** hidden (conditional on `vm.currentSelection != nil`)
-- **Speed available:** shows crosshair speed with `✛` suffix
+- **Crosshair on land / off coverage:** hero shows an em dash (`—`) — no speed to report
 - **Tide data unavailable:** chart shows a "Tide data unavailable" placeholder
 
-**Speed readout:** value is formatted by `AppSettings.formatSpeed(knots:)` so it
-honours the user's unit (kn / km·h / m·s — see §9). The crosshair association is
-shown with the `scope` SF Symbol, not the former non-standard `✛` glyph (which
-did not read naturally on VoiceOver).
+**Speed readout:** value is formatted from `AppSettings.speedUnit` so it honours
+the user's unit (kn / km·h / m·s — see §9). The crosshair association uses the
+`scope` SF Symbol, not the former non-standard `✛` glyph (which did not read
+naturally on VoiceOver). The accessibility label leads with the speed to match
+the visual hierarchy.
 
 ### 5.2 Timeline Control Bar
 

@@ -47,6 +47,12 @@ extension Font {
     // Phase name headline in the capsule badge
     static let stHeadline = Font.system(.subheadline, design: .default).weight(.bold)
 
+    // Hero current-speed readout — the primary datum in the phase card. Large
+    // monospaced digits so the value reads at a glance and doesn't jump while
+    // scrubbing; the unit ("kn") rides smaller beside it.
+    static let stReadout     = Font.system(.title,   design: .default).weight(.bold).monospacedDigit()
+    static let stReadoutUnit = Font.system(.callout, design: .default).weight(.medium)
+
     // Timeline date/time (monospaced so digits don't jump)
     static let stClock    = Font.system(.headline,    design: .default).monospacedDigit()
 
@@ -123,14 +129,14 @@ extension UIColor {
     static func currentSpeedRamp(dark: Bool) -> [UIColor] {
         dark
         ? [
-            UIColor(red: 0.13, green: 0.40, blue: 0.67, alpha: 1),  // calm   · muted blue
-            UIColor(red: 0.45, green: 0.68, blue: 0.82, alpha: 1),  // light  · sky blue
+            UIColor(red: 0.36, green: 0.64, blue: 0.92, alpha: 1),  // calm   · bright blue (legible on dark water)
+            UIColor(red: 0.55, green: 0.80, blue: 0.92, alpha: 1),  // light  · sky blue
             UIColor(red: 0.98, green: 0.85, blue: 0.37, alpha: 1),  // mod    · amber
             UIColor(red: 0.96, green: 0.43, blue: 0.26, alpha: 1),  // strong · orange-red
             UIColor(red: 0.84, green: 0.19, blue: 0.15, alpha: 1),  // v.str  · deep red
         ]
         : [
-            UIColor(red: 0.08, green: 0.34, blue: 0.55, alpha: 1),  // calm   · deep blue
+            UIColor(red: 0.13, green: 0.45, blue: 0.72, alpha: 1),  // calm   · clear blue
             UIColor(red: 0.15, green: 0.52, blue: 0.74, alpha: 1),  // light  · ocean blue
             UIColor(red: 0.80, green: 0.52, blue: 0.05, alpha: 1),  // mod    · dark amber
             UIColor(red: 0.86, green: 0.35, blue: 0.10, alpha: 1),  // strong · burnt orange
