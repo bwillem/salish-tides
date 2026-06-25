@@ -88,8 +88,8 @@ struct TideChartView: View {
             fill.closeSubpath()
             ctx.fill(fill, with: .linearGradient(
                 Gradient(stops: [
-                    .init(color: Color.oceanMid.opacity(0.55), location: 0),
-                    .init(color: Color.oceanMid.opacity(0.06), location: 1),
+                    .init(color: Color.brandAccent.opacity(0.55), location: 0),
+                    .init(color: Color.brandAccent.opacity(0.06), location: 1),
                 ]),
                 startPoint: CGPoint(x: 0, y: chartTop),
                 endPoint:   CGPoint(x: 0, y: chartBot)
