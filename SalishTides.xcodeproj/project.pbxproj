@@ -26,6 +26,7 @@
 		8892B94C18ABFFDE44949FD5 /* atlas_index_vol3.json in Resources */ = {isa = PBXBuildFile; fileRef = 1F71279AD0BA5885E48ABD65 /* atlas_index_vol3.json */; };
 		9CEBBFBDEB99CD300FC775BF /* TideDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = D25E37F6E08BDAD0D7CB5885 /* TideDatabase.swift */; };
 		A14E261EEF019763C5C3ED1C /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 4C2D431933E482A18FCC18F9 /* GRDB */; };
+		A5373274BBC15D93DDE7A47B /* Basemap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E351A5A0241F5F0CB272A0D /* Basemap.swift */; };
 		B3E0A98667446BD785E78FBB /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 808EEF6FA5FE567E488AA3D5 /* DesignTokens.swift */; };
 		BC9A62D51F3C27B4EB0BD09C /* stub-style.json in Resources */ = {isa = PBXBuildFile; fileRef = D8D047884F1E73D88E45BDA6 /* stub-style.json */; };
 		CC1DE4A9F7C994DD5459CB22 /* TapeSliderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28E631FED305377F6178516B /* TapeSliderView.swift */; };
@@ -48,6 +49,8 @@
 		34E23098B238D68AE7C4E0CA /* AtlasVolume.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtlasVolume.swift; sourceTree = "<group>"; };
 		3DDA2FAF2D0189860F478A7C /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		4FA576D80059DF72E4354E26 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		57507473C7B77D54DECBB9A0 /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
+		6E351A5A0241F5F0CB272A0D /* Basemap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Basemap.swift; sourceTree = "<group>"; };
 		6EE458C039CC8A1CCE1AD9D9 /* TideStation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TideStation.swift; sourceTree = "<group>"; };
 		6F8AC975A9DE6B660C38E780 /* SalishTidesApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SalishTidesApp.swift; sourceTree = "<group>"; };
 		705E9152F8BEA1FA75608D3F /* MapLibreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapLibreView.swift; sourceTree = "<group>"; };
@@ -137,6 +140,7 @@
 		6876E2B896F5398AAAA4F185 = {
 			isa = PBXGroup;
 			children = (
+				E2308F46423DFC35F3FF6F86 /* Config */,
 				567AE6C212DBB6EB37BD5C84 /* SalishTides */,
 				489D3086E0E1A69D40C4993B /* Products */,
 			);
@@ -193,9 +197,18 @@
 		CFBFD2D1DC00ECC2742C993C /* Map */ = {
 			isa = PBXGroup;
 			children = (
+				6E351A5A0241F5F0CB272A0D /* Basemap.swift */,
 				705E9152F8BEA1FA75608D3F /* MapLibreView.swift */,
 			);
 			path = Map;
+			sourceTree = "<group>";
+		};
+		E2308F46423DFC35F3FF6F86 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				57507473C7B77D54DECBB9A0 /* Base.xcconfig */,
+			);
+			path = Config;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -305,6 +318,7 @@
 				5634D37C27B06326BEB8F192 /* AtlasIndex.swift in Sources */,
 				DEEA37D4F253B7A4E151C3EB /* AtlasLookupTable.swift in Sources */,
 				2872EC1D5D05AB899A667652 /* AtlasVolume.swift in Sources */,
+				A5373274BBC15D93DDE7A47B /* Basemap.swift in Sources */,
 				1F1918795868670251164A0C /* ContentView.swift in Sources */,
 				570A422AFA165A8582E8CC3E /* CurrentVector.swift in Sources */,
 				5447EAD323169BC3E88B2FF6 /* DatabaseMigrator.swift in Sources */,
@@ -328,6 +342,7 @@
 /* Begin XCBuildConfiguration section */
 		157BC6C0832647AF17CBD2E7 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 57507473C7B77D54DECBB9A0 /* Base.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
@@ -350,6 +365,7 @@
 		};
 		DDF2BFEA0F0AE17E9D09D654 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 57507473C7B77D54DECBB9A0 /* Base.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";

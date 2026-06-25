@@ -20,6 +20,8 @@
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>MAPTILER_KEY</key>
+	<string>$(MAPTILER_KEY)</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Your location is shown on the chart so you can orient yourself relative to the currents.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>

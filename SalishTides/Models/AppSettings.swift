@@ -113,6 +113,10 @@ final class AppSettings {
     var appearance: AppearanceMode {
         didSet { defaults.set(appearance.rawValue, forKey: Keys.appearance) }
     }
+    /// Developer-facing base map style selection (see Settings → Basemap).
+    var basemap: Basemap {
+        didSet { defaults.set(basemap.rawValue, forKey: Keys.basemap) }
+    }
 
     private let defaults: UserDefaults
 
@@ -121,6 +125,7 @@ final class AppSettings {
         self.speedUnit  = defaults.string(forKey: Keys.speedUnit).flatMap(SpeedUnit.init) ?? .knots
         self.heightUnit = defaults.string(forKey: Keys.heightUnit).flatMap(HeightUnit.init) ?? .metres
         self.appearance = defaults.string(forKey: Keys.appearance).flatMap(AppearanceMode.init) ?? .system
+        self.basemap    = defaults.string(forKey: Keys.basemap).flatMap(Basemap.init) ?? .ocean
         // Bool keys default to `true` (feature visible) when never set.
         self.showCrosshair = defaults.object(forKey: Keys.showCrosshair) as? Bool ?? true
     }
@@ -144,5 +149,6 @@ final class AppSettings {
         static let heightUnit    = "settings.heightUnit"
         static let showCrosshair = "settings.showCrosshair"
         static let appearance    = "settings.appearance"
+        static let basemap       = "settings.basemap"
     }
 }

@@ -4,6 +4,7 @@ import CoreLocation
 
 struct MapLibreView: UIViewRepresentable {
     @Environment(MapViewModel.self) private var vm
+    @Environment(AppSettings.self) private var settings
 
     func makeUIView(context: Context) -> MLNMapView {
         let mapView = MLNMapView(frame: .zero)
@@ -17,7 +18,8 @@ struct MapLibreView: UIViewRepresentable {
         let center = CLLocationCoordinate2D(latitude: 48.8, longitude: -123.2)
         mapView.setCenter(center, zoomLevel: 9.5, animated: false)
 
-        if let styleURL = Bundle.main.url(forResource: "stub-style", withExtension: "json") {
+        context.coordinator.appliedBasemap = settings.basemap
+        if let styleURL = settings.basemap.styleURL(key: MapConfig.maptilerKey) {
             mapView.styleURL = styleURL
         }
 
@@ -25,6 +27,15 @@ struct MapLibreView: UIViewRepresentable {
     }
 
     func updateUIView(_ mapView: MLNMapView, context: Context) {
+        // Apply a basemap change live. Re-setting styleURL reloads the style,
+        // which re-fires didFinishLoading → the coordinator re-adds the arrow
+        // layers and re-applies the current vectors.
+        if settings.basemap != context.coordinator.appliedBasemap {
+            context.coordinator.appliedBasemap = settings.basemap
+            if let styleURL = settings.basemap.styleURL(key: MapConfig.maptilerKey) {
+                mapView.styleURL = styleURL
+            }
+        }
         context.coordinator.updateVectors(vm.currentVectors, on: mapView)
     }
 
@@ -42,6 +53,9 @@ struct MapLibreView: UIViewRepresentable {
         private let shaftLayerID = "salish-shafts"
         private let barbLayerID = "salish-barbs"
         nonisolated(unsafe) private var pendingVectors: [CurrentVector]?
+        // Basemap currently applied to the map view; compared in updateUIView so
+        // the style only reloads when the selection actually changes.
+        nonisolated(unsafe) var appliedBasemap: Basemap?
         private let onViewportChange: (ChartBounds) -> Void
 
         init(onViewportChange: @escaping (ChartBounds) -> Void) {

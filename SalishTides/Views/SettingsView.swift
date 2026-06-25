@@ -50,6 +50,25 @@ struct SettingsView: View {
                     Text("The chart’s colours are tuned for daylight on the water and stay constant; this affects the app’s panels and menus.")
                 }
 
+                // ── Basemap (developer) ──────────────────────────────────
+                Section {
+                    Picker("Style", selection: $settings.basemap) {
+                        Section("Light") {
+                            ForEach(Basemap.light) { Text($0.label).tag($0) }
+                        }
+                        Section("Dark") {
+                            ForEach(Basemap.dark) { Text($0.label).tag($0) }
+                        }
+                    }
+                    .pickerStyle(.navigationLink)
+                } header: {
+                    Text("Basemap (Developer)")
+                } footer: {
+                    Text(MapConfig.maptilerKey.isEmpty
+                         ? "Set MAPTILER_KEY in Config/Secrets.xcconfig to load these styles. Without a key, the offline stub style is shown for all options."
+                         : "Switch the map’s base style to compare options. Loaded from MapTiler — requires a network connection.")
+                }
+
                 // ── About ────────────────────────────────────────────────
                 Section("About") {
                     LabeledContent("Version", value: Self.appVersion)
