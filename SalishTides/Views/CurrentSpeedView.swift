@@ -9,11 +9,10 @@ struct CurrentSpeedView: View {
 
     var body: some View {
         if vm.currentSelection != nil {
-            // Icon centered to the value; value + unit baseline-aligned ("0.3 kn")
-            // and scale down together rather than wrap.
+            // Value (hero) leads; the compass needle sits to its right, centered
+            // to the value. Value + unit are baseline-aligned ("0.3 kn") and
+            // scale down together rather than wrap.
             HStack(alignment: .center, spacing: Spacing.xs) {
-                directionIcon
-                    .font(.stReadoutUnit)
                 if let speed = vm.crosshairSpeed {
                     HStack(alignment: .firstTextBaseline, spacing: Spacing.xxs) {
                         Text(speedValue(speed))
@@ -29,6 +28,8 @@ struct CurrentSpeedView: View {
                         .font(.stReadout)
                         .foregroundStyle(Color.inkSecondary)
                 }
+                directionIcon
+                    .font(.stReadoutUnit)
             }
             .padding(.horizontal, Spacing.md)
             .padding(.vertical, Spacing.sm)
@@ -38,15 +39,16 @@ struct CurrentSpeedView: View {
         }
     }
 
-    /// An arrow tilted to the current's flow direction at the crosshair
-    /// (compass bearing; `arrow.up` = north, rotated clockwise). Falls back to
-    /// the `scope` reticle when there's no current to point.
+    /// A compass needle tilted to the current's flow direction at the crosshair
+    /// (bearing; the needle points north at 0°, rotated clockwise). A distinct
+    /// glyph from the tide tendency arrows, and the ring reads as a bearing.
+    /// Falls back to the `scope` reticle when there's no current to point.
     @ViewBuilder
     private var directionIcon: some View {
         if let direction = vm.crosshairDirection {
-            Image(systemName: "arrow.up")
+            Image(systemName: "location.north.circle.fill")
                 .rotationEffect(.degrees(direction))
-                .foregroundStyle(.primary)
+                .foregroundStyle(Color.inkSecondary)
         } else {
             Image(systemName: "scope")
                 .foregroundStyle(Color.inkSecondary)
