@@ -112,12 +112,12 @@ struct TapeSliderView: View {
             let isLabelled = (tick % 3 == 0) || isMidnight   // taller tick + a label
 
             if isNow {
-                // "Now" marker: full-height line in oceanLight so it's visible
+                // "Now" marker: full-height line in the accent so it's visible
                 // whether the cursor is sitting on it or has moved away
                 var p = Path()
                 p.move(to:    CGPoint(x: x, y: 0))
                 p.addLine(to: CGPoint(x: x, y: totalH * 0.70))
-                ctx.stroke(p, with: .color(Color.oceanLight.opacity(0.75)), lineWidth: 1.0)
+                ctx.stroke(p, with: .color(Color.brandAccent.opacity(0.75)), lineWidth: 1.0)
             }
 
             // Hour tick (taller on labelled marks)
