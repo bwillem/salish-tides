@@ -148,12 +148,20 @@ struct MapLibreView: UIViewRepresentable {
             var features: [MLNPolylineFeature] = []
             features.reserveCapacity(vectors.count * 3)
 
-            let halfDeg = 0.005       // ~500 m at Salish Sea latitudes
-            // barb = 35% of full shaft (2×halfDeg) → 0.70 × halfDeg
-            let barbFraction = 0.70
+            let baseHalfDeg = 0.005   // ~500 m; the half-length of a ~1 kn arrow
+            // Arrowhead size is pinned to the *base* length (not the speed-scaled
+            // length below), so only the tail grows with speed — the barbs don't.
+            // barb = 35% of the full reference shaft (2×baseHalfDeg) → 0.70 ×.
+            let barbLen = baseHalfDeg * 0.70
 
             for v in vectors where v.isSignificant {
                 let θ = v.direction_deg * .pi / 180
+
+                // Tail length encodes speed: faster current → longer arrow, slower
+                // → shorter stub. Clamped so the slowest vectors stay visible and
+                // the fastest don't overrun their neighbours (cap reached ~3.7 kn).
+                let lengthScale = min(max(0.5 + v.speedKnots * 0.30, 0.5), 1.6)
+                let halfDeg = baseHalfDeg * lengthScale
                 let dLat = cos(θ) * halfDeg
                 let dLon = sin(θ) * halfDeg
 
@@ -165,9 +173,8 @@ struct MapLibreView: UIViewRepresentable {
                 shaftFeature.attributes = ["speed_knots": v.speedKnots, "arrow_type": "shaft"]
                 features.append(shaftFeature)
 
-                // Two barbs at ±25° from the reversed direction
+                // Two barbs at ±25° from the reversed direction (constant size)
                 let backθ = θ + .pi
-                let barbLen = halfDeg * barbFraction
                 for spread in [-0.4363, 0.4363] {
                     let βθ = backθ + spread
                     var barb = [
