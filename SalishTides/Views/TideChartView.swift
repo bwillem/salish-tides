@@ -44,7 +44,7 @@ struct TideChartView: View {
             // below MLLW and ~5 m at Chart Datum — a fixed 0–5 domain won't do).
             let heights = samples.map { conv($0.height) }
             let lo = heights.min()!, hi = heights.max()!
-            let pad = max(conv(0.3) - conv(0), (hi - lo) * 0.15)
+            let pad = max(conv(0.3), (hi - lo) * 0.15)
             let yMin = lo - pad, yMax = hi + pad
 
             let chartLeft  = leftPad

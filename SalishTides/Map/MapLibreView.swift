@@ -4,7 +4,6 @@ import CoreLocation
 
 struct MapLibreView: UIViewRepresentable {
     @Environment(MapViewModel.self) private var vm
-    @Environment(AppSettings.self) private var settings
 
     func makeUIView(context: Context) -> MLNMapView {
         let mapView = MLNMapView(frame: .zero)
@@ -26,9 +25,7 @@ struct MapLibreView: UIViewRepresentable {
     }
 
     func updateUIView(_ mapView: MLNMapView, context: Context) {
-        // Honour the "Current arrows" toggle by clearing the rendered set when off.
-        let vectors = settings.showCurrentArrows ? vm.currentVectors : []
-        context.coordinator.updateVectors(vectors, on: mapView)
+        context.coordinator.updateVectors(vm.currentVectors, on: mapView)
     }
 
     func makeCoordinator() -> Coordinator {

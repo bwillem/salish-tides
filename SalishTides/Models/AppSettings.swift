@@ -107,9 +107,6 @@ final class AppSettings {
     var heightUnit: HeightUnit {
         didSet { defaults.set(heightUnit.rawValue, forKey: Keys.heightUnit) }
     }
-    var showCurrentArrows: Bool {
-        didSet { defaults.set(showCurrentArrows, forKey: Keys.showCurrentArrows) }
-    }
     var showCrosshair: Bool {
         didSet { defaults.set(showCrosshair, forKey: Keys.showCrosshair) }
     }
@@ -125,8 +122,7 @@ final class AppSettings {
         self.heightUnit = defaults.string(forKey: Keys.heightUnit).flatMap(HeightUnit.init) ?? .metres
         self.appearance = defaults.string(forKey: Keys.appearance).flatMap(AppearanceMode.init) ?? .system
         // Bool keys default to `true` (feature visible) when never set.
-        self.showCurrentArrows = defaults.object(forKey: Keys.showCurrentArrows) as? Bool ?? true
-        self.showCrosshair     = defaults.object(forKey: Keys.showCrosshair) as? Bool ?? true
+        self.showCrosshair = defaults.object(forKey: Keys.showCrosshair) as? Bool ?? true
     }
 
     // MARK: Formatting helpers
@@ -144,10 +140,9 @@ final class AppSettings {
     }
 
     private enum Keys {
-        static let speedUnit         = "settings.speedUnit"
-        static let heightUnit        = "settings.heightUnit"
-        static let showCurrentArrows = "settings.showCurrentArrows"
-        static let showCrosshair     = "settings.showCrosshair"
-        static let appearance        = "settings.appearance"
+        static let speedUnit     = "settings.speedUnit"
+        static let heightUnit    = "settings.heightUnit"
+        static let showCrosshair = "settings.showCrosshair"
+        static let appearance    = "settings.appearance"
     }
 }

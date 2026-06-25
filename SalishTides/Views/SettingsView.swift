@@ -29,12 +29,11 @@ struct SettingsView: View {
 
                 // ── Map & Display ────────────────────────────────────────
                 Section {
-                    Toggle("Current arrows", isOn: $settings.showCurrentArrows)
                     Toggle("Crosshair", isOn: $settings.showCrosshair)
                 } header: {
                     Text("Map & Display")
                 } footer: {
-                    Text("Current arrows show flow speed and direction at the displayed time. The crosshair marks the point used for the speed readout.")
+                    Text("The crosshair marks the point used for the speed readout.")
                 }
 
                 // ── Appearance ───────────────────────────────────────────

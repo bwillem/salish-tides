@@ -293,7 +293,6 @@ Settings                                    Done
 │   Current speed                      Knots ⌄   │
 │   Tide height                       Metres ⌄   │
 │  MAP & DISPLAY                                  │
-│   Current arrows                          ●──  │
 │   Crosshair                               ●──  │
 │  APPEARANCE                                     │
 │   [ System | Light | Dark ]                    │
@@ -396,7 +395,6 @@ environment — the same pattern as `MapViewModel`, so both SwiftUI views and th
 |-----------|------|---------|---------|
 | `speedUnit` | knots / km·h / m·s | knots | Phase panel speed readout + VoiceOver |
 | `heightUnit` | metres / feet | metres | Tide chart cursor, y-axis, VoiceOver |
-| `showCurrentArrows` | Bool | on | MapLibre arrow layers (cleared when off) |
 | `showCrosshair` | Bool | on | `CrosshairView` visibility |
 | `appearance` | system / light / dark | system | `.preferredColorScheme` on the root |
 
