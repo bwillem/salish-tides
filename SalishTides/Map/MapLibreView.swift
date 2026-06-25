@@ -68,7 +68,13 @@ struct MapLibreView: UIViewRepresentable {
                 Task { await vm.updateViewport(bounds) }
             },
             onBearingChange: { [mapController] bearing in
-                Task { @MainActor in mapController.bearing = bearing }
+                // Only write on an actual change: mapViewRegionIsChanging fires
+                // every frame during pan/zoom too, and ContentView observes
+                // `bearing`, so a redundant write would re-render the overlay
+                // ~60×/sec while panning.
+                Task { @MainActor in
+                    if mapController.bearing != bearing { mapController.bearing = bearing }
+                }
             }
         )
     }
