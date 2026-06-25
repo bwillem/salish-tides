@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PhaseIndicatorView: View {
     @Environment(MapViewModel.self) private var vm
+    @Environment(AppSettings.self) private var settings
 
     var body: some View {
         if let sel = vm.currentSelection {
@@ -33,9 +34,12 @@ struct PhaseIndicatorView: View {
                             .font(.stHeadline)
 
                         if let speed = vm.crosshairSpeed {
-                            Text(String(format: "%.1f kn ✛", speed))
-                                .font(.stMono)
-                                .foregroundStyle(.secondary)
+                            HStack(spacing: Spacing.xxs) {
+                                Image(systemName: "scope")
+                                Text(settings.formatSpeed(knots: speed))
+                            }
+                            .font(.stMono)
+                            .foregroundStyle(.secondary)
                         }
                     }
 
@@ -57,14 +61,16 @@ struct PhaseIndicatorView: View {
             return "Tide chart. Data unavailable."
         }
         let datum = station.datum == "MLLW" ? "mean lower low water" : "chart datum"
-        return String(format: "Tide %.1f metres at %@, above %@.", h, station.name, datum)
+        let height = settings.heightUnit.value(fromMetres: h)
+        let unit = settings.heightUnit.label.lowercased()
+        return String(format: "Tide %.1f %@ at %@, above %@.", height, unit, station.name, datum)
     }
 
     private func phaseRowLabel(_ sel: ChartSelection) -> String {
         let phase = sel.phase.replacingOccurrences(of: "_", with: " ").lowercased()
         var label = "\(phase) tide."
         if let speed = vm.crosshairSpeed {
-            label += String(format: " %.1f knots at crosshair.", speed)
+            label += " \(settings.formatSpeed(knots: speed)) at crosshair."
         }
         return label
     }

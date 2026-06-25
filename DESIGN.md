@@ -211,8 +211,10 @@ the map visible around and beneath them.
 - **Speed available:** shows crosshair speed with `✛` suffix
 - **Tide data unavailable:** chart shows a "Tide data unavailable" placeholder
 
-**Open design issues:**
-- The `✛` suffix character is non-standard and may not read naturally on VoiceOver
+**Speed readout:** value is formatted by `AppSettings.formatSpeed(knots:)` so it
+honours the user's unit (kn / km·h / m·s — see §9). The crosshair association is
+shown with the `scope` SF Symbol, not the former non-standard `✛` glyph (which
+did not read naturally on VoiceOver).
 
 ### 5.2 Timeline Control Bar
 
@@ -270,6 +272,40 @@ Rendered by MapLibre, not SwiftUI. Color is controlled by `speedColorExpression(
 **Caption:** "Loading charts… N%" in `.stMono`-equivalent caption
 
 **Note:** This screen shows only on first launch (migration). Second launch goes directly to the map. No need to optimize for repeat views.
+
+### 5.6 Settings Button & Sheet
+
+**Entry point** (`SettingsButton`, in `ContentView`): a floating gear
+(`gearshape`) in the **top-left**, mirroring the phase panel top-right so the two
+upper corners read as a deliberate pair. Uses the shared `.floatingCard()`
+surface at `Radius.lg` and a fixed **44×44 pt** frame — meets the HIG minimum
+target. Inset `.padding(.leading)` + `Spacing.sm` from the safe area.
+
+**Sheet** (`SettingsView`): a standard grouped `Form` in a `NavigationStack`,
+following the iOS HIG settings pattern — sections of related controls, system
+`Picker`/`Toggle`, inline navigation title, single confirming **Done** button
+(`.confirmationAction`).
+
+```
+Settings                                    Done
+┌──────────────────────────────────────────────┐
+│  UNITS                                         │
+│   Current speed                      Knots ⌄   │
+│   Tide height                       Metres ⌄   │
+│  MAP & DISPLAY                                  │
+│   Crosshair                               ●──  │
+│  APPEARANCE                                     │
+│   [ System | Light | Dark ]                    │
+│  ABOUT                                          │
+│   Version                          1.0 (1)     │
+│   Data Sources                            >    │
+└──────────────────────────────────────────────┘
+```
+
+**Data Sources** (`DataSourcesView`, pushed from About): NOAA CO-OPS / CHS IWLS
+tide attribution, the CHS current atlas, MapLibre basemap credit, and the
+"not for navigation" disclaimer. In-app provenance is expected at App Store
+review for a navigation aid.
 
 ---
 
@@ -348,15 +384,46 @@ its "Tide data unavailable" placeholder.
 
 ---
 
-## 8. Open Design Backlog
+## 8. Settings & User Preferences
+
+User preferences live in `AppSettings` (`Models/AppSettings.swift`), an
+`@Observable` store persisted to `UserDefaults` and injected through the SwiftUI
+environment — the same pattern as `MapViewModel`, so both SwiftUI views and the
+`MapLibreView` representable react without prop-drilling.
+
+| Preference | Type | Default | Affects |
+|-----------|------|---------|---------|
+| `speedUnit` | knots / km·h / m·s | knots | Phase panel speed readout + VoiceOver |
+| `heightUnit` | metres / feet | metres | Tide chart cursor, y-axis, VoiceOver |
+| `showCrosshair` | Bool | on | `CrosshairView` visibility |
+| `appearance` | system / light / dark | system | `.preferredColorScheme` on the root |
+
+**Canonical units never change in storage.** Currents are stored in knots
+(`CurrentVector.speedKnots`) and tide heights in metres (station datum);
+conversion happens only at the readout via `AppSettings.formatSpeed/​formatHeight`
+or the `SpeedUnit`/`HeightUnit` `value(from:)` helpers. Never persist a converted
+value — round-tripping loses precision.
+
+**Appearance default is `.system`.** The current-speed colour scale and basemap
+are held constant regardless (the chart's context is the water, not the OS
+appearance — see §2.3); the override only re-tints the app's panels and menus.
+
+---
+
+## 9. Open Design Backlog
+
+**Resolved in the settings/HIG-audit pass:**
+- ✅ Settings + About surface (§5.6) — data-source attribution now in-app
+- ✅ Non-standard `✛` speed suffix → `scope` SF Symbol (§5.1)
+- ✅ Unit preferences (speed / height) with a unit-agnostic tide-chart axis
 
 | Priority | Item | Notes |
 |----------|------|-------|
 | High | Real nautical basemap | Current stub-style.json is solid blue. Need PMTiles + proper chart style. Until this ships, all visual design is provisional. |
 | High | Crosshair contrast on light map | White-on-white will be invisible. Add dark stroke or shadow. |
+| Med | `Now` button touch target | `.controlSize(.small)` may fall below 44 pt, and the balance spacer is a hardcoded `width: 54` that desyncs at large Dynamic Type. Audit on device. |
 | Low | VoiceOver audit | Labels are in place (§6.2); verify reading order + adjustable tape on-device with the Accessibility Inspector |
 | Medium | Speed legend | Users need a legend to understand the 5-color current scale |
 | Medium | Sunlight contrast validation | Test `.currentModerate` (#FAD95E) on device in daylight |
 | Low | Haptic feedback | Add impact feedback to slider steps and Now button |
-| Low | Dark mode explicit treatment | Materials handle it, but test the full dark-mode flow |
-| Low | Portrait layout | Verify timeline + phase panel don't overlap in portrait on smaller iPads |
+| Low | Portrait layout | Verify timeline + phase panel + new settings button don't overlap in portrait on smaller iPads |

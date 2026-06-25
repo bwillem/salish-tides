@@ -2,6 +2,8 @@ import SwiftUI
 
 struct ContentView: View {
     @Environment(MapViewModel.self) private var vm
+    @Environment(AppSettings.self) private var settings
+    @State private var showingSettings = false
 
     var body: some View {
         Group {
@@ -18,13 +20,18 @@ struct ContentView: View {
         ZStack(alignment: .bottom) {
             MapLibreView()
                 .ignoresSafeArea()
-            CrosshairView()
+            if settings.showCrosshair {
+                CrosshairView()
+            }
             VStack(spacing: 0) {
-                HStack {
+                HStack(alignment: .top) {
+                    SettingsButton { showingSettings = true }
+                        .padding(.leading)
+                        .padding(.top, Spacing.sm)
                     Spacer()
                     PhaseIndicatorView()
                         .padding(.trailing)
-                        .padding(.top, 8)
+                        .padding(.top, Spacing.sm)
                 }
                 Spacer()
                 TimelineControlView()
@@ -40,6 +47,27 @@ struct ContentView: View {
         } message: {
             Text(vm.migrationError ?? "")
         }
+        .sheet(isPresented: $showingSettings) {
+            SettingsView()
+        }
+    }
+}
+
+/// Floating gear button, top-left — the entry point to Settings. Mirrors the
+/// phase panel's floating-card surface (§4.1b) so the two top corners read as a
+/// pair, and meets the 44 pt HIG minimum touch target.
+private struct SettingsButton: View {
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "gearshape")
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(.primary)
+                .frame(width: 44, height: 44)
+        }
+        .floatingCard(cornerRadius: Radius.lg)
+        .accessibilityLabel("Settings")
     }
 }
 
