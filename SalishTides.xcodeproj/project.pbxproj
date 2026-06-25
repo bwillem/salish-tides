@@ -41,6 +41,7 @@
 		DB1DA594128D65FAE7F67967 /* standard-light.json in Resources */ = {isa = PBXBuildFile; fileRef = 727BC113893557DFF4A9C2AF /* standard-light.json */; };
 		DEEA37D4F253B7A4E151C3EB /* AtlasLookupTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33F90FC333D8D0174AF1A089 /* AtlasLookupTable.swift */; };
 		E1217A140CE89A8A73B3C4A6 /* TimelineControlView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B460FF242F858B027A672B40 /* TimelineControlView.swift */; };
+		E6FE100509920528EC7D2D3D /* CurrentSpeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF9286BF11F407E9F9851157 /* CurrentSpeedView.swift */; };
 		F743BEB1EA6645CE4C8D41E9 /* atlas_index.json in Resources */ = {isa = PBXBuildFile; fileRef = F4B415D45980FEC40DFF87CB /* atlas_index.json */; };
 		FB3737835F764AD3A85B61BE /* SalishTidesApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F8AC975A9DE6B660C38E780 /* SalishTidesApp.swift */; };
 /* End PBXBuildFile section */
@@ -83,6 +84,7 @@
 		F4B415D45980FEC40DFF87CB /* atlas_index.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = atlas_index.json; sourceTree = "<group>"; };
 		FC4BE54595E9CB5FA8F715B3 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		FD04BD2129588FF977B70226 /* atlas_lookup_vol2_2026.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = atlas_lookup_vol2_2026.json; sourceTree = "<group>"; };
+		FF9286BF11F407E9F9851157 /* CurrentSpeedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrentSpeedView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -202,6 +204,7 @@
 		795C560FDDE5EFE82BA7550C /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				FF9286BF11F407E9F9851157 /* CurrentSpeedView.swift */,
 				BF78D89E101E6B88EB6D487E /* PhaseIndicatorView.swift */,
 				190464A173F749BB0A3B786E /* SettingsView.swift */,
 				28E631FED305377F6178516B /* TapeSliderView.swift */,
@@ -350,6 +353,7 @@
 				2872EC1D5D05AB899A667652 /* AtlasVolume.swift in Sources */,
 				A5373274BBC15D93DDE7A47B /* Basemap.swift in Sources */,
 				1F1918795868670251164A0C /* ContentView.swift in Sources */,
+				E6FE100509920528EC7D2D3D /* CurrentSpeedView.swift in Sources */,
 				570A422AFA165A8582E8CC3E /* CurrentVector.swift in Sources */,
 				5447EAD323169BC3E88B2FF6 /* DatabaseMigrator.swift in Sources */,
 				B3E0A98667446BD785E78FBB /* DesignTokens.swift in Sources */,

@@ -39,9 +39,12 @@ struct ContentView: View {
                         .padding(.leading)
                         .padding(.top, Spacing.sm)
                     Spacer()
-                    PhaseIndicatorView()
-                        .padding(.trailing)
-                        .padding(.top, Spacing.sm)
+                    VStack(alignment: .trailing, spacing: Spacing.sm) {
+                        PhaseIndicatorView()
+                        CurrentSpeedView()
+                    }
+                    .padding(.trailing)
+                    .padding(.top, Spacing.sm)
                 }
                 Spacer()
                 TimelineControlView()

@@ -1,67 +1,40 @@
 import SwiftUI
 
+/// Tide chart + its phase state, as one floating card. The current speed at the
+/// crosshair lives in its own card — see `CurrentSpeedView`.
 struct PhaseIndicatorView: View {
     @Environment(MapViewModel.self) private var vm
     @Environment(AppSettings.self) private var settings
 
     var body: some View {
         if let sel = vm.currentSelection {
-            // Two groups separated by spacing alone (no divider): the tide
-            // chart + its phase state, then the current-speed hero.
-            VStack(alignment: .leading, spacing: Spacing.lg) {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                TideChartView(currentDate: vm.displayDate,
+                              events: vm.tideEvents)
+                    .frame(height: 108)
+                    .accessibilityElement()
+                    .accessibilityLabel(tideChartLabel)
 
-                // ── Tide group: chart + its phase state (conceptually one) ───
-                VStack(alignment: .leading, spacing: Spacing.xs) {
-                    TideChartView(currentDate: vm.displayDate,
-                                  station: vm.tideStation,
-                                  events: vm.tideEvents)
-                        .frame(height: 108)
-                        .accessibilityElement()
-                        .accessibilityLabel(tideChartLabel)
-
-                    // Phase state labels the chart it sits under.
-                    HStack(spacing: Spacing.xs) {
-                        Image(systemName: tendencyIcon(sel.tendency))
-                            .font(.stPhase.weight(.semibold))
-                            .foregroundStyle(tendencyColor(sel.tendency))
-                        Text(phaseText(sel))
-                            .font(.stPhase)
-                            .foregroundStyle(.secondary)
-                    }
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("\(phaseText(sel)) tide.")
-                }
-
-                // ── Current speed at the crosshair (hero) ────────────────────
-                // Em dash when the crosshair is on land / off coverage.
-                // Center the scope icon to the value; the value + unit stay
-                // baseline-aligned to each other ("0.3 kn").
-                HStack(alignment: .center, spacing: Spacing.xs) {
-                    Image(systemName: "scope")
-                        .font(.stReadoutUnit)
+                // Phase state labels the chart it sits under.
+                HStack(spacing: Spacing.xs) {
+                    Image(systemName: tendencyIcon(sel.tendency))
+                        .font(.stPhase.weight(.semibold))
+                        .foregroundStyle(tendencyColor(sel.tendency))
+                    Text(phaseText(sel))
+                        .font(.stPhase)
                         .foregroundStyle(.secondary)
-                    if let speed = vm.crosshairSpeed {
-                        // Scaling lives on this value+unit group so it shrinks to
-                        // fit the fixed-width card at large Dynamic Type rather
-                        // than clipping (e.g. "12.5 km/h").
-                        HStack(alignment: .firstTextBaseline, spacing: Spacing.xxs) {
-                            Text(speedValue(speed))
-                                .font(.stReadout)
-                            Text(settings.speedUnit.abbreviation)
-                                .font(.stReadoutUnit)
-                                .foregroundStyle(.secondary)
-                        }
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6)
-                    } else {
-                        Text("—")
-                            .font(.stReadout)
-                            .foregroundStyle(.secondary)
-                    }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(crosshairSpeedLabel)
+                .accessibilityLabel("\(phaseText(sel)) tide.")
+
+                // Provenance: which station the curve is from + its datum.
+                if let station = vm.tideStation {
+                    Text("\(station.name) · \(station.datum)")
+                        .font(.stCaption)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
             }
             .padding(Spacing.md)
             .frame(width: 248)
@@ -80,23 +53,9 @@ struct PhaseIndicatorView: View {
         return String(format: "Tide %.1f %@ at %@, above %@.", height, unit, station.name, datum)
     }
 
-    /// Speed value without the unit (the unit rides separately, smaller).
-    private func speedValue(_ knots: Double) -> String {
-        settings.speedUnit.value(fromKnots: knots)
-            .formatted(.number.precision(.fractionLength(1)))
-    }
-
     /// Display name for the tide phase, e.g. "Small Flood".
     private func phaseText(_ sel: ChartSelection) -> String {
         sel.phase.replacingOccurrences(of: "_", with: " ").capitalized
-    }
-
-    /// VoiceOver label for the hero readout (the crosshair current speed).
-    private var crosshairSpeedLabel: String {
-        if let speed = vm.crosshairSpeed {
-            return "\(settings.formatSpeed(knots: speed)) at crosshair."
-        }
-        return "No current at crosshair."
     }
 
     private func tendencyIcon(_ tendency: Tendency) -> String {
