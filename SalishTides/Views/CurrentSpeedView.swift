@@ -46,9 +46,9 @@ struct CurrentSpeedView: View {
     @ViewBuilder
     private var directionIcon: some View {
         if let direction = vm.crosshairDirection {
-            Image(systemName: "location.north.circle.fill")
+            Image(systemName: "location.north.fill")
                 .rotationEffect(.degrees(direction))
-                .foregroundStyle(Color.inkSecondary)
+                .foregroundStyle(.red)
         } else {
             Image(systemName: "scope")
                 .foregroundStyle(Color.inkSecondary)
