@@ -8,24 +8,27 @@ struct PhaseIndicatorView: View {
 
     var body: some View {
         if let sel = vm.currentSelection {
-            VStack(alignment: .leading, spacing: Spacing.xs) {
-                TideChartView(currentDate: vm.displayDate,
-                              events: vm.tideEvents)
-                    .frame(height: 108)
-                    .accessibilityElement()
-                    .accessibilityLabel(tideChartLabel)
+            VStack(alignment: .leading, spacing: Spacing.md) {
 
-                // Provenance: which station the curve is from + its datum.
-                // Sits directly under the chart it labels.
-                if let station = vm.tideStation {
-                    Text("\(station.name) · \(station.datum)")
-                        .font(.stCaption)
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
+                // Chart + its station label, tightly grouped.
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    TideChartView(currentDate: vm.displayDate,
+                                  events: vm.tideEvents)
+                        .frame(height: 108)
+                        .accessibilityElement()
+                        .accessibilityLabel(tideChartLabel)
+
+                    // Provenance: which station the curve is from + its datum.
+                    if let station = vm.tideStation {
+                        Text("\(station.name) · \(station.datum)")
+                            .font(.stCaption)
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
                 }
 
-                // Phase state.
+                // Phase state — separated from the chart group by more space.
                 HStack(spacing: Spacing.xs) {
                     Image(systemName: tendencyIcon(sel.tendency))
                         .font(.stPhase.weight(.semibold))
