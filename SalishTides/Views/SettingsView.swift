@@ -47,7 +47,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Appearance")
                 } footer: {
-                    Text("The chart’s colours are tuned for daylight on the water and stay constant; this affects the app’s panels and menus.")
+                    Text("Switches the full Day / Night theme — basemap, panels, and current-arrow colours. System follows your device setting.")
                 }
 
                 // ── About ────────────────────────────────────────────────
