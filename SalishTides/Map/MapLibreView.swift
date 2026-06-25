@@ -7,16 +7,17 @@ struct MapLibreView: UIViewRepresentable {
     @Environment(AppSettings.self) private var settings
     @Environment(\.colorScheme) private var colorScheme
 
-    // Day / Night basemap styles (see DESIGN.md §2.3). Pure bundle lookup —
-    // nonisolated so the (also nonisolated) MapStyleLoader can call it.
+    // The bundled Standard basemap, per Day / Night (see DESIGN.md §2.3). Pure
+    // bundle lookup — nonisolated so the (also nonisolated) MapStyleLoader can
+    // call it. Doubles as the universal fallback when an online style fails.
     nonisolated static func styleURL(for scheme: ColorScheme) -> URL? {
-        let name = scheme == .dark ? "stub-style-dark" : "stub-style-light"
+        let name = scheme == .dark ? "standard-dark" : "standard-light"
         return Bundle.main.url(forResource: name, withExtension: "json")
     }
 
     // Resolved style for the selected basemap + current appearance. MapTiler
     // styles inject the key from the bundled JSON; .standard / failures fall
-    // back to the per-scheme offline stub above.
+    // back to the bundled Standard style above.
     private func desiredStyleURL(for scheme: ColorScheme) -> URL? {
         MapStyleLoader.styleURL(for: settings.basemap, dark: scheme == .dark)
     }
@@ -125,13 +126,13 @@ struct MapLibreView: UIViewRepresentable {
 
             let shaftLayer = MLNLineStyleLayer(identifier: shaftLayerID, source: source)
             shaftLayer.lineColor = speedColorExpression(dark: dark)
-            shaftLayer.lineWidth = NSExpression(format: "TERNARY(speed_knots < 1.5, 1.0, TERNARY(speed_knots < 3.0, 1.8, 3.0))")
+            shaftLayer.lineWidth = NSExpression(format: "TERNARY(speed_knots < 1.5, 1.4, TERNARY(speed_knots < 3.0, 1.8, 3.0))")
             shaftLayer.lineCap = NSExpression(forConstantValue: "round")
             shaftLayer.predicate = NSPredicate(format: "arrow_type == 'shaft'")
 
             let barbLayer = MLNLineStyleLayer(identifier: barbLayerID, source: source)
             barbLayer.lineColor = speedColorExpression(dark: dark)
-            barbLayer.lineWidth = NSExpression(format: "TERNARY(speed_knots < 1.5, 0.8, TERNARY(speed_knots < 3.0, 1.4, 2.5))")
+            barbLayer.lineWidth = NSExpression(format: "TERNARY(speed_knots < 1.5, 1.1, TERNARY(speed_knots < 3.0, 1.4, 2.5))")
             barbLayer.predicate = NSPredicate(format: "arrow_type == 'barb'")
 
             style.addLayer(shaftLayer)

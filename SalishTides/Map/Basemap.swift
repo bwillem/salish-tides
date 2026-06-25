@@ -12,7 +12,7 @@ enum MapConfig {
 
 /// The chart's base map style.
 ///
-/// Offline-first: `.standard` always works (bundled stub, no key). `.ocean` and
+/// Offline-first: `.standard` always works (bundled style, no key). `.ocean` and
 /// `.satellite` are MapTiler styles that stream when online and are cached by
 /// MapLibre's ambient cache, so they keep working offline over waters you've
 /// already viewed. Each style has a light + dark variant (bundled JSON), so a
@@ -36,7 +36,7 @@ enum Basemap: String, CaseIterable, Identifiable {
     var requiresNetwork: Bool { self != .standard }
 
     /// Bundled style-JSON resource for the given appearance, or `nil` for
-    /// `.standard` (which uses the stub styles handled in `MapLibreView`).
+    /// `.standard` (whose styles are handled in `MapLibreView`).
     /// Satellite is imagery — one style for both appearances.
     func styleResource(dark: Bool) -> String? {
         switch self {
