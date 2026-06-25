@@ -12,6 +12,9 @@ import numpy as np
 
 PDF_DIR = "/Users/bryan/salish-tides/dev/pdfs"
 
+# Slack dots are pure visual fill; keep ~1 per cell of this size (~2 km).
+SLACK_GRID_DEG = 0.018
+
 VOLUMES = {
     1: {"pdf": "Salish Sea Tidal Current Atlas Volume 1 Version 1.01.pdf",
         "regions": "ABCDEFGH", "maps": 43, "regionA_start": 19,
@@ -245,13 +248,20 @@ def process(doc, page_idx, bounds, fb_geo, fb_scale):
         out.append({'lat': round(lat, 5), 'lon': round(lon, 5),
                     'speed_ms': round(spd, 3), 'direction_deg': round(a['direction_deg'], 1)})
     # Slack/weak grid points → zero-speed dots (no direction), so weak-current
-    # areas show as the atlas draws them rather than as missing data.
+    # areas show as the atlas draws them rather than as missing data. They're
+    # pure visual fill, so subsample to a coarse grid (~1.3 km) to keep the data
+    # small; one dot per cell still reads as continuous coverage.
     W, H = page.rect.width, page.rect.height
+    slack_seen = set()
     for cx, cy in extract_slack_marks(draws, insets, W, H):
         lon = lonf[0]*cx + lonf[1]
         lat = latf[0]*cy + latf[1]
         if lat < la0 or lat > la1 or lon < lo0 or lon > lo1:
             continue
+        key = (round(lat / SLACK_GRID_DEG), round(lon / SLACK_GRID_DEG))
+        if key in slack_seen:
+            continue
+        slack_seen.add(key)
         out.append({'lat': round(lat, 5), 'lon': round(lon, 5),
                     'speed_ms': 0.0, 'direction_deg': 0.0})
     return out, geo, scale
