@@ -22,7 +22,7 @@ struct PhaseIndicatorView: View {
                     if let station = vm.tideStation {
                         Text("\(station.name) · \(station.datum)")
                             .font(.stCaption)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(.secondary)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
                     }
@@ -35,7 +35,7 @@ struct PhaseIndicatorView: View {
                         .foregroundStyle(tendencyColor(sel.tendency))
                     Text(phaseText(sel))
                         .font(.stPhase)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.primary)
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("\(phaseText(sel)) tide.")
