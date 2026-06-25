@@ -28,5 +28,7 @@ ios-production-handoff/
 __pycache__/
 *.pyc
 
+# Pinned per-worktree Xcode DerivedData (parallel agents / sims)
+.ddata/
 # Local build output (xcodebuild -derivedDataPath)
 /build/
