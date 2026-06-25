@@ -303,7 +303,7 @@ Settings                                    Done
 ```
 
 **Data Sources** (`DataSourcesView`, pushed from About): NOAA CO-OPS / CHS IWLS
-tide attribution, the CHS current atlas, MapLibre basemap credit, and the
+tide attribution, the Salish Sea Tidal Current Atlas, MapLibre basemap credit, and the
 "not for navigation" disclaimer. In-app provenance is expected at App Store
 review for a navigation aid.
 
