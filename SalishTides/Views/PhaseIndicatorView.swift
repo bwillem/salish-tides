@@ -34,16 +34,20 @@ struct PhaseIndicatorView: View {
 
                 // ── Current speed at the crosshair (hero) ────────────────────
                 // Em dash when the crosshair is on land / off coverage.
-                HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
+                // Center the scope icon to the value; the value + unit stay
+                // baseline-aligned to each other ("0.3 kn").
+                HStack(alignment: .center, spacing: Spacing.xs) {
                     Image(systemName: "scope")
                         .font(.stReadoutUnit)
                         .foregroundStyle(.secondary)
                     if let speed = vm.crosshairSpeed {
-                        Text(speedValue(speed))
-                            .font(.stReadout)
-                        Text(settings.speedUnit.abbreviation)
-                            .font(.stReadoutUnit)
-                            .foregroundStyle(.secondary)
+                        HStack(alignment: .firstTextBaseline, spacing: Spacing.xxs) {
+                            Text(speedValue(speed))
+                                .font(.stReadout)
+                            Text(settings.speedUnit.abbreviation)
+                                .font(.stReadoutUnit)
+                                .foregroundStyle(.secondary)
+                        }
                     } else {
                         Text("—")
                             .font(.stReadout)
