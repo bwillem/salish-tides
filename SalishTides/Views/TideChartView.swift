@@ -70,7 +70,7 @@ struct TideChartView: View {
                 grid.addLine(to: CGPoint(x: chartRight, y: y))
                 m += gridStep
             }
-            ctx.stroke(grid, with: .color(.white.opacity(0.10)), lineWidth: 0.5)
+            ctx.stroke(grid, with: .color(.primary.opacity(0.10)), lineWidth: 0.5)
 
             // ── Tide curve ──────────────────────────────────────────────────
             let pts = samples.map { CGPoint(x: xOf($0.date), y: yOf($0.height)) }
@@ -92,28 +92,28 @@ struct TideChartView: View {
             var stroke = Path()
             stroke.move(to: pts[0])
             pts.dropFirst().forEach { stroke.addLine(to: $0) }
-            ctx.stroke(stroke, with: .color(.white.opacity(0.80)), lineWidth: 1.5)
+            ctx.stroke(stroke, with: .color(.primary.opacity(0.80)), lineWidth: 1.5)
 
             // ── Cursor (current time = centre) ──────────────────────────────
             let cx = xOf(currentDate)
             var cursor = Path()
             cursor.move(to:    CGPoint(x: cx, y: chartTop))
             cursor.addLine(to: CGPoint(x: cx, y: chartBot))
-            ctx.stroke(cursor, with: .color(.white.opacity(0.90)), lineWidth: 1.5)
+            ctx.stroke(cursor, with: .color(.primary.opacity(0.90)), lineWidth: 1.5)
 
             let currentH = TideCurve.height(at: currentDate, events: events) ?? 0
             let cy = yOf(currentH)
             let dotR: CGFloat = 4
             ctx.fill(
                 Path(ellipseIn: CGRect(x: cx - dotR, y: cy - dotR, width: dotR*2, height: dotR*2)),
-                with: .color(.white)
+                with: .color(.primary)
             )
 
             let labelY = cy < chartTop + 20 ? cy + 14 : cy - 10
             ctx.draw(
                 Text(String(format: "%.1fm", currentH))
                     .font(.system(size: 10, design: .monospaced).weight(.semibold))
-                    .foregroundStyle(.white),
+                    .foregroundStyle(.primary),
                 at: CGPoint(x: cx + 6, y: labelY),
                 anchor: .leading
             )
@@ -124,14 +124,14 @@ struct TideChartView: View {
                 ctx.draw(
                     Text(station.name)
                         .font(.system(size: 8, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.45)),
+                        .foregroundStyle(.primary.opacity(0.45)),
                     at: CGPoint(x: chartLeft + 1, y: chartTop + 1),
                     anchor: .topLeading
                 )
                 ctx.draw(
                     Text(station.datum)
                         .font(.system(size: 8, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.40)),
+                        .foregroundStyle(.primary.opacity(0.40)),
                     at: CGPoint(x: chartRight - 3, y: chartTop + 1),
                     anchor: .topTrailing
                 )
@@ -157,7 +157,7 @@ struct TideChartView: View {
                         ctx.draw(
                             Text(String(format: "%02d:00", hr))
                                 .font(.system(size: 9, design: .monospaced))
-                                .foregroundStyle(.white.opacity(0.45)),
+                                .foregroundStyle(.primary.opacity(0.45)),
                             at: CGPoint(x: tx, y: size.height - 3),
                             anchor: .bottom
                         )
@@ -165,7 +165,7 @@ struct TideChartView: View {
                     var tickPath = Path()
                     tickPath.move(to:    CGPoint(x: tx, y: chartBot))
                     tickPath.addLine(to: CGPoint(x: tx, y: chartBot + 3))
-                    ctx.stroke(tickPath, with: .color(.white.opacity(0.25)), lineWidth: 0.5)
+                    ctx.stroke(tickPath, with: .color(.primary.opacity(0.25)), lineWidth: 0.5)
                 }
                 tick = tick.addingTimeInterval(3 * 3600)
             }
@@ -177,7 +177,7 @@ struct TideChartView: View {
                 ctx.draw(
                     Text(String(format: "%.0fm", level))
                         .font(.system(size: 9, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.35)),
+                        .foregroundStyle(.primary.opacity(0.35)),
                     at: CGPoint(x: chartLeft - 3, y: y),
                     anchor: .trailing
                 )
@@ -189,7 +189,7 @@ struct TideChartView: View {
         ctx.draw(
             Text("Tide data unavailable")
                 .font(.system(size: 11, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.35)),
+                .foregroundStyle(.primary.opacity(0.35)),
             at: CGPoint(x: size.width / 2, y: size.height / 2),
             anchor: .center
         )

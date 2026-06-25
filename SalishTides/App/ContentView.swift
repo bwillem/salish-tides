@@ -46,19 +46,31 @@ struct ContentView: View {
 private struct CrosshairView: View {
     var body: some View {
         ZStack {
-            Circle()
-                .strokeBorder(.white.opacity(0.75), lineWidth: 1.5)
-                .frame(width: 22, height: 22)
-            Path { p in
-                p.move(to: CGPoint(x: 0, y: -18)); p.addLine(to: CGPoint(x: 0, y: -12))
-                p.move(to: CGPoint(x: 0, y:  12)); p.addLine(to: CGPoint(x: 0, y:  18))
-                p.move(to: CGPoint(x: -18, y: 0)); p.addLine(to: CGPoint(x: -12, y: 0))
-                p.move(to: CGPoint(x:  12, y: 0)); p.addLine(to: CGPoint(x:  18, y: 0))
-            }
-            .stroke(.white.opacity(0.75), lineWidth: 1.5)
+            // Inverse halo keeps the reticle legible on any tile in either theme:
+            // systemBackground is the opposite of .primary, so the reticle is
+            // dark-on-light in Day and light-on-dark in Night, each with a
+            // contrasting outline.
+            ReticleShape().stroke(Color(.systemBackground).opacity(0.6), lineWidth: 3.5)
+            ReticleShape().stroke(.primary.opacity(0.9), lineWidth: 1.5)
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+}
+
+// Ring + four ticks centred on the view's rect. As a Shape it fills the
+// proposed space and centres on the screen, so both strokes stay aligned and
+// the reticle sits at the viewport centre (the point the readouts refer to).
+private struct ReticleShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let cx = rect.midX, cy = rect.midY
+        var p = Path()
+        p.addEllipse(in: CGRect(x: cx - 11, y: cy - 11, width: 22, height: 22))
+        p.move(to: CGPoint(x: cx, y: cy - 18)); p.addLine(to: CGPoint(x: cx, y: cy - 12))
+        p.move(to: CGPoint(x: cx, y: cy + 12)); p.addLine(to: CGPoint(x: cx, y: cy + 18))
+        p.move(to: CGPoint(x: cx - 18, y: cy)); p.addLine(to: CGPoint(x: cx - 12, y: cy))
+        p.move(to: CGPoint(x: cx + 12, y: cy)); p.addLine(to: CGPoint(x: cx + 18, y: cy))
+        return p
     }
 }
 
@@ -67,23 +79,23 @@ private struct MigrationView: View {
 
     var body: some View {
         ZStack {
-            Color(red: 0.1, green: 0.22, blue: 0.36)
+            Color.appBackground
                 .ignoresSafeArea()
             VStack(spacing: 24) {
                 Image(systemName: "water.waves")
                     .font(.system(size: 48))
-                    .foregroundStyle(.white.opacity(0.8))
+                    .foregroundStyle(.primary.opacity(0.8))
                 Text("Salish Tides")
                     .font(.largeTitle.bold())
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                 VStack(spacing: 8) {
                     ProgressView(value: progress)
                         .progressViewStyle(.linear)
-                        .tint(.white)
+                        .tint(.primary)
                         .frame(width: 280)
                     Text("Loading charts… \(Int(progress * 100))%")
                         .font(.caption)
-                        .foregroundStyle(.white.opacity(0.6))
+                        .foregroundStyle(.secondary)
                 }
             }
         }

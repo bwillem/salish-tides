@@ -46,19 +46,24 @@ All colors live in `SalishTides/Design/DesignTokens.swift` as `Color` extensions
 
 Flood = blue (water rising, ocean filling). Ebb = amber (receding, warmth). This mapping is consistent with traditional tidal imagery and avoids red/green colorblindness conflicts.
 
-#### Current Speed Scale (diverging)
+#### Current Speed Scale (diverging, per-theme)
 
-Used exclusively for MapLibre arrow rendering. Matches scientific convention (cool→warm diverging scale).
+Used exclusively for MapLibre arrow rendering (cool→warm diverging scale). The
+single source of truth is `UIColor.currentSpeedRamp(dark:)` — a 5-stop ramp that
+differs by theme so each arrow contrasts against its basemap.
 
-| Token | Hex | Speed range | UIColor alias |
-|-------|-----|-------------|---------------|
-| `.currentCalm` | `#2166AB` | < 0.5 kn | `UIColor.currentCalm` |
-| `.currentLight` | `#73AECF` | 0.5 – 1.5 kn | `UIColor.currentLight` |
-| `.currentModerate` | `#FAD95E` | 1.5 – 3.0 kn | `UIColor.currentModerate` |
-| `.currentStrong` | `#F56E43` | 3.0 – 4.5 kn | `UIColor.currentStrong` |
-| `.currentVeryStrong` | `#D73026` | ≥ 4.5 kn | `UIColor.currentVeryStrong` |
+| Bucket | Speed | Night (dark map) | Day (light map) |
+|--------|-------|------------------|-----------------|
+| calm | < 0.5 kn | `#2166AB` muted blue | `#14577D` deep blue |
+| light | 0.5 – 1.5 kn | `#73AED1` sky blue | `#2685BC` ocean blue |
+| moderate | 1.5 – 3.0 kn | `#FAD95E` amber | `#CC8500` dark amber |
+| strong | 3.0 – 4.5 kn | `#F56E43` orange-red | `#DB591A` burnt orange |
+| very strong | ≥ 4.5 kn | `#D73026` deep red | `#B81C19` deep red |
 
-> **Sunlight warning:** The original moderate-current color was `#FFFFBF` (near-white yellow) which is nearly invisible against a light basemap and in sunlight. It has been replaced with `#FAD95E` (amber-yellow) which passes 3:1 contrast against a white background. Verify this on a real iPad in daylight before shipping.
+> **Why per-theme:** the bright Night ramp's mid amber (`#FAD95E`) and sky blue
+> wash out on the light Day basemap. The Day ramp darkens/saturates every stop
+> so the amber especially stays legible. (The `.current*` SwiftUI `Color` tokens
+> mirror the Night values for any future legend.)
 
 > **Colorblindness note:** The blue→amber→red ramp is partially accessible (avoids pure red/green). The calm→light transition (both blue) may be hard to distinguish for some users. Future: add line-weight encoding as a secondary cue.
 
@@ -68,9 +73,34 @@ Used exclusively for MapLibre arrow rendering. Matches scientific convention (co
 - **Text over map:** `.primary` / `.secondary` work in both light and dark because they adapt. Prefer these over hardcoded white.
 - **Text on `oceanDeep`:** Hardcode `.white` — the background is fixed dark.
 
-### 2.3 Dark Mode
+### 2.3 Day / Night Themes
 
-No explicit dark-mode treatment — system materials auto-adapt, `oceanDeep` is already dark, and the current color scale is held constant (the basemap, not the system appearance, is its context). Revisit if a light basemap ships.
+The app follows the **system appearance** and ships two full themes — **Day**
+(light) and **Night** (dark). Every surface adapts:
+
+| Surface | Day (light) | Night (dark) |
+|---------|-------------|--------------|
+| Basemap | CARTO `light_all` raster (`stub-style-light.json`) | CARTO `dark_all` raster (`stub-style-dark.json`) |
+| Splash / migration bg | `Color.appBackground` — pale sky | `Color.appBackground` — `oceanDeep` |
+| Floating cards | `.ultraThinMaterial` (auto) | `.ultraThinMaterial` (auto) |
+| Ink (card text, chart, tape) | `.primary` / `.secondary` (auto → dark ink) | `.primary` / `.secondary` (auto → light ink) |
+| Crosshair | `.primary` reticle + `Color(.systemBackground)` halo (inverse) | same, inverts automatically |
+| Current arrows | `UIColor.currentSpeedRamp(dark: false)` — darker, saturated (amber reads on light) | `currentSpeedRamp(dark: true)` — brighter ramp for the dark basemap |
+
+**Rules**
+- **Never hardcode `.white`** in Canvas views — use `.primary`/`.secondary` so
+  the chart and tape ink flip with the theme. The `GraphicsContext` resolves
+  semantic colors against the view's color scheme.
+- **Adaptive colors live as one token** (`Color.appBackground`, defined with a
+  `UIColor` dynamic provider in `DesignTokens.swift`); brand colors
+  (`oceanMid` fill, current-speed scale) stay constant across themes.
+- The basemap switches via `MapLibreView` observing `@Environment(\.colorScheme)`
+  and swapping `styleURL`; vectors are re-applied on the new style.
+
+The current-speed arrow ramp is **per-theme** (`UIColor.currentSpeedRamp(dark:)`,
+the single source of truth — re-evaluated whenever the style reloads). The Day
+ramp is darker and more saturated so the mid "amber" arrow reads on the light
+basemap rather than washing out; the Night ramp stays bright for the dark map.
 
 ---
 
@@ -352,11 +382,8 @@ its "Tide data unavailable" placeholder.
 
 | Priority | Item | Notes |
 |----------|------|-------|
-| High | Real nautical basemap | Current stub-style.json is solid blue. Need PMTiles + proper chart style. Until this ships, all visual design is provisional. |
-| High | Crosshair contrast on light map | White-on-white will be invisible. Add dark stroke or shadow. |
+| High | Real nautical basemap | CARTO raster (Day/Night) is a placeholder. Need PMTiles + a proper chart style with depth/seamark data. |
+| Medium | Speed legend | Users need a legend to understand the 5-color current scale (per-theme — see `currentSpeedRamp`) |
 | Low | VoiceOver audit | Labels are in place (§6.2); verify reading order + adjustable tape on-device with the Accessibility Inspector |
-| Medium | Speed legend | Users need a legend to understand the 5-color current scale |
-| Medium | Sunlight contrast validation | Test `.currentModerate` (#FAD95E) on device in daylight |
-| Low | Haptic feedback | Add impact feedback to slider steps and Now button |
-| Low | Dark mode explicit treatment | Materials handle it, but test the full dark-mode flow |
+| Low | Haptic feedback | Add impact feedback to tape hour-snaps and the Now button |
 | Low | Portrait layout | Verify timeline + phase panel don't overlap in portrait on smaller iPads |
