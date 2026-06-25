@@ -11,6 +11,10 @@ final class MapViewModel {
     // The map does NOT observe this, so per-frame updates stay cheap.
     var displayDate: Date = .now
     var currentVectors: [CurrentVector] = []
+    // Gridded current velocity over the visible viewport, built from the
+    // full-resolution vectors (not the thinned arrow set). Drives the animated
+    // particle layer; nil until a viewport and vectors are available.
+    var velocityField: VelocityField?
     var currentSelections: [ChartSelection] = []
     var isMigrating = false
     var migrationProgress: Double = 0
@@ -131,7 +135,7 @@ final class MapViewModel {
             scrubLoadTask?.cancel()
             lastScrubLoadAt = Date()
             currentDate = snapped
-            Task { await loadVectors(for: snapped) }
+            Task { await loadVectors(for: snapped, refreshField: false) }
         } else {
             // Trailing edge: make sure the latest hour loads even mid-throttle.
             scrubLoadTask?.cancel()
@@ -140,7 +144,7 @@ final class MapViewModel {
                 guard !Task.isCancelled, let self else { return }
                 self.lastScrubLoadAt = Date()
                 self.currentDate = snapped
-                await self.loadVectors(for: snapped)
+                await self.loadVectors(for: snapped, refreshField: false)
             }
         }
     }
@@ -166,7 +170,12 @@ final class MapViewModel {
         }
     }
 
-    private func loadVectors(for date: Date) async {
+    // `refreshField`: rebuild the particle velocity field for this load. Skipped
+    // during a live timeline scrub so the animated particles keep flowing with the
+    // settled hour instead of churning/reseeding ~11×/s as the flow pattern shifts
+    // (which reads as the particles teleporting). The field catches up on the
+    // commit (setTime) and on viewport zoom/pan.
+    private func loadVectors(for date: Date, refreshField: Bool = true) async {
         loadGeneration &+= 1
         let generation = loadGeneration
 
@@ -219,6 +228,14 @@ final class MapViewModel {
         // layer is down-sampled.
         crosshairSpeed = nearestSpeed(in: vectors, viewport: visibleViewport)
         currentVectors = thinned(vectors, for: visibleViewport)
+        // Particle field uses the full-resolution set over the visible bbox so the
+        // flow stays smooth and directionally rich (the arrows are down-sampled).
+        // Skipped during live scrub (see `refreshField`).
+        if refreshField {
+            velocityField = visibleViewport.flatMap {
+                VelocityField(id: UInt64(generation), vectors: vectors, bounds: $0, maxCellsAcross: 160)
+            }
+        }
 
         await updateTides(for: date, generation: generation)
     }

@@ -24,3 +24,6 @@ ios-production-handoff/
 .claude/
 __pycache__/
 *.pyc
+
+# Pinned per-worktree Xcode DerivedData (parallel agents / sims)
+.ddata/

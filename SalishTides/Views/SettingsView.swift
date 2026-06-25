@@ -34,11 +34,17 @@ struct SettingsView: View {
 
                 // ── Map & Display ────────────────────────────────────────
                 Section {
+                    Picker("Current", selection: $settings.currentStyle) {
+                        ForEach(CurrentStyle.allCases) { style in
+                            Text(style.label).tag(style)
+                        }
+                    }
+                    .pickerStyle(.segmented)
                     Toggle("Crosshair", isOn: $settings.showCrosshair)
                 } header: {
                     Text("Map & Display")
                 } footer: {
-                    Text("The crosshair marks the point used for the speed readout.")
+                    Text("Particles animate the flow of the current; Arrows show it statically. Arrows are used automatically when Reduce Motion or Low Power Mode is on. The crosshair marks the point used for the speed readout.")
                 }
 
                 // ── Appearance ───────────────────────────────────────────

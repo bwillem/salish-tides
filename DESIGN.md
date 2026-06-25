@@ -293,6 +293,27 @@ Rendered by MapLibre, not SwiftUI. Color is controlled by `speedColorExpression(
 
 **Arrow geometry:** ±25° barb spread, barb length = 70% of half-shaft. This is close to standard meteorological wind barb convention, which sailors recognize.
 
+**Role:** arrows are now the *fallback* current display — used when the user picks "Arrows" in Settings, or automatically under Reduce Motion / Low Power Mode. The default is the animated particle layer (§5.4a). The two are mutually exclusive: `MapLibreView.Coordinator.applyCurrentStyle(_:on:)` toggles the shaft/barb layers' visibility and the particle layer's active state from `AppSettings.effectiveCurrentStyle`.
+
+### 5.4a Current Particles (default)
+
+The default current display is an animated GPU particle field — flowing "comet streaks" that convey both direction and speed (see `CurrentParticleLayer`, an `MLNCustomStyleLayer` Metal subclass). Particles are the headline; arrows (§5.4) are the static fallback.
+
+**Pipeline (30 fps, driven by a `CADisplayLink` → `setNeedsDisplay`):**
+1. **Velocity field.** `MapViewModel.loadVectors` builds a `VelocityField` (Sendable: bbox, grid dims, interleaved east/north m/s) from the *full-resolution* vectors over the visible viewport — denser and more directional than the thinned arrow set. It's uploaded to an `RG32Float` texture.
+2. **Advection (compute).** Each frame a kernel advects N≈6000 particles by bilinearly sampling the velocity texture, reseeding any that age out, stall (land / slack — the data has no slack vectors, so zero velocity means "no current"), or leave the field. Motion is exaggerated by `speedScale` for legibility.
+3. **Streaks (render).** Each particle draws as a 2-vertex line from a tail (offset back along the local flow, length ∝ speed) to a bright head, fading tail→head and over the particle's life. Drawn straight into MapLibre's render encoder with the live projection matrix, so streaks stay glued to the basemap through pan/zoom/rotate.
+
+**Why streaks, not an offscreen trail buffer:** keeping everything in the map's own render pass avoids offscreen textures, cross-queue GPU sync, and screen-space "swim" during pans. The tradeoff is shorter tails than an accumulation buffer; longer comet tails could be added later via a ground-locked trail texture.
+
+**Race-free buffering:** particle buffers ping-pong. The compute pass (own command queue) reads `current` → writes `next`; the render pass reads `current` (last frame's result, already complete). A 2-deep semaphore bounds frames in flight. Positions are one frame stale (invisible at 30 fps) but drawn with the current camera, so no swim.
+
+**Per-theme color:** night = cool white-blue; day = deeper saturated blue so streaks read on the light basemap. Driven by `setDark(_:)` from the map color scheme, mirroring the arrow ramp's per-theme logic (§2.1).
+
+**Performance / power:** the display link runs only while particles are the selected style *and* the app is foregrounded (`setActive` / `setForeground`), so the GPU is idle in arrows mode or in the background. 30 fps (not 60) halves the energy cost — chosen for an all-day on-the-water app.
+
+**Gotcha (recorded):** MapLibre leaves a cull mode set from its own draws; the custom layer must call `renderEncoder.setCullMode(.none)` or its geometry is silently culled by winding.
+
 ### 5.5 Migration/Splash Screen
 
 **Background:** `.oceanDeep` (#1A3A5C)  
@@ -377,7 +398,7 @@ All text uses semantic font styles → scales automatically. Verify at "Accessib
 
 ### 6.4 Reduce Motion
 
-The app has no animations currently. When animations are added (e.g., arrow fade transitions between charts), wrap in:
+The animated current particles (§5.4a) are the one continuous animation in the app. Under **Reduce Motion** — and under **Low Power Mode** — `AppSettings.effectiveCurrentStyle` automatically falls back to the static arrows (§5.4), and the particle display link stops. `AppSettings` observes `UIAccessibility.reduceMotionStatusDidChangeNotification` and `NSProcessInfoPowerStateDidChange`, so the switch happens live without a relaunch. Any future SwiftUI animations should additionally gate on:
 ```swift
 @Environment(\.accessibilityReduceMotion) var reduceMotion
 ```

@@ -1,5 +1,6 @@
 import SwiftUI
 import Observation
+import UIKit
 
 // MARK: - Salish Sea local time
 
@@ -126,6 +127,22 @@ enum ClockFormat: String, CaseIterable, Identifiable {
     var is24Hour: Bool { self == .twentyFourHour }
 }
 
+/// How tidal current is drawn on the map. Particles (animated flow) is the
+/// default; arrows are the static fallback and the automatic substitute when
+/// Reduce Motion or Low Power Mode is on (see `AppSettings.effectiveCurrentStyle`).
+enum CurrentStyle: String, CaseIterable, Identifiable {
+    case particles, arrows
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .particles: "Particles"
+        case .arrows:    "Arrows"
+        }
+    }
+}
+
 // MARK: - Settings Store
 
 /// App-wide user preferences, persisted to `UserDefaults` and observed by the
@@ -151,6 +168,21 @@ final class AppSettings {
     var clockFormat: ClockFormat {
         didSet { defaults.set(clockFormat.rawValue, forKey: Keys.clockFormat) }
     }
+    var currentStyle: CurrentStyle {
+        didSet { defaults.set(currentStyle.rawValue, forKey: Keys.currentStyle) }
+    }
+
+    // Mirrors the accessibility / power state; updated via notifications so
+    // `effectiveCurrentStyle` re-evaluates (and observers re-render) when the
+    // user toggles Reduce Motion or Low Power Mode while the app is running.
+    private(set) var reduceMotion: Bool = UIAccessibility.isReduceMotionEnabled
+    private(set) var lowPowerMode: Bool = ProcessInfo.processInfo.isLowPowerModeEnabled
+
+    /// The style actually rendered: particles unless the user picked arrows, or
+    /// Reduce Motion / Low Power Mode forces the static fallback.
+    var effectiveCurrentStyle: CurrentStyle {
+        (currentStyle == .arrows || reduceMotion || lowPowerMode) ? .arrows : .particles
+    }
 
     private let defaults: UserDefaults
 
@@ -160,8 +192,23 @@ final class AppSettings {
         self.heightUnit = defaults.string(forKey: Keys.heightUnit).flatMap(HeightUnit.init) ?? .metres
         self.appearance = defaults.string(forKey: Keys.appearance).flatMap(AppearanceMode.init) ?? .system
         self.clockFormat = defaults.string(forKey: Keys.clockFormat).flatMap(ClockFormat.init) ?? .twentyFourHour
+        self.currentStyle = defaults.string(forKey: Keys.currentStyle).flatMap(CurrentStyle.init) ?? .particles
         // Bool keys default to `true` (feature visible) when never set.
         self.showCrosshair = defaults.object(forKey: Keys.showCrosshair) as? Bool ?? true
+
+        observeAccessibilityAndPower()
+    }
+
+    private func observeAccessibilityAndPower() {
+        let nc = NotificationCenter.default
+        nc.addObserver(forName: UIAccessibility.reduceMotionStatusDidChangeNotification,
+                       object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.reduceMotion = UIAccessibility.isReduceMotionEnabled }
+        }
+        nc.addObserver(forName: .NSProcessInfoPowerStateDidChange,
+                       object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.lowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled }
+        }
     }
 
     // MARK: Formatting helpers
@@ -213,5 +260,6 @@ final class AppSettings {
         static let showCrosshair = "settings.showCrosshair"
         static let appearance    = "settings.appearance"
         static let clockFormat   = "settings.clockFormat"
+        static let currentStyle  = "settings.currentStyle"
     }
 }

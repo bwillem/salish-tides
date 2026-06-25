@@ -4,7 +4,9 @@ import CoreLocation
 
 struct MapLibreView: UIViewRepresentable {
     @Environment(MapViewModel.self) private var vm
+    @Environment(AppSettings.self) private var settings
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.scenePhase) private var scenePhase
 
     // Day / Night basemap styles (see DESIGN.md §2.3).
     static func styleURL(for scheme: ColorScheme) -> URL? {
@@ -39,6 +41,15 @@ struct MapLibreView: UIViewRepresentable {
             mapView.styleURL = Self.styleURL(for: colorScheme)
         }
         context.coordinator.updateVectors(vm.currentVectors, on: mapView)
+        // Push the latest velocity field to the particle layer. Read here so
+        // Observation re-invokes updateUIView whenever the field changes.
+        context.coordinator.updateField(vm.velocityField)
+        context.coordinator.setParticleDark(colorScheme == .dark)
+        // Particles vs arrows, honouring the Reduce-Motion / Low-Power fallback,
+        // plus pause-on-background. Read here so Observation re-runs updateUIView
+        // when the setting, accessibility/power state, or scene phase changes.
+        context.coordinator.applyCurrentStyle(settings.effectiveCurrentStyle, on: mapView)
+        context.coordinator.setForeground(scenePhase == .active)
     }
 
     func makeCoordinator() -> Coordinator {
@@ -54,7 +65,11 @@ struct MapLibreView: UIViewRepresentable {
         private let sourceID = "salish-vectors"
         private let shaftLayerID = "salish-shafts"
         private let barbLayerID = "salish-barbs"
+        private let particleLayerID = "salish-particles"
         nonisolated(unsafe) private var pendingVectors: [CurrentVector]?
+        // The custom particle layer, re-created on each style (re)load. Held so
+        // updateUIView can push the latest velocity field to it.
+        nonisolated(unsafe) private var particleLayer: CurrentParticleLayer?
         // Tracks the basemap appearance currently applied, so we only reload the
         // style on an actual Day/Night flip.
         nonisolated(unsafe) var lastScheme: ColorScheme?
@@ -97,6 +112,43 @@ struct MapLibreView: UIViewRepresentable {
             applyVectors(vectors, style: style)
         }
 
+        // Latest velocity field, retained so it can be re-pushed to a freshly
+        // created particle layer after a Day/Night style reload.
+        nonisolated(unsafe) private var lastField: VelocityField?
+
+        func updateField(_ field: VelocityField?) {
+            // Skip when unchanged: updateUIView fires ~11×/s during a scrub (the
+            // arrows' vectors change), and re-uploading the same velocity texture
+            // would race the GPU compute pass reading it, jolting the particles.
+            guard field?.id != lastField?.id else { return }
+            lastField = field
+            particleLayer?.update(field: field)
+        }
+
+        // Retained so a freshly created layer (after a style reload) can be
+        // restored to the correct scheme and current-display mode.
+        nonisolated(unsafe) private var lastDark = true
+        nonisolated(unsafe) private var lastStyleMode: CurrentStyle = .particles
+
+        func setParticleDark(_ dark: Bool) {
+            lastDark = dark
+            particleLayer?.setDark(dark)
+        }
+
+        func applyCurrentStyle(_ style: CurrentStyle, on mapView: MLNMapView) {
+            lastStyleMode = style
+            let showArrows = style == .arrows
+            if let s = mapView.style {
+                s.layer(withIdentifier: shaftLayerID)?.isVisible = showArrows
+                s.layer(withIdentifier: barbLayerID)?.isVisible = showArrows
+            }
+            particleLayer?.setActive(!showArrows)
+        }
+
+        func setForeground(_ foreground: Bool) {
+            particleLayer?.setForeground(foreground)
+        }
+
         private func addLayers(to style: MLNStyle) {
             let source = MLNShapeSource(identifier: sourceID, shapes: [], options: nil)
             style.addSource(source)
@@ -116,8 +168,24 @@ struct MapLibreView: UIViewRepresentable {
             barbLayer.lineWidth = NSExpression(format: "TERNARY(speed_knots < 1.5, 0.8, TERNARY(speed_knots < 3.0, 1.4, 2.5))")
             barbLayer.predicate = NSPredicate(format: "arrow_type == 'barb'")
 
+            // Visibility is driven by the selected current style (re-applied
+            // below), so a Day/Night style reload restores the right mode.
+            let showArrows = lastStyleMode == .arrows
+            shaftLayer.isVisible = showArrows
+            barbLayer.isVisible = showArrows
+
             style.addLayer(shaftLayer)
             style.addLayer(barbLayer)
+
+            // Animated particle current overlay, drawn above the arrows.
+            let particleLayer = CurrentParticleLayer(identifier: particleLayerID)
+            style.addLayer(particleLayer)
+            self.particleLayer = particleLayer
+            // Re-seed the freshly created layer with the field + style/scheme from
+            // before the reload, so particles don't blank out on a Day/Night flip.
+            particleLayer.update(field: lastField)
+            particleLayer.setDark(lastDark)
+            particleLayer.setActive(lastStyleMode != .arrows)
         }
 
         private func applyVectors(_ vectors: [CurrentVector], style: MLNStyle) {
