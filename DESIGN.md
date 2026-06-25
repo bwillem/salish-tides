@@ -134,7 +134,7 @@ must work 100% offline, but light up richer maps when a connection exists
 - The **dark Ocean** variant is an authored colour remap of the light Ocean style
   (same bathymetry tiles, darkened water/land, lightened labels).
 
-> The Standard stub still streams CARTO + OpenSeaMap rasters, so it is not *truly*
+> The Standard stub still streams CARTO rasters, so it is not *truly*
 > offline yet — a real bundled baseline (PMTiles bathymetry, backlog #1) is the
 > next milestone. MapTiler online is the enhancement layer; a future SalishSeaCast
 > current model will hang off the same `NetworkMonitor` plumbing.
