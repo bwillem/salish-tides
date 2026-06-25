@@ -22,10 +22,10 @@ struct PhaseIndicatorView: View {
                     // Phase state labels the chart it sits under.
                     HStack(spacing: Spacing.xs) {
                         Image(systemName: tendencyIcon(sel.tendency))
-                            .font(.subheadline.weight(.semibold))
+                            .font(.stPhase.weight(.semibold))
                             .foregroundStyle(tendencyColor(sel.tendency))
                         Text(phaseText(sel))
-                            .font(.subheadline)
+                            .font(.stPhase)
                             .foregroundStyle(.secondary)
                     }
                     .accessibilityElement(children: .ignore)
@@ -41,6 +41,9 @@ struct PhaseIndicatorView: View {
                         .font(.stReadoutUnit)
                         .foregroundStyle(.secondary)
                     if let speed = vm.crosshairSpeed {
+                        // Scaling lives on this value+unit group so it shrinks to
+                        // fit the fixed-width card at large Dynamic Type rather
+                        // than clipping (e.g. "12.5 km/h").
                         HStack(alignment: .firstTextBaseline, spacing: Spacing.xxs) {
                             Text(speedValue(speed))
                                 .font(.stReadout)
@@ -48,14 +51,14 @@ struct PhaseIndicatorView: View {
                                 .font(.stReadoutUnit)
                                 .foregroundStyle(.secondary)
                         }
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
                     } else {
                         Text("—")
                             .font(.stReadout)
                             .foregroundStyle(.secondary)
                     }
                 }
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(crosshairSpeedLabel)

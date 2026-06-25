@@ -44,23 +44,20 @@ extension Font {
     // Splash / hero
     static let stDisplay  = Font.system(.largeTitle,  design: .default).weight(.bold)
 
-    // Phase name headline in the capsule badge
-    static let stHeadline = Font.system(.subheadline, design: .default).weight(.bold)
-
     // Hero current-speed readout — the primary datum in the phase card. Large
     // monospaced digits so the value reads at a glance and doesn't jump while
     // scrubbing; the unit ("kn") rides smaller beside it.
     static let stReadout     = Font.system(.title,   design: .default).weight(.bold).monospacedDigit()
     static let stReadoutUnit = Font.system(.callout, design: .default).weight(.medium)
 
+    // Tide phase label under the chart (and its tendency arrow)
+    static let stPhase    = Font.system(.subheadline, design: .default)
+
     // Timeline date/time (monospaced so digits don't jump)
     static let stClock    = Font.system(.headline,    design: .default).monospacedDigit()
 
     // Secondary labels (chart number, phase in timeline)
     static let stCaption  = Font.system(.caption,     design: .monospaced)
-
-    // Speed readout, offset label — fixed-width data
-    static let stMono     = Font.system(.caption2,    design: .monospaced).monospacedDigit()
 }
 
 // MARK: - Spacing Scale
