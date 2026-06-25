@@ -5,6 +5,20 @@ import CoreLocation
 struct MapLibreView: UIViewRepresentable {
     @Environment(MapViewModel.self) private var vm
     @Environment(AppSettings.self) private var settings
+    @Environment(\.colorScheme) private var colorScheme
+
+    // Day / Night basemap styles (see DESIGN.md §2.3).
+    static func styleURL(for scheme: ColorScheme) -> URL? {
+        let name = scheme == .dark ? "stub-style-dark" : "stub-style-light"
+        return Bundle.main.url(forResource: name, withExtension: "json")
+    }
+
+    // Resolved basemap: a developer-selected MapTiler style when a MapTiler key
+    // is configured, otherwise the per-scheme offline stub above.
+    private func desiredStyleURL(for scheme: ColorScheme) -> URL? {
+        settings.basemap.styleURL(key: MapConfig.maptilerKey)
+            ?? Self.styleURL(for: scheme)
+    }
 
     func makeUIView(context: Context) -> MLNMapView {
         let mapView = MLNMapView(frame: .zero)
@@ -18,23 +32,22 @@ struct MapLibreView: UIViewRepresentable {
         let center = CLLocationCoordinate2D(latitude: 48.8, longitude: -123.2)
         mapView.setCenter(center, zoomLevel: 9.5, animated: false)
 
+        context.coordinator.lastScheme = colorScheme
         context.coordinator.appliedBasemap = settings.basemap
-        if let styleURL = settings.basemap.styleURL(key: MapConfig.maptilerKey) {
-            mapView.styleURL = styleURL
-        }
+        mapView.styleURL = desiredStyleURL(for: colorScheme)
 
         return mapView
     }
 
     func updateUIView(_ mapView: MLNMapView, context: Context) {
-        // Apply a basemap change live. Re-setting styleURL reloads the style,
-        // which re-fires didFinishLoading → the coordinator re-adds the arrow
-        // layers and re-applies the current vectors.
-        if settings.basemap != context.coordinator.appliedBasemap {
+        // Reload the basemap on a Day/Night flip or a developer basemap change,
+        // re-applying the current vectors once the new style finishes loading.
+        if context.coordinator.lastScheme != colorScheme
+            || context.coordinator.appliedBasemap != settings.basemap {
+            context.coordinator.lastScheme = colorScheme
             context.coordinator.appliedBasemap = settings.basemap
-            if let styleURL = settings.basemap.styleURL(key: MapConfig.maptilerKey) {
-                mapView.styleURL = styleURL
-            }
+            context.coordinator.prepareForStyleReload(vm.currentVectors)
+            mapView.styleURL = desiredStyleURL(for: colorScheme)
         }
         context.coordinator.updateVectors(vm.currentVectors, on: mapView)
     }
@@ -53,13 +66,21 @@ struct MapLibreView: UIViewRepresentable {
         private let shaftLayerID = "salish-shafts"
         private let barbLayerID = "salish-barbs"
         nonisolated(unsafe) private var pendingVectors: [CurrentVector]?
-        // Basemap currently applied to the map view; compared in updateUIView so
-        // the style only reloads when the selection actually changes.
+        // Tracks the basemap appearance currently applied, so we only reload the
+        // style on an actual Day/Night flip.
+        nonisolated(unsafe) var lastScheme: ColorScheme?
+        // Developer basemap selection currently applied; reload only on change.
         nonisolated(unsafe) var appliedBasemap: Basemap?
         private let onViewportChange: (ChartBounds) -> Void
 
         init(onViewportChange: @escaping (ChartBounds) -> Void) {
             self.onViewportChange = onViewportChange
+        }
+
+        // Setting styleURL tears down the added source/layers; stash the vectors
+        // so didFinishLoading re-applies them onto the new style.
+        func prepareForStyleReload(_ vectors: [CurrentVector]) {
+            pendingVectors = vectors
         }
 
         func mapView(_ mapView: MLNMapView, didFinishLoading style: MLNStyle) {
@@ -93,14 +114,18 @@ struct MapLibreView: UIViewRepresentable {
             let source = MLNShapeSource(identifier: sourceID, shapes: [], options: nil)
             style.addSource(source)
 
+            // Re-runs on every style (re)load, so a Day/Night flip picks up the
+            // matching ramp automatically.
+            let dark = (lastScheme ?? .dark) == .dark
+
             let shaftLayer = MLNLineStyleLayer(identifier: shaftLayerID, source: source)
-            shaftLayer.lineColor = speedColorExpression()
+            shaftLayer.lineColor = speedColorExpression(dark: dark)
             shaftLayer.lineWidth = NSExpression(format: "TERNARY(speed_knots < 1.5, 1.0, TERNARY(speed_knots < 3.0, 1.8, 3.0))")
             shaftLayer.lineCap = NSExpression(forConstantValue: "round")
             shaftLayer.predicate = NSPredicate(format: "arrow_type == 'shaft'")
 
             let barbLayer = MLNLineStyleLayer(identifier: barbLayerID, source: source)
-            barbLayer.lineColor = speedColorExpression()
+            barbLayer.lineColor = speedColorExpression(dark: dark)
             barbLayer.lineWidth = NSExpression(format: "TERNARY(speed_knots < 1.5, 0.8, TERNARY(speed_knots < 3.0, 1.4, 2.5))")
             barbLayer.predicate = NSPredicate(format: "arrow_type == 'barb'")
 
@@ -154,18 +179,15 @@ struct MapLibreView: UIViewRepresentable {
             return features
         }
 
-        private func speedColorExpression() -> NSExpression {
-            NSExpression(format: """
+        private func speedColorExpression(dark: Bool) -> NSExpression {
+            let c = UIColor.currentSpeedRamp(dark: dark)
+            return NSExpression(format: """
                 TERNARY(speed_knots < 0.5, %@,
                 TERNARY(speed_knots < 1.5, %@,
                 TERNARY(speed_knots < 3.0, %@,
                 TERNARY(speed_knots < 4.5, %@, %@))))
             """,
-            UIColor(red: 0.13, green: 0.40, blue: 0.67, alpha: 1),
-            UIColor(red: 0.45, green: 0.68, blue: 0.82, alpha: 1),
-            UIColor(red: 1.00, green: 1.00, blue: 0.75, alpha: 1),
-            UIColor(red: 0.96, green: 0.43, blue: 0.26, alpha: 1),
-            UIColor(red: 0.84, green: 0.19, blue: 0.15, alpha: 1))
+            c[0], c[1], c[2], c[3], c[4])
         }
     }
 }

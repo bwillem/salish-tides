@@ -12,6 +12,15 @@ extension Color {
     static let oceanMid     = Color(red: 0.13, green: 0.40, blue: 0.67)  // #2166AB  primary
     static let oceanLight   = Color(red: 0.45, green: 0.68, blue: 0.82)  // #73AECF  secondary
 
+    // -- Adaptive surfaces (Day / Night themes) --
+    // Splash & migration background: pale sky in Day, deep ocean in Night.
+    // Brand colors below stay constant; only true surfaces adapt.
+    static let appBackground = Color(uiColor: UIColor { trait in
+        trait.userInterfaceStyle == .dark
+            ? UIColor(red: 0.10, green: 0.22, blue: 0.36, alpha: 1)   // oceanDeep
+            : UIColor(red: 0.86, green: 0.91, blue: 0.95, alpha: 1)   // pale sky
+    })
+
     // -- Tide tendency (flood / ebb / slack) --
     static let tideFlood = Color(red: 0.13, green: 0.40, blue: 0.67)  // oceanMid — incoming
     static let tideEbb   = Color(red: 0.87, green: 0.45, blue: 0.08)  // #DE7314  — outgoing
@@ -106,9 +115,26 @@ extension View {
 // Mirror the current speed scale here so MapLibreView can reference the same values.
 
 extension UIColor {
-    static let currentCalm       = UIColor(red: 0.13, green: 0.40, blue: 0.67, alpha: 1)
-    static let currentLight      = UIColor(red: 0.45, green: 0.68, blue: 0.82, alpha: 1)
-    static let currentModerate   = UIColor(red: 0.98, green: 0.85, blue: 0.37, alpha: 1)
-    static let currentStrong     = UIColor(red: 0.96, green: 0.43, blue: 0.26, alpha: 1)
-    static let currentVeryStrong = UIColor(red: 0.84, green: 0.19, blue: 0.15, alpha: 1)
+    // Current-speed ramp for the map arrows, per theme. Buckets:
+    // <0.5  <1.5  <3.0  <4.5  4.5+ knots (calm → very strong).
+    // Night is tuned for the dark basemap (bright); Day is darker / more
+    // saturated so every arrow — especially the mid amber — reads on the light
+    // basemap instead of washing out.
+    static func currentSpeedRamp(dark: Bool) -> [UIColor] {
+        dark
+        ? [
+            UIColor(red: 0.13, green: 0.40, blue: 0.67, alpha: 1),  // calm   · muted blue
+            UIColor(red: 0.45, green: 0.68, blue: 0.82, alpha: 1),  // light  · sky blue
+            UIColor(red: 0.98, green: 0.85, blue: 0.37, alpha: 1),  // mod    · amber
+            UIColor(red: 0.96, green: 0.43, blue: 0.26, alpha: 1),  // strong · orange-red
+            UIColor(red: 0.84, green: 0.19, blue: 0.15, alpha: 1),  // v.str  · deep red
+        ]
+        : [
+            UIColor(red: 0.08, green: 0.34, blue: 0.55, alpha: 1),  // calm   · deep blue
+            UIColor(red: 0.15, green: 0.52, blue: 0.74, alpha: 1),  // light  · ocean blue
+            UIColor(red: 0.80, green: 0.52, blue: 0.05, alpha: 1),  // mod    · dark amber
+            UIColor(red: 0.86, green: 0.35, blue: 0.10, alpha: 1),  // strong · burnt orange
+            UIColor(red: 0.72, green: 0.11, blue: 0.10, alpha: 1),  // v.str  · deep red
+        ]
+    }
 }

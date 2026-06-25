@@ -23,12 +23,13 @@
 		5DB2319BABC9FB829D843F6A /* TideChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E02E5CB168CDB0660201216E /* TideChartView.swift */; };
 		5FECA4D7D218CCCFA6B36A93 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DDA2FAF2D0189860F478A7C /* AppSettings.swift */; };
 		674193FB48B28EB47DDE9EF9 /* MapLibreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 705E9152F8BEA1FA75608D3F /* MapLibreView.swift */; };
+		7520224CBC1D4DB9F00958A9 /* stub-style-dark.json in Resources */ = {isa = PBXBuildFile; fileRef = CD8D20EF2AD7E3CD9EDB203B /* stub-style-dark.json */; };
 		8892B94C18ABFFDE44949FD5 /* atlas_index_vol3.json in Resources */ = {isa = PBXBuildFile; fileRef = 1F71279AD0BA5885E48ABD65 /* atlas_index_vol3.json */; };
 		9CEBBFBDEB99CD300FC775BF /* TideDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = D25E37F6E08BDAD0D7CB5885 /* TideDatabase.swift */; };
 		A14E261EEF019763C5C3ED1C /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 4C2D431933E482A18FCC18F9 /* GRDB */; };
 		A5373274BBC15D93DDE7A47B /* Basemap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E351A5A0241F5F0CB272A0D /* Basemap.swift */; };
 		B3E0A98667446BD785E78FBB /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 808EEF6FA5FE567E488AA3D5 /* DesignTokens.swift */; };
-		BC9A62D51F3C27B4EB0BD09C /* stub-style.json in Resources */ = {isa = PBXBuildFile; fileRef = D8D047884F1E73D88E45BDA6 /* stub-style.json */; };
+		B6D335F727B47E81AF9DE1A6 /* stub-style-light.json in Resources */ = {isa = PBXBuildFile; fileRef = DE459FEAE5C7A0A226439742 /* stub-style-light.json */; };
 		CC1DE4A9F7C994DD5459CB22 /* TapeSliderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28E631FED305377F6178516B /* TapeSliderView.swift */; };
 		CD10BDF599A8B4DC91FC583E /* TideStation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EE458C039CC8A1CCE1AD9D9 /* TideStation.swift */; };
 		D02F6CEBAD38ED7BCD07D911 /* MapLibre in Frameworks */ = {isa = PBXBuildFile; productRef = 42B0127065AEDC608BD0C4A4 /* MapLibre */; };
@@ -64,8 +65,9 @@
 		B460FF242F858B027A672B40 /* TimelineControlView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineControlView.swift; sourceTree = "<group>"; };
 		B534466B629735C3AFD88226 /* CurrentVector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrentVector.swift; sourceTree = "<group>"; };
 		BF78D89E101E6B88EB6D487E /* PhaseIndicatorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhaseIndicatorView.swift; sourceTree = "<group>"; };
+		CD8D20EF2AD7E3CD9EDB203B /* stub-style-dark.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "stub-style-dark.json"; sourceTree = "<group>"; };
 		D25E37F6E08BDAD0D7CB5885 /* TideDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TideDatabase.swift; sourceTree = "<group>"; };
-		D8D047884F1E73D88E45BDA6 /* stub-style.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "stub-style.json"; sourceTree = "<group>"; };
+		DE459FEAE5C7A0A226439742 /* stub-style-light.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "stub-style-light.json"; sourceTree = "<group>"; };
 		E02E5CB168CDB0660201216E /* TideChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TideChartView.swift; sourceTree = "<group>"; };
 		EA075EE14D6DD086954E95E5 /* atlas_index_vol2.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = atlas_index_vol2.json; sourceTree = "<group>"; };
 		F4B415D45980FEC40DFF87CB /* atlas_index.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = atlas_index.json; sourceTree = "<group>"; };
@@ -169,7 +171,8 @@
 				1E2E5511446438A2D163BF38 /* atlas_lookup_2026.json */,
 				FD04BD2129588FF977B70226 /* atlas_lookup_vol2_2026.json */,
 				2DB51EF67918D47D54D0733D /* atlas_lookup_vol4_2026.json */,
-				D8D047884F1E73D88E45BDA6 /* stub-style.json */,
+				CD8D20EF2AD7E3CD9EDB203B /* stub-style-dark.json */,
+				DE459FEAE5C7A0A226439742 /* stub-style-light.json */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -282,7 +285,8 @@
 				3002DAB5B09EDAE4506050FB /* atlas_lookup_2026.json in Resources */,
 				063221F80851C1FDC5A9257C /* atlas_lookup_vol2_2026.json in Resources */,
 				D14AD78CBA4B0066C42F056B /* atlas_lookup_vol4_2026.json in Resources */,
-				BC9A62D51F3C27B4EB0BD09C /* stub-style.json in Resources */,
+				7520224CBC1D4DB9F00958A9 /* stub-style-dark.json in Resources */,
+				B6D335F727B47E81AF9DE1A6 /* stub-style-light.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

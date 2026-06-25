@@ -47,12 +47,10 @@ enum Basemap: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Resolved style URL. Falls back to the bundled offline stub style when
-    /// `key` is empty, so the app still renders with no MapTiler key.
+    /// Hosted MapTiler style URL, or `nil` when no key is configured — callers
+    /// then fall back to the per-scheme offline stub style.
     func styleURL(key: String) -> URL? {
-        guard !key.isEmpty else {
-            return Bundle.main.url(forResource: "stub-style", withExtension: "json")
-        }
+        guard !key.isEmpty else { return nil }
         return URL(string: "https://api.maptiler.com/maps/\(maptilerStyleID)/style.json?key=\(key)")
     }
 }

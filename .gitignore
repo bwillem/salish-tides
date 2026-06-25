@@ -27,3 +27,6 @@ ios-production-handoff/
 .claude/
 __pycache__/
 *.pyc
+
+# Local build output (xcodebuild -derivedDataPath)
+/build/
