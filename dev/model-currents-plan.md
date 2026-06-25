@@ -66,9 +66,14 @@ Run by UBC-MOAD. ERDDAP server: <https://salishsea.eos.ubc.ca/erddap/>
    lat/lon grid** (so device lookup is a trivial bilinear), pack to a compact
    binary blob. ~1 km, water-only → ~40–60k nodes × 8 const × 4 vals →
    **~5–15 MB bundled** (vs the ~90 MB arrow DB).
-4. **Predict (Swift)** — implement the 8 constituents' speeds + nodal
-   corrections (a few hundred lines, portable from utide/NOAA tables) + a grid
-   sampler.
+4. **Predict (Swift)** — ✅ **DONE.** `SalishTides/CurrentModel/TidalHarmonics`
+   (astronomical engine: Doodson equilibrium argument + Schureman nodal
+   corrections for the 8 constituents) + `TidalCurrentField` (U/V synthesis +
+   bilinear grid sampler → `CurrentVector`). Built/iterated in Python
+   (`dev/model/tidepredict.py`), validated against NOAA Seattle tide
+   predictions (**correlation 0.997**), then ported to Swift and re-validated
+   to identical numbers (`dev/model/SwiftValidate`). Only the constituent grid
+   (step 1–3 / UBC) is still needed; the device-side predictor is ready.
 5. **Integrate** — a parallel "Model" current source feeding the *existing*
    arrow renderer; viewport → sample grid → `{lat,lon,speed,dir}`. Atlas stays
    untouched (default), model fills gaps / is a toggle.
