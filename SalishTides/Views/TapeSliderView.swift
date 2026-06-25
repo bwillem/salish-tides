@@ -90,8 +90,9 @@ struct TapeSliderView: View {
         let offset   = displayedOffset
         let atNow    = abs(offset) < 0.4
 
-        var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = TimeZone(identifier: "America/Vancouver")!
+        let cal = Calendar.salish
+        var dateStyle = Date.FormatStyle.dateTime.month(.abbreviated).day()
+        dateStyle.timeZone = .salish
 
         // ── Tick marks ───────────────────────────────────────────────────────
         // sessionAnchor is the top of an hour, so every tick is an exact clock
@@ -135,7 +136,7 @@ struct TapeSliderView: View {
                 div.addLine(to: CGPoint(x: x, y: totalH * 0.55))
                 ctx.stroke(div, with: .color(.primary.opacity(0.22)), lineWidth: 1.0)
                 ctx.draw(
-                    Text(tickDate, format: .dateTime.month(.abbreviated).day())
+                    Text(tickDate, format: dateStyle)
                         .font(.system(size: 9, design: .monospaced).weight(.semibold))
                         .foregroundStyle(.primary.opacity(0.55)),
                     at: CGPoint(x: x, y: totalH - 2),

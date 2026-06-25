@@ -91,10 +91,11 @@ struct TimelineControlView: View {
         Task { await vm.setTime(date) }
     }
 
-    // The tape steps in whole hours, so "now" is the top of the current hour —
-    // the actual hourly chart being shown — not the live wall-clock minute.
+    // The tape steps in whole hours, so "now" is the top of the current Salish
+    // hour — the actual hourly chart being shown — not the live wall-clock
+    // minute. Flooring in Salish time keeps it aligned with the tape ticks.
     private static func topOfCurrentHour() -> Date {
-        let cal = Calendar.current
+        let cal = Calendar.salish
         return cal.date(from: cal.dateComponents([.year, .month, .day, .hour], from: .now)) ?? .now
     }
 }

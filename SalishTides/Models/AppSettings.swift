@@ -1,6 +1,24 @@
 import SwiftUI
 import Observation
 
+// MARK: - Salish Sea local time
+
+extension TimeZone {
+    /// Every tide/current time in the app is shown in Salish Sea local time —
+    /// the app is region-specific, so times are "local to the water" regardless
+    /// of the device's timezone. The underlying data is tz-agnostic (UTC).
+    static let salish = TimeZone(identifier: "America/Vancouver")!
+}
+
+extension Calendar {
+    /// Gregorian calendar fixed to `TimeZone.salish`.
+    static let salish: Calendar = {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = .salish
+        return c
+    }()
+}
+
 // MARK: - Unit & Appearance Choices
 
 /// Current-speed display unit. Canonical storage everywhere is knots
@@ -172,14 +190,14 @@ final class AppSettings {
 
     /// Timeline readout, e.g. "Jun 24 at 17:00" / "Jun 24 at 5:00 PM".
     func formatTimelineDate(_ date: Date) -> String {
-        let day = date.formatted(.dateTime.month(.abbreviated).day())
-        return "\(day) at \(formatClock(date))"
+        var dayStyle = Date.FormatStyle.dateTime.month(.abbreviated).day()
+        dayStyle.timeZone = .salish
+        return "\(date.formatted(dayStyle)) at \(formatClock(date))"
     }
 
     /// Time-of-day only: "17:00" / "5:00 PM".
     func formatClock(_ date: Date) -> String {
-        var cal = Calendar.current
-        cal.timeZone = .current
+        let cal = Calendar.salish
         let h = cal.component(.hour, from: date)
         let m = cal.component(.minute, from: date)
         if clockFormat.is24Hour {
