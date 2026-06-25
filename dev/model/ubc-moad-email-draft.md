@@ -1,8 +1,9 @@
 # Draft email — UBC-MOAD / SalishSeaCast tidal-current constituents
 
-**To:** SalishSeaCast / UBC-MOAD group (Mesoscale Ocean & Atmospheric Dynamics,
-EOAS, UBC — PI Prof. Susan Allen). Find a current contact on
-<https://salishsea.eos.ubc.ca/> / the SalishSeaCast GitHub org.
+**To:** Doug Latornell <dlatornell@eoas.ubc.ca> — Research Software Engineer, runs
+the SalishSeaCast nowcast/ERDDAP data infrastructure (best technical contact).
+**Cc:** Prof. Susan Allen <sallen@eoas.ubc.ca> — MOAD group lead / PI.
+(Full contributor list: <https://salishsea.eos.ubc.ca/contributors>.)
 
 **Subject:** Request: gridded tidal-current harmonic constituents from SalishSeaCast
 
