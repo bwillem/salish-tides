@@ -9,10 +9,12 @@ struct CurrentSpeedView: View {
 
     var body: some View {
         if vm.currentSelection != nil {
-            // Value (hero) leads; the compass needle sits to its right, centered
-            // to the value. Value + unit are baseline-aligned ("0.3 kn") and
-            // scale down together rather than wrap.
+            // Compass needle leads (a label for the reading), then the value.
+            // Value + unit are baseline-aligned ("0.3 kn") and scale down
+            // together rather than wrap.
             HStack(alignment: .center, spacing: Spacing.sm) {
+                directionIcon
+                    .font(.footnote)
                 if let speed = vm.crosshairSpeed {
                     HStack(alignment: .firstTextBaseline, spacing: Spacing.xxs) {
                         Text(speedValue(speed))
@@ -28,8 +30,6 @@ struct CurrentSpeedView: View {
                         .font(.stReadout)
                         .foregroundStyle(Color.inkSecondary)
                 }
-                directionIcon
-                    .font(.footnote)
             }
             .padding(.horizontal, Spacing.md)
             .padding(.vertical, Spacing.sm)
