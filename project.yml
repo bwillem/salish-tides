@@ -17,6 +17,9 @@ targets:
     type: application
     platform: iOS
     deploymentTarget: "17.0"
+    configFiles:
+      Debug: Config/Base.xcconfig
+      Release: Config/Base.xcconfig
     sources:
       - path: SalishTides
         excludes:
@@ -53,6 +56,7 @@ targets:
         NSLocationWhenInUseUsageDescription: "Your location is shown on the chart so you can orient yourself relative to the currents."
         UIApplicationSupportsIndirectInputEvents: true
         UIStatusBarHidden: false
+        MAPTILER_KEY: "$(MAPTILER_KEY)"
     dependencies:
       - package: MapLibre
         product: MapLibre

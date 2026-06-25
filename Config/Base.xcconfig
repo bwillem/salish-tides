@@ -1,0 +1,16 @@
+// Base build settings for the SalishTides target.
+//
+// Secrets (API keys, etc.) must NOT be committed. Put them in the gitignored
+// Config/Secrets.xcconfig, which is optionally included below — the build works
+// with or without it.
+//
+// To use the hosted MapTiler Ocean basemap (prototype), create
+// Config/Secrets.xcconfig containing:
+//
+//     MAPTILER_KEY = your_maptiler_api_key
+//
+// With no key, the app falls back to the bundled offline stub style.
+
+MAPTILER_KEY =
+
+#include? "Secrets.xcconfig"

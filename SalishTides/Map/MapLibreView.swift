@@ -4,15 +4,28 @@ import CoreLocation
 
 struct MapLibreView: UIViewRepresentable {
     @Environment(MapViewModel.self) private var vm
+    @Environment(AppSettings.self) private var settings
     @Environment(\.colorScheme) private var colorScheme
 
-    // Day / Night basemap styles (see DESIGN.md §2.3).
-    static func styleURL(for scheme: ColorScheme) -> URL? {
+    // Day / Night basemap styles (see DESIGN.md §2.3). Pure bundle lookup —
+    // nonisolated so the (also nonisolated) MapStyleLoader can call it.
+    nonisolated static func styleURL(for scheme: ColorScheme) -> URL? {
         let name = scheme == .dark ? "stub-style-dark" : "stub-style-light"
         return Bundle.main.url(forResource: name, withExtension: "json")
     }
 
+    // Resolved style for the selected basemap + current appearance. MapTiler
+    // styles inject the key from the bundled JSON; .standard / failures fall
+    // back to the per-scheme offline stub above.
+    private func desiredStyleURL(for scheme: ColorScheme) -> URL? {
+        MapStyleLoader.styleURL(for: settings.basemap, dark: scheme == .dark)
+    }
+
     func makeUIView(context: Context) -> MLNMapView {
+        // Grow the ambient cache so a day's viewing survives offline (default is
+        // ~50 MB). This is what makes online styles render offline afterward.
+        MLNOfflineStorage.shared.setMaximumAmbientCacheSize(256 * 1024 * 1024, withCompletionHandler: { _ in })
+
         let mapView = MLNMapView(frame: .zero)
         mapView.delegate = context.coordinator
         mapView.showsUserLocation = true
@@ -25,18 +38,21 @@ struct MapLibreView: UIViewRepresentable {
         mapView.setCenter(center, zoomLevel: 9.5, animated: false)
 
         context.coordinator.lastScheme = colorScheme
-        mapView.styleURL = Self.styleURL(for: colorScheme)
+        context.coordinator.appliedBasemap = settings.basemap
+        mapView.styleURL = desiredStyleURL(for: colorScheme)
 
         return mapView
     }
 
     func updateUIView(_ mapView: MLNMapView, context: Context) {
-        // Swap the basemap when the system appearance flips, re-applying the
-        // current vectors once the new style finishes loading.
-        if context.coordinator.lastScheme != colorScheme {
+        // Reload the basemap on a Day/Night flip or a Map Style change,
+        // re-applying the current vectors once the new style finishes loading.
+        if context.coordinator.lastScheme != colorScheme
+            || context.coordinator.appliedBasemap != settings.basemap {
             context.coordinator.lastScheme = colorScheme
+            context.coordinator.appliedBasemap = settings.basemap
             context.coordinator.prepareForStyleReload(vm.currentVectors)
-            mapView.styleURL = Self.styleURL(for: colorScheme)
+            mapView.styleURL = desiredStyleURL(for: colorScheme)
         }
         context.coordinator.updateVectors(vm.currentVectors, on: mapView)
     }
@@ -58,6 +74,8 @@ struct MapLibreView: UIViewRepresentable {
         // Tracks the basemap appearance currently applied, so we only reload the
         // style on an actual Day/Night flip.
         nonisolated(unsafe) var lastScheme: ColorScheme?
+        // Developer basemap selection currently applied; reload only on change.
+        nonisolated(unsafe) var appliedBasemap: Basemap?
         private let onViewportChange: (ChartBounds) -> Void
 
         init(onViewportChange: @escaping (ChartBounds) -> Void) {

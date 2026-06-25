@@ -3,7 +3,17 @@ import SwiftUI
 struct ContentView: View {
     @Environment(MapViewModel.self) private var vm
     @Environment(AppSettings.self) private var settings
+    @Environment(NetworkMonitor.self) private var network
     @State private var showingSettings = false
+
+    // When a network style is shown while *confirmed* online, its tiles enter
+    // the ambient cache — record it so it stays selectable offline. Gating on
+    // didConfirmOnline avoids marking from the optimistic launch default.
+    private func recordIfOnline() {
+        if network.isOnline, network.didConfirmOnline {
+            settings.markOfflineReady(settings.basemap)
+        }
+    }
 
     var body: some View {
         Group {
@@ -50,6 +60,10 @@ struct ContentView: View {
         .sheet(isPresented: $showingSettings) {
             SettingsView()
         }
+        .onAppear { recordIfOnline() }
+        .onChange(of: settings.basemap) { recordIfOnline() }
+        .onChange(of: network.isOnline) { recordIfOnline() }
+        .onChange(of: network.didConfirmOnline) { recordIfOnline() }
     }
 }
 

@@ -6,6 +6,7 @@ import SwiftUI
 /// navigation title, and a single confirming **Done** action.
 struct SettingsView: View {
     @Environment(AppSettings.self) private var settings
+    @Environment(NetworkMonitor.self) private var network
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -55,6 +56,17 @@ struct SettingsView: View {
                     Text("Switches the full Day / Night theme — basemap, panels, and current-arrow colours. System follows your device setting.")
                 }
 
+                // ── Map Style ────────────────────────────────────────────
+                Section {
+                    ForEach(Basemap.allCases) { style in
+                        mapStyleRow(style)
+                    }
+                } header: {
+                    Text("Map Style")
+                } footer: {
+                    Text("Standard works fully offline. Ocean and Satellite stream from MapTiler when online and are cached for offline use over waters you've viewed.")
+                }
+
                 // ── About ────────────────────────────────────────────────
                 Section("About") {
                     LabeledContent("Version", value: Self.appVersion)
@@ -69,6 +81,32 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+
+    /// A Map Style row: tappable + checkmark when selectable; greyed with an
+    /// "Online only" caption when it needs network it doesn't have.
+    @ViewBuilder
+    private func mapStyleRow(_ style: Basemap) -> some View {
+        let selectable = settings.isSelectable(style, online: network.isOnline)
+        Button {
+            settings.basemap = style
+        } label: {
+            HStack {
+                Text(style.label)
+                    .foregroundStyle(selectable ? .primary : .secondary)
+                Spacer()
+                if settings.basemap == style {
+                    Image(systemName: "checkmark")
+                        .foregroundStyle(.tint)
+                } else if !selectable {
+                    Text("Online only")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .contentShape(.rect)
+        }
+        .disabled(!selectable)
     }
 
     private static var appVersion: String {
@@ -118,4 +156,5 @@ private struct DataSourcesView: View {
 #Preview {
     SettingsView()
         .environment(AppSettings())
+        .environment(NetworkMonitor())
 }
