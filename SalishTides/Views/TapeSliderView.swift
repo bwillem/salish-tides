@@ -5,6 +5,7 @@ import SwiftUI
 // Snaps to the nearest integer hour on release with a short spring animation.
 // Does not call onCommit during drag — only after the snap settles.
 struct TapeSliderView: View {
+    @Environment(AppSettings.self) private var settings
     @Binding var offsetHours: Int
     let sessionAnchor: Date
     let onCommit: () -> Void
@@ -12,7 +13,7 @@ struct TapeSliderView: View {
     @State private var dragTranslation: CGFloat = 0
 
     private let pixelsPerHour: CGFloat = 27
-    private let maxHours: Int = 12
+    private let maxHours: Int = 48
 
     // Continuous display offset — drives all Canvas drawing
     private var displayedOffset: Double {
@@ -39,7 +40,7 @@ struct TapeSliderView: View {
 
     var body: some View {
         Canvas { ctx, size in
-            draw(ctx: ctx, size: size)
+            draw(ctx: ctx, size: size, use24Hour: settings.clockFormat.is24Hour)
         }
         .contentShape(Rectangle())
         .gesture(
@@ -83,22 +84,28 @@ struct TapeSliderView: View {
 
     // MARK: - Canvas drawing
 
-    private func draw(ctx: GraphicsContext, size: CGSize) {
+    private func draw(ctx: GraphicsContext, size: CGSize, use24Hour: Bool) {
         let cx       = size.width / 2
         let totalH   = size.height
         let offset   = displayedOffset
         let atNow    = abs(offset) < 0.4
 
-        var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = TimeZone(identifier: "America/Vancouver")!
+        let cal = Calendar.salish
+        var dateStyle = Date.FormatStyle.dateTime.month(.abbreviated).day()
+        dateStyle.timeZone = .salish
 
         // ── Tick marks ───────────────────────────────────────────────────────
+        // sessionAnchor is the top of an hour, so every tick is an exact clock
+        // hour: labels are accurate and midnight lands precisely on a tick.
         for tick in -maxHours ... maxHours {
             let x = cx + CGFloat(Double(tick) - offset) * pixelsPerHour
             guard x >= -4 && x <= size.width + 4 else { continue }
 
             let isNow = tick == 0
-            let is3h  = tick % 3 == 0
+            let tickDate = sessionAnchor.addingTimeInterval(Double(tick) * 3600)
+            let hour = cal.component(.hour, from: tickDate)
+            let isMidnight = hour == 0
+            let isLabelled = (tick % 3 == 0) || isMidnight   // taller tick + a label
 
             if isNow {
                 // "Now" marker: full-height line in oceanLight so it's visible
@@ -109,9 +116,9 @@ struct TapeSliderView: View {
                 ctx.stroke(p, with: .color(Color.oceanLight.opacity(0.75)), lineWidth: 1.0)
             }
 
-            // Hour / 3-hour tick
-            let tickH: CGFloat   = is3h ? 11 : 6
-            let tickAlpha: Double = isNow ? 0 : (is3h ? 0.55 : 0.28)
+            // Hour tick (taller on labelled marks)
+            let tickH: CGFloat   = isLabelled ? 11 : 6
+            let tickAlpha: Double = isNow ? 0 : (isLabelled ? 0.55 : 0.28)
             if tickAlpha > 0 {
                 var p = Path()
                 p.move(to:    CGPoint(x: x, y: 0))
@@ -119,14 +126,30 @@ struct TapeSliderView: View {
                 ctx.stroke(p, with: .color(.primary.opacity(tickAlpha)), lineWidth: 1.0)
             }
 
-            // Clock-hour label on 3-hour marks (skip the "now" tick — cursor implies it)
-            if is3h && !isNow {
-                let tickDate = sessionAnchor.addingTimeInterval(Double(tick) * 3600)
-                let hour = cal.component(.hour, from: tickDate)
-                // Suppress labels too close to the right edge
-                guard x <= size.width - 22 else { continue }
+            // Labels (skip the "now" tick — the cursor implies it, and stay clear
+            // of the edges). Midnight shows the date + a faint day divider so the
+            // wide range reads clearly across days; other 3-hour marks show HH:00.
+            guard !isNow, x >= 18, x <= size.width - 22 else { continue }
+            if isMidnight {
+                var div = Path()
+                div.move(to:    CGPoint(x: x, y: 0))
+                div.addLine(to: CGPoint(x: x, y: totalH * 0.55))
+                ctx.stroke(div, with: .color(.primary.opacity(0.22)), lineWidth: 1.0)
                 ctx.draw(
-                    Text(String(format: "%02d:00", hour))
+                    Text(tickDate, format: dateStyle)
+                        .font(.system(size: 9, design: .monospaced).weight(.semibold))
+                        .foregroundStyle(.primary.opacity(0.55)),
+                    at: CGPoint(x: x, y: totalH - 2),
+                    anchor: .bottom
+                )
+            } else if tick % 3 == 0 && hour != 23 && hour != 1 {
+                // (23:00 / 01:00 sit one hour from a midnight date marker — skip
+                // them so the date label doesn't collide.)
+                let label = use24Hour
+                    ? String(format: "%02d:00", hour)
+                    : "\(hour % 12 == 0 ? 12 : hour % 12) \(hour < 12 ? "AM" : "PM")"
+                ctx.draw(
+                    Text(label)
                         .font(.system(size: 9, design: .monospaced))
                         .foregroundStyle(.primary.opacity(0.40)),
                     at: CGPoint(x: x, y: totalH - 2),
