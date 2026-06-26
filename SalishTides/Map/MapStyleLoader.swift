@@ -10,13 +10,34 @@ import SwiftUI
 ///     offline tile archive (see `Basemap.bundledArchive`).
 ///
 /// If a style can't be resolved (missing key, missing archive, or I/O error) we
-/// fall back to `.standard`, which is bundled + offline, so the map never blanks.
+/// fall back to `.standard`, and finally to a flat water-coloured style with no
+/// dependencies — so the map never blanks, even if the bundled tile archive is
+/// absent.
 enum MapStyleLoader {
 
     static func styleURL(for basemap: Basemap, dark: Bool) -> URL? {
         if let url = resolve(basemap, dark: dark) { return url }
-        // Offline-safe fallback; guard against recursion if standard itself fails.
-        return basemap == .standard ? nil : resolve(.standard, dark: dark)
+        // Offline-safe fallback: the bundled-offline Standard style.
+        if basemap != .standard, let url = resolve(.standard, dark: dark) { return url }
+        // Last resort, with zero external dependencies: a flat water-coloured
+        // style so the map is never blank even if the bundled tile archive is
+        // missing (e.g. a checkout that hasn't run dev/basemap/build-pmtiles.sh).
+        // The current-arrow overlay still draws on top.
+        return fallbackStyleURL(dark: dark)
+    }
+
+    /// A minimal style with no sources — just a solid water background matching
+    /// the real basemap's tone — guaranteed to render. The single safety net
+    /// that keeps `styleURL` from ever handing MapLibre a nil/blank style.
+    private static func fallbackStyleURL(dark: Bool) -> URL? {
+        let water = dark ? "#0f1c28" : "#cfdce6"   // mirrors standard-{dark,light}.json
+        let json = """
+        {"version":8,"name":"Fallback","sources":{},"layers":[\
+        {"id":"background","type":"background","paint":{"background-color":"\(water)"}}]}
+        """
+        let dest = FileManager.default.temporaryDirectory
+            .appendingPathComponent("style-fallback-\(dark ? "dark" : "light").json")
+        return (try? json.write(to: dest, atomically: true, encoding: .utf8)) == nil ? nil : dest
     }
 
     /// Read the bundled style, inject any placeholders it contains, write the
