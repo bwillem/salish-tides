@@ -1,31 +1,38 @@
 {
   "version": 8,
-  "name": "Salish Tides — Day",
+  "name": "Salish Standard — Day",
+  "metadata": {
+    "comment": "Offline vector basemap. Source tiles are the bundled Protomaps/OSM (ODbL) PMTiles, injected at load time via the {{LOCAL_TILES}} placeholder. Geometry only — no symbol layers, so no glyphs are required and the style renders with zero network. Add place labels later by bundling a glyph PBF set and a `glyphs` URL."
+  },
   "sources": {
-    "carto-light": {
-      "type": "raster",
-      "tiles": [
-        "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png",
-        "https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png",
-        "https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png"
-      ],
-      "tileSize": 256,
-      "attribution": "© OpenStreetMap contributors © CARTO",
-      "maxzoom": 19
-    }
+    "protomaps": { "type": "vector", "url": "{{LOCAL_TILES}}" }
   },
   "layers": [
-    {
-      "id": "background",
-      "type": "background",
+    { "id": "background", "type": "background",
+      "paint": { "background-color": "#cfdce6" } },
+
+    { "id": "earth", "type": "fill", "source": "protomaps", "source-layer": "earth",
+      "paint": { "fill-color": "#f4f1ea" } },
+
+    { "id": "landcover", "type": "fill", "source": "protomaps", "source-layer": "landcover",
       "paint": {
-        "background-color": "#dbe7f0"
-      }
-    },
-    {
-      "id": "carto-light-tiles",
-      "type": "raster",
-      "source": "carto-light"
-    }
+        "fill-color": ["match", ["get", "kind"],
+          "forest", "#e0e8d4",
+          ["grassland", "scrub", "wood"], "#e6ecdb",
+          ["glacier", "barren"], "#eef0ee",
+          "#ece9df"],
+        "fill-opacity": 0.55 } },
+
+    { "id": "landuse-green", "type": "fill", "source": "protomaps", "source-layer": "landuse",
+      "filter": ["match", ["get", "kind"],
+        ["park", "forest", "nature_reserve", "grass", "recreation_ground", "golf_course", "cemetery"], true, false],
+      "paint": { "fill-color": "#d8e6c6", "fill-opacity": 0.7 } },
+
+    { "id": "water", "type": "fill", "source": "protomaps", "source-layer": "water",
+      "paint": { "fill-color": "#cfdce6" } },
+
+    { "id": "boundaries", "type": "line", "source": "protomaps", "source-layer": "boundaries",
+      "filter": ["match", ["get", "kind"], ["country", "region"], true, false],
+      "paint": { "line-color": "#9aa7b5", "line-dasharray": [2, 2], "line-width": 0.8, "line-opacity": 0.7 } }
   ]
 }

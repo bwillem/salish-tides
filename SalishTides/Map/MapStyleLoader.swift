@@ -3,47 +3,93 @@ import SwiftUI
 
 /// Resolves the MapLibre style URL for a `(Basemap, appearance)` pair.
 ///
-/// `.standard` uses the bundled Standard styles directly. MapTiler styles are
-/// bundled with a `{{MAPTILER_KEY}}` placeholder (so the key is never committed);
-/// at load time the key is injected and the result written to a temp file that
-/// MapLibre loads. If the key is missing or anything fails, we fall back to the
-/// always-available Standard style so the map never goes blank.
+/// Every basemap is a bundled style JSON carrying placeholders that are filled in
+/// at load time and written to a temp file MapLibre loads:
+///   • `{{MAPTILER_KEY}}` — the MapTiler key (never committed) for online styles.
+///   • `{{LOCAL_TILES}}`  — a `pmtiles://`/`mbtiles://` URL for the style's bundled
+///     offline tile archive (see `Basemap.bundledArchive`).
+///
+/// If a style can't be resolved (missing key, missing archive, or I/O error) we
+/// fall back to `.standard`, and finally to a flat water-coloured style with no
+/// dependencies — so the map never blanks, even if the bundled tile archive is
+/// absent.
 enum MapStyleLoader {
 
     static func styleURL(for basemap: Basemap, dark: Bool) -> URL? {
-        let fallback = MapLibreView.styleURL(for: dark ? .dark : .light)
+        if let url = resolve(basemap, dark: dark) { return url }
+        // Offline-safe fallback: the bundled-offline Standard style.
+        if basemap != .standard, let url = resolve(.standard, dark: dark) { return url }
+        // Last resort, with zero external dependencies: a flat water-coloured
+        // style so the map is never blank even if the bundled tile archive is
+        // missing (e.g. a checkout that hasn't run dev/basemap/build-pmtiles.sh).
+        // The current-arrow overlay still draws on top.
+        return fallbackStyleURL(dark: dark)
+    }
 
-        guard let resource = basemap.styleResource(dark: dark) else {
-            return fallback   // .standard
-        }
-
-        // The injected JSON is deterministic per resource (key is build-constant),
-        // so write it once and reuse it — avoids re-reading + re-writing ~20 KB on
-        // the main thread on every style/theme switch.
+    /// A minimal style with no sources — just a solid water background matching
+    /// the real basemap's tone — guaranteed to render. The single safety net
+    /// that keeps `styleURL` from ever handing MapLibre a nil/blank style.
+    private static func fallbackStyleURL(dark: Bool) -> URL? {
+        let water = dark ? "#0f1c28" : "#cfdce6"   // mirrors standard-{dark,light}.json
+        let json = """
+        {"version":8,"name":"Fallback","sources":{},"layers":[\
+        {"id":"background","type":"background","paint":{"background-color":"\(water)"}}]}
+        """
         let dest = FileManager.default.temporaryDirectory
-            .appendingPathComponent("style-\(resource).json")
-        if FileManager.default.fileExists(atPath: dest.path) {
-            return dest
-        }
+            .appendingPathComponent("style-fallback-\(dark ? "dark" : "light").json")
+        return (try? json.write(to: dest, atomically: true, encoding: .utf8)) == nil ? nil : dest
+    }
 
+    /// Read the bundled style, inject any placeholders it contains, write the
+    /// result to a temp file. Returns `nil` if a required substitution can't be
+    /// satisfied (so the caller can fall back).
+    private static func resolve(_ basemap: Basemap, dark: Bool) -> URL? {
+        let resource = basemap.styleResource(dark: dark)
         guard let src = Bundle.main.url(forResource: resource, withExtension: "json"),
               var json = try? String(contentsOf: src, encoding: .utf8) else {
-            return fallback
+            return nil
         }
 
-        if json.contains(placeholder) {
+        if json.contains(keyPlaceholder) {
             let key = MapConfig.maptilerKey
-            guard !key.isEmpty else { return fallback }
-            json = json.replacingOccurrences(of: placeholder, with: key)
+            guard !key.isEmpty else { return nil }
+            json = json.replacingOccurrences(of: keyPlaceholder, with: key)
         }
 
+        if json.contains(tilesPlaceholder) {
+            guard let tiles = localTilesURL(for: basemap) else { return nil }
+            json = json.replacingOccurrences(of: tilesPlaceholder, with: tiles)
+        }
+
+        // Rewrite on every call: the injected local-tiles path is an absolute
+        // bundle URL that changes between installs, so a cached temp file could go
+        // stale. The cost is a ~20 KB write on a (rare) style/theme switch.
+        let dest = FileManager.default.temporaryDirectory
+            .appendingPathComponent("style-\(resource).json")
         do {
             try json.write(to: dest, atomically: true, encoding: .utf8)
             return dest
         } catch {
-            return fallback
+            return nil
         }
     }
 
-    private static let placeholder = "{{MAPTILER_KEY}}"
+    /// A `pmtiles://`/`mbtiles://` URL for a basemap's bundled archive (in the
+    /// app's `basemap/` resource folder), or `nil` if it isn't present.
+    private static func localTilesURL(for basemap: Basemap) -> String? {
+        guard let archive = basemap.bundledArchive else { return nil }
+        let name = (archive as NSString).deletingPathExtension
+        let ext  = (archive as NSString).pathExtension
+        guard let url = Bundle.main.url(forResource: name, withExtension: ext, subdirectory: "basemap") else {
+            return nil
+        }
+        switch ext {
+        case "pmtiles": return "pmtiles://" + url.absoluteString   // → pmtiles://file:///…
+        case "mbtiles": return "mbtiles://" + url.path             // → mbtiles:///…
+        default:        return nil
+        }
+    }
+
+    private static let keyPlaceholder   = "{{MAPTILER_KEY}}"
+    private static let tilesPlaceholder = "{{LOCAL_TILES}}"
 }
