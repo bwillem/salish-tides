@@ -215,14 +215,20 @@ def find_scale(page, arrows, insets):
         return None
     scales.sort(key=lambda s: s['y'])
     main = scales[0]
+    # The legend reference arrow is a HORIZONTAL (~90/270deg), full-length arrow
+    # beside the label. Match it specifically -- not merely the nearest arrow:
+    # current-data arrows are often drawn closer to the label and are short and
+    # diagonal, so "nearest" gives a wildly wrong scale (Vol1 region E maps 3+
+    # picked a ~7px data arrow -> 5-6x too fast, up to 14kn).
     best, bd = None, 1e9
     for a in arrows:
         d = math.hypot(a['cx']-main['x'], a['cy']-main['y'])
-        if d < bd and d < 100:
+        horizontal = min(abs(a['direction_deg']-90), abs(a['direction_deg']-270)) < 25
+        if d < 110 and horizontal and a['length_px'] > 20 and d < bd:
             bd, best = d, a
-    if best and best['length_px'] > 5:
+    if best:
         return main['v'] / best['length_px']
-    return main['v'] / 39.0
+    return main['v'] / 39.0   # legend arrow is a fixed ~39px graphic
 
 
 def process(doc, page_idx, bounds, fb_geo, fb_scale):
