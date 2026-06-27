@@ -8,9 +8,10 @@
 # "Copy Atlas & Tide Data" phase) and renders it locally via MapLibre's native
 # pmtiles:// support — no network, no API key.
 #
-# Requirements: the `pmtiles` CLI (`brew install pmtiles`). The extract uses
-# HTTP range requests against Protomaps' hosted planet build, so it downloads
-# only our region (~50 MB), not the whole planet (~136 GB).
+# Requirements: the `pmtiles` CLI (`brew install pmtiles`), `tile-join`
+# (`brew install tippecanoe`) for the layer-strip step, and `curl`. The extract
+# uses HTTP range requests against Protomaps' hosted planet build, so it
+# downloads only our region (~50 MB), not the whole planet (~136 GB).
 #
 # Usage:  dev/basemap/build-pmtiles.sh [YYYYMMDD]
 #   YYYYMMDD  Optional Protomaps daily-build date. Defaults to auto-detecting
@@ -34,8 +35,9 @@ EXCLUDE_LAYERS=(roads buildings pois)
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 OUT="${REPO_ROOT}/data/basemap/salish.pmtiles"
 
-command -v pmtiles  >/dev/null || { echo "error: pmtiles CLI not found — 'brew install pmtiles'" >&2; exit 1; }
+command -v pmtiles   >/dev/null || { echo "error: pmtiles CLI not found — 'brew install pmtiles'" >&2; exit 1; }
 command -v tile-join >/dev/null || { echo "error: tile-join not found — 'brew install tippecanoe'" >&2; exit 1; }
+command -v curl      >/dev/null || { echo "error: curl not found (needed to detect the latest Protomaps build)" >&2; exit 1; }
 
 # --- Resolve a valid Protomaps build date ---------------------------------
 build_date="${1:-}"
@@ -58,8 +60,11 @@ echo "Output : $OUT"
 mkdir -p "$(dirname "$OUT")"
 
 # 1. Region/zoom subset from the hosted planet (range requests, ~tens of MB).
-RAW="$(mktemp -t salish-raw).pmtiles"
-trap 'rm -f "$RAW"' EXIT
+#    Use a temp dir so the file keeps its .pmtiles extension (tile-join detects
+#    the format from it) without orphaning a stray mktemp file.
+TMP_DIR="$(mktemp -d -t salish-basemap)"
+trap 'rm -rf "$TMP_DIR"' EXIT
+RAW="$TMP_DIR/raw.pmtiles"
 pmtiles extract "$SRC" "$RAW" --bbox="$BBOX" --maxzoom="$MAXZOOM"
 
 # 2. Strip the unwanted layers (tile-join re-tiles; pmtiles extract can't drop
