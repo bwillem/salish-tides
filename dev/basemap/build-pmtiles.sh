@@ -26,11 +26,16 @@ BBOX="-128.23,46.92,-122.05,51.20"   # min_lon,min_lat,max_lon,max_lat
 # geometry/labels stay crisp). Bump to 13/14 for sharper-but-larger archives
 # (z13 ≈ 114 MB, z14 ≈ 237 MB) if a denser harbour detail is ever needed.
 MAXZOOM=12
+# Layers dropped from the Protomaps schema — it's a boating app, so roads /
+# buildings / points-of-interest are noise (and look wrong over water). We keep
+# earth, water, landcover, landuse (land topo), places and boundaries.
+EXCLUDE_LAYERS=(roads buildings pois)
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 OUT="${REPO_ROOT}/data/basemap/salish.pmtiles"
 
-command -v pmtiles >/dev/null || { echo "error: pmtiles CLI not found — 'brew install pmtiles'" >&2; exit 1; }
+command -v pmtiles  >/dev/null || { echo "error: pmtiles CLI not found — 'brew install pmtiles'" >&2; exit 1; }
+command -v tile-join >/dev/null || { echo "error: tile-join not found — 'brew install tippecanoe'" >&2; exit 1; }
 
 # --- Resolve a valid Protomaps build date ---------------------------------
 build_date="${1:-}"
@@ -51,8 +56,18 @@ echo "BBox   : $BBOX   maxzoom=$MAXZOOM"
 echo "Output : $OUT"
 
 mkdir -p "$(dirname "$OUT")"
-pmtiles extract "$SRC" "$OUT" --bbox="$BBOX" --maxzoom="$MAXZOOM"
+
+# 1. Region/zoom subset from the hosted planet (range requests, ~tens of MB).
+RAW="$(mktemp -t salish-raw).pmtiles"
+trap 'rm -f "$RAW"' EXIT
+pmtiles extract "$SRC" "$RAW" --bbox="$BBOX" --maxzoom="$MAXZOOM"
+
+# 2. Strip the unwanted layers (tile-join re-tiles; pmtiles extract can't drop
+#    layers). -L excludes a layer.
+exclude_args=()
+for layer in "${EXCLUDE_LAYERS[@]}"; do exclude_args+=(-L "$layer"); done
+tile-join -f -pk -o "$OUT" "${exclude_args[@]}" "$RAW"
 
 echo
-echo "Done. $(du -h "$OUT" | cut -f1) → $OUT"
-pmtiles show "$OUT" | grep -E "tile type|bounds|min zoom|max zoom"
+echo "Done. $(du -h "$OUT" | cut -f1) → $OUT  (dropped: ${EXCLUDE_LAYERS[*]})"
+pmtiles show "$OUT" | grep -E "tile type|min zoom|max zoom"

@@ -31,17 +31,6 @@
     { "id": "water", "type": "fill", "source": "protomaps", "source-layer": "water",
       "paint": { "fill-color": "#cfdce6" } },
 
-    { "id": "roads-minor", "type": "line", "source": "protomaps", "source-layer": "roads",
-      "minzoom": 11,
-      "filter": ["match", ["get", "kind"], ["minor_road", "other"], true, false],
-      "paint": { "line-color": "#e6dfd0",
-        "line-width": ["interpolate", ["linear"], ["zoom"], 11, 0.4, 16, 1.6] } },
-
-    { "id": "roads-major", "type": "line", "source": "protomaps", "source-layer": "roads",
-      "filter": ["match", ["get", "kind"], ["highway", "major_road", "medium_road"], true, false],
-      "paint": { "line-color": "#ddd2bf",
-        "line-width": ["interpolate", ["linear"], ["zoom"], 7, 0.5, 12, 2.0, 16, 5.0] } },
-
     { "id": "boundaries", "type": "line", "source": "protomaps", "source-layer": "boundaries",
       "filter": ["match", ["get", "kind"], ["country", "region"], true, false],
       "paint": { "line-color": "#9aa7b5", "line-dasharray": [2, 2], "line-width": 0.8, "line-opacity": 0.7 } }
