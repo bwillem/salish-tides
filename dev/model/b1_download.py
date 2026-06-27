@@ -32,11 +32,17 @@ for var, ds in VARS.items():
         t0, t1 = month_range(YEAR, m)
         url = (f"{BASE}/{ds}.nc?{var}%5B({t0}):({t1})%5D%5B0%5D"
                f"%5B{GY0}:{GY1}%5D%5B{GX0}:{GX1}%5D")
-        t = time.time()
-        try:
-            data = urllib.request.urlopen(url, timeout=600).read()
-        except Exception as e:
-            print(f"  FAIL {var} {YEAR}-{m:02d}: {e}", flush=True)
+        data = None
+        for attempt in range(1, 5):                 # retry transient timeouts
+            t = time.time()
+            try:
+                data = urllib.request.urlopen(url, timeout=600).read()
+                break
+            except Exception as e:
+                print(f"  retry {attempt}/4 {var} {YEAR}-{m:02d}: {e}", flush=True)
+                time.sleep(10 * attempt)
+        if data is None:
+            print(f"  GAVE UP {var} {YEAR}-{m:02d}", flush=True)
             sys.exit(1)
         with open(path, "wb") as f:
             f.write(data)
