@@ -17,12 +17,20 @@ set -euo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO"
 
-declare -A OUTDIR=( [1]="data/maps" [2]="data/maps_vol2" [3]="data/maps_vol3" [4]="data/maps_vol4" )
+# Vol 1 uses data/maps; vols 2-4 use data/maps_vol{N}. (Kept as a case rather
+# than an associative array so this runs on macOS's stock bash 3.2.)
+outdir_for() {
+  case "$1" in
+    1) echo "data/maps" ;;
+    *) echo "data/maps_vol$1" ;;
+  esac
+}
 
 echo "Regenerating atlas map data for all 4 volumes..."
 for vol in 1 2 3 4; do
-  echo "  Vol $vol -> ${OUTDIR[$vol]}"
-  python3 dev/extraction/extract_vectors_fitz.py "$vol" "${OUTDIR[$vol]}"
+  out="$(outdir_for "$vol")"
+  echo "  Vol $vol -> $out"
+  python3 dev/extraction/extract_vectors_fitz.py "$vol" "$out"
 done
 
 echo "Regenerating viewport-culling indexes (tracked: SalishTides/Resources/atlas_index*.json)..."
