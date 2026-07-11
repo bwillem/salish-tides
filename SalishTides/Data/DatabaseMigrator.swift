@@ -8,8 +8,9 @@ actor DatabaseMigrator {
     // inserted, so an interrupted first launch can't leave a partial table.
     // Keep vectorKey's version in lockstep with VectorDatabase.schemaVersion: a
     // schema bump drops the table, so the population key must change too or the
-    // fresh table is left empty. v4 = corrected Vol 2-4 georeferencing;
-    // v9 = corrected current-speed scale (legend-arrow misdetection inflated
+    // fresh table is left empty. Version history: v4 corrected Vol 2-4
+    // georeferencing; v5-v8 refined extraction/slack-marker coverage; v9
+    // corrected the current-speed scale (legend-arrow misdetection inflated
     // some regions 4-6x, e.g. Vol1 region E up to ~14kn).
     private static let vectorKey = "vectorDBMigrated_v9"
     // Tide hi/lo predictions (independent of the vector schema).
