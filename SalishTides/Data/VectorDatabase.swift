@@ -27,7 +27,8 @@ actor VectorDatabase {
     // is always safe — DatabaseMigrator repopulates it.
     // v8: slack dot markers (atlas draws these where current is below the
     // min-arrow threshold), subsampled to ~2 km, so weak areas are not blank.
-    private static let schemaVersion = 8
+    // v9: corrected current-speed scale (find_scale legend-arrow misdetection).
+    private static let schemaVersion = 9
 
     private init() {}
 
