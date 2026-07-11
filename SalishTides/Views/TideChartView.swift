@@ -10,12 +10,14 @@ struct TideChartView: View {
     let currentDate: Date
     let events: [TideEvent]
     /// Live model water levels (already on the station's datum). Where the
-    /// series covers a sample time it overrides the interpolated prediction;
-    /// outside its coverage the curve falls back seamlessly.
+    /// series covers a sample time it overrides the interpolated prediction,
+    /// cross-fading into the prediction near its coverage edges so the curve
+    /// never steps where the sources hand off.
     let live: LiveTideSeries?
 
     private func height(at t: Date) -> Double? {
-        live?.height(at: t) ?? TideCurve.height(at: t, events: events)
+        let predicted = TideCurve.height(at: t, events: events)
+        return live?.blendedHeight(at: t, fallback: predicted) ?? predicted
     }
 
     // Visible window: ±windowHalfHours on each side of cursor

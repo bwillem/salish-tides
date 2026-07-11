@@ -200,8 +200,25 @@ final class MapViewModel {
         // needs to know the on-screen hour either way, so its background
         // prefetch can trigger a reload the moment visible data lands.
         liveData?.displayedHourKey = LiveDataService.hourKey(for: date)
-        let liveVectors = await liveData?.currents(for: date)
+        let liveField = await liveData?.currents(for: date)
         guard generation == loadGeneration else { return }
+
+        // Cull the whole-domain live field to the viewport (with margin, so
+        // pans don't immediately hit empty edges) BEFORE choosing the source:
+        // an empty result means the viewport is outside the model's coverage
+        // (or all land at this resolution), and the atlas must take over —
+        // its charts extend beyond the NEMO domain (e.g. Queen Charlotte
+        // Strait in Vol 4).
+        let liveVectors: [CurrentVector]? = liveField.flatMap { field in
+            guard let vp = visibleViewport else { return field }
+            let latMargin = (vp.lat_max - vp.lat_min) * 0.2
+            let lonMargin = (vp.lon_max - vp.lon_min) * 0.2
+            let culled = field.filter {
+                $0.lat >= vp.lat_min - latMargin && $0.lat <= vp.lat_max + latMargin &&
+                $0.lon >= vp.lon_min - lonMargin && $0.lon <= vp.lon_max + lonMargin
+            }
+            return culled.isEmpty ? nil : culled
+        }
 
         // Find all volumes whose geographic bounds intersect the current viewport.
         // If no viewport yet, include all volumes so any initial chart load works.
@@ -251,22 +268,12 @@ final class MapViewModel {
         }
 
         if let liveVectors {
-            // The live field spans the whole model domain; cull to the viewport
-            // (with margin, so pans don't immediately hit empty edges) to keep
-            // the thinning/field/readout passes proportionate to the screen.
-            if let vp = visibleViewport {
-                let latMargin = (vp.lat_max - vp.lat_min) * 0.2
-                let lonMargin = (vp.lon_max - vp.lon_min) * 0.2
-                vectors = liveVectors.filter {
-                    $0.lat >= vp.lat_min - latMargin && $0.lat <= vp.lat_max + latMargin &&
-                    $0.lon >= vp.lon_min - lonMargin && $0.lon <= vp.lon_max + lonMargin
-                }
-            } else {
-                vectors = liveVectors
-            }
+            vectors = liveVectors
         }
 
         guard generation == loadGeneration else { return }
+        // Provenance reflects what is actually rendered: liveVectors is nil
+        // (and the atlas populated `vectors`) whenever the cull came up empty.
         isLiveCurrents = liveVectors != nil
         currentSelections = selections
         // Crosshair readout uses the full-resolution set; only the rendered

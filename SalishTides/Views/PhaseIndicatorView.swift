@@ -19,9 +19,10 @@ struct PhaseIndicatorView: View {
                         .accessibilityElement()
                         .accessibilityLabel(tideChartLabel)
 
-                    // Provenance: which station the curve is from + its datum.
+                    // Provenance: which station the curve is from + its datum,
+                    // and whether the drawn curve itself is live model data.
                     if let station = vm.tideStation {
-                        Text("\(station.name) · \(station.datum)")
+                        Text("\(station.name) · \(station.datum)\(isLiveTide ? " · Live" : "")")
                             .font(.stCaption)
                             .foregroundStyle(Color.inkSecondary)
                             .lineLimit(1)
@@ -41,19 +42,21 @@ struct PhaseIndicatorView: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("\(phaseText(sel)) tide.")
 
-                // Live-data provenance: shown only while SalishSeaCast model
-                // data is actually on screen, so its absence means "bundled".
-                if isShowingLiveData {
+                // Currents provenance: shown only while the rendered current
+                // field is live SalishSeaCast data (the tide curve's own
+                // provenance is the "· Live" suffix on the station caption
+                // above — the two can differ, e.g. no gauge near the station).
+                if vm.isLiveCurrents {
                     HStack(spacing: Spacing.xs) {
                         Circle()
                             .fill(Color.brandAccent)
                             .frame(width: 5, height: 5)
-                        Text("SalishSeaCast live")
+                        Text("SalishSeaCast live currents")
                             .font(.stCaption)
                             .foregroundStyle(Color.inkSecondary)
                     }
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("Showing live SalishSeaCast forecast data.")
+                    .accessibilityLabel("Current field is live SalishSeaCast forecast data.")
                 }
             }
             .padding(Spacing.md)
@@ -62,15 +65,16 @@ struct PhaseIndicatorView: View {
         }
     }
 
-    /// Whether either readout is currently backed by live model data.
-    private var isShowingLiveData: Bool {
-        vm.isLiveCurrents || vm.liveTideSeries?.covers(vm.displayDate) == true
+    /// Whether the drawn tide curve is live model data at the cursor.
+    private var isLiveTide: Bool {
+        vm.liveTideSeries?.covers(vm.displayDate) == true
     }
 
     private var tideChartLabel: String {
+        let predicted = TideCurve.height(at: vm.displayDate, events: vm.tideEvents)
         guard let station = vm.tideStation,
-              let h = vm.liveTideSeries?.height(at: vm.displayDate)
-                ?? TideCurve.height(at: vm.displayDate, events: vm.tideEvents) else {
+              let h = vm.liveTideSeries?.blendedHeight(at: vm.displayDate, fallback: predicted)
+                ?? predicted else {
             return "Tide chart. Data unavailable."
         }
         let datum = station.datum == "MLLW" ? "mean lower low water" : "chart datum"

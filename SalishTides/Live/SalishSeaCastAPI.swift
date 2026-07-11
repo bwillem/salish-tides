@@ -20,7 +20,9 @@ enum SalishSeaCastAPI {
     static var stridedCols: Int { (nativeCols + gridStride - 1) / gridStride }
     /// Approximate latitude spacing of the strided grid — the resolution floor
     /// for any raster built from it (see `VelocityField.minCellSizeDeg`).
-    static let stridedSpacingDeg = 0.010
+    /// Derived from the stride so a stride retune can't leave it stale
+    /// (native cell ≈ 500 m ≈ 0.005° latitude).
+    static var stridedSpacingDeg: Double { 0.005 * Double(gridStride) }
 
     /// Flattened strided-grid index for a native (gridY, gridX) pair.
     static func stridedIndex(gridY: Int, gridX: Int) -> Int {
@@ -131,8 +133,7 @@ enum SalishSeaCastAPI {
     /// model hasn't published yet silently returns a neighbouring slice.
     static func parseCurrentsSlice(_ data: Data) throws -> (center: Date, points: [WetPoint])? {
         let rows = try tableRows(data)
-        guard let first = rows.first,
-              let isoTime = first[0] as? String,
+        guard let isoTime = rows.first?.first as? String,
               let epoch = TideBundleEvent.epochUTC(from: isoTime)
         else { return nil }
 
@@ -142,6 +143,9 @@ enum SalishSeaCastAPI {
             guard row.count >= 5,
                   let y = (row[1] as? NSNumber)?.intValue,
                   let x = (row[2] as? NSNumber)?.intValue,
+                  // Server data is untrusted: an out-of-range index would trap
+                  // in the UInt32 conversion or poison the cached slice.
+                  (0..<nativeRows).contains(y), (0..<nativeCols).contains(x),
                   let e = (row[3] as? NSNumber)?.floatValue,
                   let n = (row[4] as? NSNumber)?.floatValue
             else { continue }   // null velocity → land
@@ -161,11 +165,11 @@ enum SalishSeaCastAPI {
             guard row.count >= 4,
                   let y = (row[0] as? NSNumber)?.intValue,
                   let x = (row[1] as? NSNumber)?.intValue,
+                  (0..<nativeRows).contains(y), (0..<nativeCols).contains(x),
                   let lo = (row[2] as? NSNumber)?.floatValue,
                   let la = (row[3] as? NSNumber)?.floatValue
             else { continue }
             let idx = stridedIndex(gridY: y, gridX: x)
-            guard idx < count else { continue }
             lon[idx] = lo
             lat[idx] = la
         }
