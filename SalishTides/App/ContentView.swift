@@ -6,7 +6,9 @@ struct ContentView: View {
     @Environment(NetworkMonitor.self) private var network
     @Environment(MapController.self) private var mapController
     @Environment(OfflineMapManager.self) private var offline
+    @Environment(LiveDataService.self) private var liveData
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.scenePhase) private var scenePhase
     @State private var showingSettings = false
 
     // When a downloadable network style is selected while *confirmed* online,
@@ -38,6 +40,22 @@ struct ContentView: View {
             }
         }
         .task { await vm.initialize() }
+        // Live SalishSeaCast fetching runs for the life of the view; its own
+        // kicks below cover the moments worth re-checking between its periodic
+        // staleness passes.
+        .task { await liveData.start() }
+        .onChange(of: scenePhase) {
+            if scenePhase == .active { liveData.kick() }
+        }
+        .onChange(of: settings.offlineOnly) {
+            // Flipping the switch swaps the rendered source immediately, both
+            // directions — not just on the next fetch.
+            liveData.kick()
+            Task { await vm.refresh() }
+        }
+        .onChange(of: liveData.dataGeneration) {
+            Task { await vm.refresh() }
+        }
     }
 
     private var mapView: some View {
@@ -91,7 +109,10 @@ struct ContentView: View {
         }
         .onAppear { cacheCurrentStyleIfOnline(); syncOfflineReady() }
         .onChange(of: settings.basemap) { cacheCurrentStyleIfOnline() }
-        .onChange(of: network.isOnline) { cacheCurrentStyleIfOnline() }
+        .onChange(of: network.isOnline) {
+            cacheCurrentStyleIfOnline()
+            if network.isOnline { liveData.kick() }
+        }
         .onChange(of: network.didConfirmOnline) { cacheCurrentStyleIfOnline() }
         .onChange(of: offline.states) { syncOfflineReady() }
     }

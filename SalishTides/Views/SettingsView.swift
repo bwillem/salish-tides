@@ -74,6 +74,15 @@ struct SettingsView: View {
                     Text("Standard works fully offline. Selecting Ocean while online downloads it for offline use across the region. Satellite streams online only.")
                 }
 
+                // ── Live Data ────────────────────────────────────────────
+                Section {
+                    Toggle("Offline only", isOn: $settings.offlineOnly)
+                } header: {
+                    Text("Live Data")
+                } footer: {
+                    Text("When online, real-time current and water-level forecasts from the SalishSeaCast model (UBC) are downloaded in the background and shown in place of the bundled atlas data for the next ~36 hours. Turn on Offline Only to use bundled data exclusively.")
+                }
+
                 // ── About ────────────────────────────────────────────────
                 Section("About") {
                     LabeledContent("Version", value: Self.appVersion)
@@ -158,8 +167,15 @@ private struct DataSourcesView: View {
     var body: some View {
         Form {
             Section {
-                Text("Salish Tides is a fully offline planning aid. It is **not** an official source for navigation. Always consult official charts and current tables.")
+                Text("Salish Tides is an offline-first planning aid. It is **not** an official source for navigation. Always consult official charts and current tables.")
                     .font(.callout)
+            }
+
+            Section("Live Forecasts") {
+                LabeledContent("Model", value: "SalishSeaCast · UBC")
+                Text("When online, real-time surface-current and water-level forecasts from the SalishSeaCast NEMO ocean model (UBC Earth, Ocean & Atmospheric Sciences) are shown in place of the sources below, out to roughly 36 hours ahead. Model water levels are aligned to each station's datum against its official predictions.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
 
             Section("Tidal Currents") {
