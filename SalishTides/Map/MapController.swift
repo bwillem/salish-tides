@@ -72,48 +72,85 @@ final class OfflineMapManager {
     /// which records a `.ready` style as offline-selectable.
     private(set) var states: [String: DownloadState] = [:]
 
-    /// A Sendable snapshot of a pack, extracted synchronously inside the observer
-    /// block (we're on the main queue) so only Sendable data crosses to the main
-    /// actor — never the non-Sendable `MLNOfflinePack` / `Notification`.
+    // The shared storage loads its pack list asynchronously, so we don't create
+    // packs until it has — otherwise we can't tell an existing pack from a new
+    // one and end up duplicating it. Requests that arrive first are stashed with
+    // their style URL and flushed once the list is known.
+    @ObservationIgnored private var packsLoaded = false
+    @ObservationIgnored private var pending: [String: URL] = [:]
+    @ObservationIgnored private var packsObserver: NSKeyValueObservation?
+
+    /// A Sendable snapshot of a pack, taken synchronously (on the main queue) so
+    /// only Sendable data crosses to the main actor — never the non-Sendable
+    /// `MLNOfflinePack` / `Notification`.
     private struct PackSnapshot: Sendable {
         let basemapRaw: String
         let stateRaw: Int
         let completed: UInt64
         let expected: UInt64
-        init?(_ note: Notification) {
-            guard let pack = note.object as? MLNOfflinePack,
-                  let raw = String(data: pack.context, encoding: .utf8) else { return nil }
+        init?(_ pack: MLNOfflinePack) {
+            guard let raw = String(data: pack.context, encoding: .utf8) else { return nil }
             basemapRaw = raw
             stateRaw = pack.state.rawValue
             completed = pack.progress.countOfResourcesCompleted
             expected = pack.progress.countOfResourcesExpected
         }
+        init?(_ note: Notification) {
+            guard let pack = note.object as? MLNOfflinePack else { return nil }
+            self.init(pack)
+        }
     }
 
     init() {
-        let nc = NotificationCenter.default
-        // MapLibre posts these on the main queue; we snapshot Sendable fields in
-        // the block and hop to the main actor with just that.
-        nc.addObserver(forName: .MLNOfflinePackProgressChanged, object: nil, queue: .main) { [weak self] note in
+        // Per-pack progress. MapLibre posts on the main queue, so snapshot the
+        // Sendable fields here and hop to the main actor with just that.
+        NotificationCenter.default.addObserver(
+            forName: .MLNOfflinePackProgressChanged, object: nil, queue: .main
+        ) { [weak self] note in
             guard let snap = PackSnapshot(note) else { return }
             MainActor.assumeIsolated { self?.apply(snap) }
         }
-        nc.addObserver(forName: .MLNOfflinePackError, object: nil, queue: .main) { [weak self] note in
-            guard let snap = PackSnapshot(note) else { return }
-            MainActor.assumeIsolated { self?.markFailed(snap.basemapRaw) }
+        // We deliberately don't observe MLNOfflinePackError: it fires for
+        // *recoverable* errors while the download keeps going, so it isn't a
+        // terminal-failure signal. A pack that truly fails becomes `.invalid`,
+        // which `apply` maps to `.failed`.
+
+        // The pack list loads asynchronously; reconcile whenever it changes (and
+        // once, on load, flush any deferred downloads).
+        packsObserver = MLNOfflineStorage.shared.observe(\.packs, options: [.initial, .new]) { [weak self] storage, _ in
+            let loaded = storage.packs != nil
+            Task { @MainActor in self?.reconcile(loaded: loaded) }
         }
-        restoreExistingPacks()
     }
 
     func state(for basemap: Basemap) -> DownloadState { states[basemap.rawValue] ?? .none }
 
     /// Start (or resume) an offline pack for a downloadable style. No-op if it's
-    /// already ready or in flight.
+    /// already ready or in flight. Deferred until the pack list has loaded so the
+    /// dedup below is reliable across launches.
     func download(_ basemap: Basemap, styleURL: URL) {
         guard basemap.supportsOfflineDownload else { return }
         switch state(for: basemap) {
         case .ready, .downloading: return
         case .none, .failed:       break
+        }
+        guard packsLoaded else {
+            pending[basemap.rawValue] = styleURL
+            states[basemap.rawValue] = .downloading(0)   // optimistic; reconciled on load
+            return
+        }
+        startOrAdoptPack(basemap, styleURL: styleURL)
+    }
+
+    /// Adopt an existing on-disk pack for this style rather than creating a
+    /// duplicate; otherwise add a fresh one. Only called once the pack list is
+    /// loaded (so `packs` is non-nil).
+    private func startOrAdoptPack(_ basemap: Basemap, styleURL: URL) {
+        if let existing = MLNOfflineStorage.shared.packs?
+            .first(where: { Self.basemap($0.context) == basemap }) {
+            existing.requestProgress()   // drives the UI state via the progress notification
+            existing.resume()            // continue a partial download; a complete pack is unaffected
+            return
         }
         states[basemap.rawValue] = .downloading(0)
         let region = MLNTilePyramidOfflineRegion(
@@ -129,12 +166,20 @@ final class OfflineMapManager {
         }
     }
 
-    /// Packs created in a previous session start in `.unknown`; ask each for its
-    /// progress so we can restore the UI state (and re-report any completed one).
-    private func restoreExistingPacks() {
-        for pack in MLNOfflineStorage.shared.packs ?? [] {
-            guard Self.basemap(pack.context) != nil else { continue }
-            pack.requestProgress()
+    /// React to the shared pack list loading/changing: refresh each known pack's
+    /// UI state, and once the list is available flush any downloads that were
+    /// deferred while it loaded.
+    private func reconcile(loaded: Bool) {
+        for pack in MLNOfflineStorage.shared.packs ?? [] where Self.basemap(pack.context) != nil {
+            pack.requestProgress()   // packs restored from disk start `.unknown`
+        }
+        guard loaded, !packsLoaded else { return }
+        packsLoaded = true
+        let deferred = pending
+        pending.removeAll()
+        for (raw, url) in deferred {
+            guard let basemap = Basemap(rawValue: raw), state(for: basemap) != .ready else { continue }
+            startOrAdoptPack(basemap, styleURL: url)
         }
     }
 
@@ -147,14 +192,13 @@ final class OfflineMapManager {
         case .active:
             let frac = snap.expected > 0 ? Double(snap.completed) / Double(snap.expected) : 0
             states[snap.basemapRaw] = .downloading(min(frac, 0.999))
-        default:
+        case .invalid:
+            states[snap.basemapRaw] = .failed
+        case .inactive, .unknown:
+            break
+        @unknown default:
             break
         }
-    }
-
-    private func markFailed(_ basemapRaw: String) {
-        guard Basemap(rawValue: basemapRaw) != nil else { return }
-        states[basemapRaw] = .failed
     }
 
     private static func context(_ basemap: Basemap) -> Data { Data(basemap.rawValue.utf8) }
