@@ -25,8 +25,10 @@ struct VelocityField: Sendable {
     /// Builds a field over `bounds`, binning the significant vectors into a grid
     /// whose longer screen axis has `maxCellsAcross` cells (cells are kept
     /// roughly square on screen by scaling longitude with cos(latitude)).
+    /// `minCellSizeDeg` is the source data's point spacing — see below.
     /// Returns nil for a degenerate (zero-span) bbox.
-    init?(id: UInt64, vectors: [CurrentVector], bounds: ChartBounds, maxCellsAcross: Int) {
+    init?(id: UInt64, vectors: [CurrentVector], bounds: ChartBounds, maxCellsAcross: Int,
+          minCellSizeDeg: Double = 0.006) {
         let latSpan = bounds.lat_max - bounds.lat_min
         let lonSpan = bounds.lon_max - bounds.lon_min
         guard latSpan > 0, lonSpan > 0 else { return nil }
@@ -44,11 +46,12 @@ struct VelocityField: Sendable {
             c = max(2, Int((Double(maxCellsAcross) * screenLon / latSpan).rounded()))
         }
 
-        // Don't make the grid finer than the source data (~0.006° spacing): a finer
-        // grid leaves empty cells between data points (clustering) and needs a fill
-        // that bleeds onto land. At the data resolution each cell holds ~one point,
-        // so bilinear sampling is continuous and the coast bleed is ~half a cell.
-        let cellSizeDeg = 0.006
+        // Don't make the grid finer than the source data's spacing (atlas ~0.006°,
+        // live model grid ~0.010°): a finer grid leaves empty cells between data
+        // points (clustering) and needs a fill that bleeds onto land. At the data
+        // resolution each cell holds ~one point, so bilinear sampling is continuous
+        // and the coast bleed is ~half a cell.
+        let cellSizeDeg = minCellSizeDeg
         c = min(c, max(2, Int((lonSpan / cellSizeDeg).rounded(.up))))
         r = min(r, max(2, Int((latSpan / cellSizeDeg).rounded(.up))))
 

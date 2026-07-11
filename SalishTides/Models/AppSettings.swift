@@ -177,6 +177,13 @@ final class AppSettings {
         didSet { defaults.set(basemap.rawValue, forKey: Keys.basemap) }
     }
 
+    /// Disables live SalishSeaCast data entirely — no fetching, and cached
+    /// live data is not rendered — so the app behaves exactly like the pure
+    /// offline build. Off by default: live data is a silent enhancement.
+    var offlineOnly: Bool {
+        didSet { defaults.set(offlineOnly, forKey: Keys.offlineOnly) }
+    }
+
     /// Raw values of network styles that have been viewed online and are thus
     /// cached for offline use. Lets the picker stay usable offline for styles
     /// the user already has, while gating ones they don't.
@@ -206,6 +213,7 @@ final class AppSettings {
         self.clockFormat = defaults.string(forKey: Keys.clockFormat).flatMap(ClockFormat.init) ?? .twentyFourHour
         self.currentStyle = defaults.string(forKey: Keys.currentStyle).flatMap(CurrentStyle.init) ?? .particles
         self.basemap    = defaults.string(forKey: Keys.basemap).flatMap(Basemap.init) ?? .standard
+        self.offlineOnly = defaults.object(forKey: Keys.offlineOnly) as? Bool ?? false
         self.offlineReadyStyles = Set(defaults.stringArray(forKey: Keys.offlineReadyStyles) ?? [])
         // Bool keys default to `true` (feature visible) when never set.
         self.showCrosshair = defaults.object(forKey: Keys.showCrosshair) as? Bool ?? true
@@ -291,6 +299,7 @@ final class AppSettings {
         static let clockFormat   = "settings.clockFormat"
         static let currentStyle  = "settings.currentStyle"
         static let basemap       = "settings.basemap"
+        static let offlineOnly   = "settings.offlineOnly"
         static let offlineReadyStyles = "settings.offlineReadyStyles"
     }
 }

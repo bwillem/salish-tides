@@ -30,9 +30,16 @@ final class MapViewModel {
     var tideStation: TideStation?
     var tideEvents: [TideEvent] = []
 
+    // Live SalishSeaCast data currently in use (nil / false → bundled data).
+    // The vectors themselves flow through the same currentVectors /
+    // velocityField properties; these only carry provenance for the UI.
+    var isLiveCurrents = false
+    var liveTideSeries: LiveTideSeries?
+
     // Convenience for views that only need one selection (e.g. phase indicator)
     var currentSelection: ChartSelection? { currentSelections.first }
 
+    private let liveData: LiveDataService?
     private let selectors: [(VolumeSpec, ChartSelector)]
     // Per-volume region index for viewport culling, keyed by volume id.
     private let atlasIndexes: [Int: AtlasIndex]
@@ -59,7 +66,8 @@ final class MapViewModel {
     // stays roughly constant as the user zooms instead of collapsing into mush.
     private let thinTargetAcross = 70.0
 
-    init() {
+    init(liveData: LiveDataService? = nil) {
+        self.liveData = liveData
         // Build one selector per unique lookup resource — Vol 1 and Vol 3 share a file,
         // so we load it once and reuse it for both volume IDs.
         var loaded: [String: AtlasLookupTable] = [:]
@@ -178,9 +186,22 @@ final class MapViewModel {
     // settled hour instead of churning/reseeding ~11×/s as the flow pattern shifts
     // (which reads as the particles teleporting). The field catches up on the
     // commit (setTime) and on viewport zoom/pan.
+    /// Reload for the current committed time — used when new live data arrives
+    /// or the offline-only setting flips, so the map reflects the new source.
+    func refresh() async {
+        await loadVectors(for: currentDate)
+    }
+
     private func loadVectors(for date: Date, refreshField: Bool = true) async {
         loadGeneration &+= 1
         let generation = loadGeneration
+
+        // Live SalishSeaCast field for this hour, when available. The service
+        // needs to know the on-screen hour either way, so its background
+        // prefetch can trigger a reload the moment visible data lands.
+        liveData?.displayedHourKey = LiveDataService.hourKey(for: date)
+        let liveVectors = await liveData?.currents(for: date)
+        guard generation == loadGeneration else { return }
 
         // Find all volumes whose geographic bounds intersect the current viewport.
         // If no viewport yet, include all volumes so any initial chart load works.
@@ -201,9 +222,13 @@ final class MapViewModel {
         var selections: [ChartSelection] = []
         var vectors: [CurrentVector] = []
 
+        // Chart selections are always computed — they drive the flood/ebb phase
+        // indicator regardless of which source renders the vectors. The atlas
+        // DB is only queried when there's no live field to show.
         for (spec, selector) in activeSelectors {
             guard let sel = selector.selection(for: date) else { continue }
             selections.append(sel)
+            guard liveVectors == nil else { continue }
 
             // Use the volume's index for viewport-based region culling when
             // available; fall back to all regions if the index failed to load.
@@ -225,7 +250,24 @@ final class MapViewModel {
             }
         }
 
+        if let liveVectors {
+            // The live field spans the whole model domain; cull to the viewport
+            // (with margin, so pans don't immediately hit empty edges) to keep
+            // the thinning/field/readout passes proportionate to the screen.
+            if let vp = visibleViewport {
+                let latMargin = (vp.lat_max - vp.lat_min) * 0.2
+                let lonMargin = (vp.lon_max - vp.lon_min) * 0.2
+                vectors = liveVectors.filter {
+                    $0.lat >= vp.lat_min - latMargin && $0.lat <= vp.lat_max + latMargin &&
+                    $0.lon >= vp.lon_min - lonMargin && $0.lon <= vp.lon_max + lonMargin
+                }
+            } else {
+                vectors = liveVectors
+            }
+        }
+
         guard generation == loadGeneration else { return }
+        isLiveCurrents = liveVectors != nil
         currentSelections = selections
         // Crosshair readout uses the full-resolution set; only the rendered
         // layer is down-sampled.
@@ -237,8 +279,10 @@ final class MapViewModel {
         // flow stays smooth and directionally rich (the arrows are down-sampled).
         // Skipped during live scrub (see `refreshField`).
         if refreshField {
+            let minCell = liveVectors != nil ? SalishSeaCastAPI.stridedSpacingDeg : 0.006
             velocityField = visibleViewport.flatMap {
-                VelocityField(id: UInt64(generation), vectors: vectors, bounds: $0, maxCellsAcross: 160)
+                VelocityField(id: UInt64(generation), vectors: vectors, bounds: $0,
+                              maxCellsAcross: 160, minCellSizeDeg: minCell)
             }
         }
 
@@ -251,14 +295,14 @@ final class MapViewModel {
     // vector path so a slow fetch can't overwrite a newer scrub/pan's result.
     private func updateTides(for date: Date, generation: Int) async {
         guard let vp = visibleViewport else {
-            tideStation = nil; tideEvents = []
+            tideStation = nil; tideEvents = []; liveTideSeries = nil
             return
         }
         let cLat = (vp.lat_min + vp.lat_max) / 2
         let cLon = (vp.lon_min + vp.lon_max) / 2
         guard let station = await TideDatabase.shared.nearestStation(lat: cLat, lon: cLon) else {
             guard generation == loadGeneration else { return }
-            tideStation = nil; tideEvents = []
+            tideStation = nil; tideEvents = []; liveTideSeries = nil
             return
         }
         // Wide enough to cover the live scrub: the chart centre (displayDate) can
@@ -266,10 +310,14 @@ final class MapViewModel {
         let from = date.addingTimeInterval(-30 * 3600)
         let to = date.addingTimeInterval(30 * 3600)
         let events = (try? await TideDatabase.shared.events(stationID: station.id, from: from, to: to)) ?? []
+        // Live model water levels refine the drawn curve where they cover it;
+        // the bundled hi/lo events still anchor everything outside coverage.
+        let live = await liveData?.liveTideSeries(for: station)
         // A newer load started while we were awaiting — drop these stale results.
         guard generation == loadGeneration else { return }
         tideStation = station
         tideEvents = events
+        liveTideSeries = live
     }
 
     private struct Cell: Hashable { let x: Int; let y: Int }

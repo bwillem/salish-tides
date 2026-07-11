@@ -13,7 +13,8 @@ struct PhaseIndicatorView: View {
                 // Chart + its station label, tightly grouped.
                 VStack(alignment: .leading, spacing: Spacing.xs) {
                     TideChartView(currentDate: vm.displayDate,
-                                  events: vm.tideEvents)
+                                  events: vm.tideEvents,
+                                  live: vm.liveTideSeries)
                         .frame(height: 108)
                         .accessibilityElement()
                         .accessibilityLabel(tideChartLabel)
@@ -39,6 +40,21 @@ struct PhaseIndicatorView: View {
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("\(phaseText(sel)) tide.")
+
+                // Live-data provenance: shown only while SalishSeaCast model
+                // data is actually on screen, so its absence means "bundled".
+                if isShowingLiveData {
+                    HStack(spacing: Spacing.xs) {
+                        Circle()
+                            .fill(Color.brandAccent)
+                            .frame(width: 5, height: 5)
+                        Text("SalishSeaCast live")
+                            .font(.stCaption)
+                            .foregroundStyle(Color.inkSecondary)
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Showing live SalishSeaCast forecast data.")
+                }
             }
             .padding(Spacing.md)
             .frame(width: 248)
@@ -46,9 +62,15 @@ struct PhaseIndicatorView: View {
         }
     }
 
+    /// Whether either readout is currently backed by live model data.
+    private var isShowingLiveData: Bool {
+        vm.isLiveCurrents || vm.liveTideSeries?.covers(vm.displayDate) == true
+    }
+
     private var tideChartLabel: String {
         guard let station = vm.tideStation,
-              let h = TideCurve.height(at: vm.displayDate, events: vm.tideEvents) else {
+              let h = vm.liveTideSeries?.height(at: vm.displayDate)
+                ?? TideCurve.height(at: vm.displayDate, events: vm.tideEvents) else {
             return "Tide chart. Data unavailable."
         }
         let datum = station.datum == "MLLW" ? "mean lower low water" : "chart datum"
