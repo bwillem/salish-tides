@@ -27,6 +27,7 @@
 		5FECA4D7D218CCCFA6B36A93 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DDA2FAF2D0189860F478A7C /* AppSettings.swift */; };
 		674193FB48B28EB47DDE9EF9 /* MapLibreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 705E9152F8BEA1FA75608D3F /* MapLibreView.swift */; };
 		79DB6E5EBB8738AF5B7CECFE /* MapController.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC0C2E94595CF5DDCD144C35 /* MapController.swift */; };
+		7E0271059E302369E9B87F7B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 2BB7C4074365FDAFA91601A1 /* PrivacyInfo.xcprivacy */; };
 		870299EA0FC423C3884FC681 /* VelocityField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CDD2B79EF57B05E5C19DD72 /* VelocityField.swift */; };
 		8892B94C18ABFFDE44949FD5 /* atlas_index_vol3.json in Resources */ = {isa = PBXBuildFile; fileRef = 1F71279AD0BA5885E48ABD65 /* atlas_index_vol3.json */; };
 		8A09E69E3A83AA62722D3822 /* ocean-dark.json in Resources */ = {isa = PBXBuildFile; fileRef = 29431B00732877DA2E615BF3 /* ocean-dark.json */; };
@@ -45,6 +46,7 @@
 		DEEA37D4F253B7A4E151C3EB /* AtlasLookupTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33F90FC333D8D0174AF1A089 /* AtlasLookupTable.swift */; };
 		E1217A140CE89A8A73B3C4A6 /* TimelineControlView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B460FF242F858B027A672B40 /* TimelineControlView.swift */; };
 		E6FE100509920528EC7D2D3D /* CurrentSpeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF9286BF11F407E9F9851157 /* CurrentSpeedView.swift */; };
+		F3E5D213CEF07F5E60967213 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E86394BD809E58805BD80D76 /* Assets.xcassets */; };
 		F743BEB1EA6645CE4C8D41E9 /* atlas_index.json in Resources */ = {isa = PBXBuildFile; fileRef = F4B415D45980FEC40DFF87CB /* atlas_index.json */; };
 		FB3737835F764AD3A85B61BE /* SalishTidesApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F8AC975A9DE6B660C38E780 /* SalishTidesApp.swift */; };
 /* End PBXBuildFile section */
@@ -56,6 +58,7 @@
 		28E631FED305377F6178516B /* TapeSliderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TapeSliderView.swift; sourceTree = "<group>"; };
 		29431B00732877DA2E615BF3 /* ocean-dark.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "ocean-dark.json"; sourceTree = "<group>"; };
 		2A78F6D08450A43684299A05 /* ocean-light.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "ocean-light.json"; sourceTree = "<group>"; };
+		2BB7C4074365FDAFA91601A1 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		2DB51EF67918D47D54D0733D /* atlas_lookup_vol4_2026.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = atlas_lookup_vol4_2026.json; sourceTree = "<group>"; };
 		33F90FC333D8D0174AF1A089 /* AtlasLookupTable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtlasLookupTable.swift; sourceTree = "<group>"; };
 		34E23098B238D68AE7C4E0CA /* AtlasVolume.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtlasVolume.swift; sourceTree = "<group>"; };
@@ -86,6 +89,7 @@
 		D191057D343E390CB41EAF3B /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
 		D25E37F6E08BDAD0D7CB5885 /* TideDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TideDatabase.swift; sourceTree = "<group>"; };
 		E02E5CB168CDB0660201216E /* TideChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TideChartView.swift; sourceTree = "<group>"; };
+		E86394BD809E58805BD80D76 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		EA075EE14D6DD086954E95E5 /* atlas_index_vol2.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = atlas_index_vol2.json; sourceTree = "<group>"; };
 		F4B415D45980FEC40DFF87CB /* atlas_index.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = atlas_index.json; sourceTree = "<group>"; };
 		FC4BE54595E9CB5FA8F715B3 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -154,7 +158,9 @@
 		567AE6C212DBB6EB37BD5C84 /* SalishTides */ = {
 			isa = PBXGroup;
 			children = (
+				E86394BD809E58805BD80D76 /* Assets.xcassets */,
 				4FA576D80059DF72E4354E26 /* Info.plist */,
+				2BB7C4074365FDAFA91601A1 /* PrivacyInfo.xcprivacy */,
 				3CC21B606D8F40553D4E2E75 /* App */,
 				55010ED328A3C0DF7CF2AFA3 /* Data */,
 				16C9E634679F3B0C6D0C972E /* Design */,
@@ -283,6 +289,10 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					B6FEA7A93754ADA91290175B = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
 				};
 			};
 			buildConfigurationList = 35C091A80D4474BB2BB1646A /* Build configuration list for PBXProject "SalishTides" */;
@@ -313,6 +323,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F3E5D213CEF07F5E60967213 /* Assets.xcassets in Resources */,
+				7E0271059E302369E9B87F7B /* PrivacyInfo.xcprivacy in Resources */,
 				F743BEB1EA6645CE4C8D41E9 /* atlas_index.json in Resources */,
 				41162347ABE1FEA0F4DD421B /* atlas_index_vol2.json in Resources */,
 				8892B94C18ABFFDE44949FD5 /* atlas_index_vol3.json in Resources */,
@@ -347,7 +359,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "# Guard: fail the build if bundled atlas data is missing/empty (it is\n# gitignored -- run dev/extraction/regenerate_all.sh to generate it).\nfor VOL in maps maps_vol2 maps_vol3 maps_vol4; do\n  SRC=\"${SRCROOT}/data/${VOL}\"\n  if [ ! -d \"$SRC\" ] || [ -z \"$(ls -A \"$SRC\" 2>/dev/null)\" ]; then\n    echo \"error: ${SRC} is missing or empty. Run dev/extraction/regenerate_all.sh to generate bundled atlas data.\" >&2\n    exit 1\n  fi\ndone\nfor VOL in maps maps_vol2 maps_vol3 maps_vol4; do\n  DEST=\"${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/${VOL}\"\n  mkdir -p \"$DEST\"\n  rsync -a --delete \"${SRCROOT}/data/${VOL}/\" \"$DEST/\"\ndone\n# Tide-prediction bundle (single JSON, lives under tides/)\nTIDE_DEST=\"${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/tides\"\nmkdir -p \"$TIDE_DEST\"\nrsync -a --delete \"${SRCROOT}/data/tides/\" \"$TIDE_DEST/\"\n# Offline basemap PMTiles (bundled under basemap/)\nBASEMAP_DEST=\"${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/basemap\"\nmkdir -p \"$BASEMAP_DEST\"\nrsync -a --delete \"${SRCROOT}/data/basemap/\" \"$BASEMAP_DEST/\"\n";
+			shellScript = "for VOL in maps maps_vol2 maps_vol3 maps_vol4; do\n  DEST=\"${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/${VOL}\"\n  mkdir -p \"$DEST\"\n  rsync -a --delete \"${SRCROOT}/data/${VOL}/\" \"$DEST/\"\ndone\n# Tide-prediction bundle (single JSON, lives under tides/)\nTIDE_DEST=\"${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/tides\"\nmkdir -p \"$TIDE_DEST\"\nrsync -a --delete \"${SRCROOT}/data/tides/\" \"$TIDE_DEST/\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 

@@ -13,4 +13,22 @@
 
 MAPTILER_KEY =
 
+// --- Versioning ---------------------------------------------------------------
+// CFBundleShortVersionString / CFBundleVersion reference these (see project.yml
+// info.properties). Bump CURRENT_PROJECT_VERSION for every TestFlight upload
+// (must be unique and increasing for a given MARKETING_VERSION).
+MARKETING_VERSION = 1.0
+CURRENT_PROJECT_VERSION = 1
+
+// --- Code signing -------------------------------------------------------------
+// Set DEVELOPMENT_TEAM to your 10-character Apple Developer Team ID for device
+// builds and archives (Xcode → Settings → Accounts → team → manage, or
+// developer.apple.com → Membership). Simulator builds don't require it.
+// Tip: to keep it out of git, instead put `DEVELOPMENT_TEAM = XXXXXXXXXX` in the
+// gitignored Config/Secrets.xcconfig, which is included below and overrides this.
+// These live in the xcconfig (not project.yml) so they survive `xcodegen
+// generate` and can be overridden per-machine without touching tracked files.
+DEVELOPMENT_TEAM =
+CODE_SIGN_STYLE = Automatic
+
 #include? "Secrets.xcconfig"
