@@ -372,7 +372,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "for VOL in maps maps_vol2 maps_vol3 maps_vol4; do\n  DEST=\"${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/${VOL}\"\n  mkdir -p \"$DEST\"\n  rsync -a --delete \"${SRCROOT}/data/${VOL}/\" \"$DEST/\"\ndone\n# Tide-prediction bundle (single JSON, lives under tides/)\nTIDE_DEST=\"${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/tides\"\nmkdir -p \"$TIDE_DEST\"\nrsync -a --delete \"${SRCROOT}/data/tides/\" \"$TIDE_DEST/\"\n";
+			shellScript = "# Guard: fail the build if bundled atlas data is missing/empty (it is\n# gitignored — run dev/extraction/regenerate_all.sh to generate it).\nfor VOL in maps maps_vol2 maps_vol3 maps_vol4; do\n  SRC=\"${SRCROOT}/data/${VOL}\"\n  if [ ! -d \"$SRC\" ] || [ -z \"$(ls -A \"$SRC\" 2>/dev/null)\" ]; then\n    echo \"error: ${SRC} is missing or empty. Run dev/extraction/regenerate_all.sh to generate bundled atlas data.\" >&2\n    exit 1\n  fi\ndone\nfor VOL in maps maps_vol2 maps_vol3 maps_vol4; do\n  DEST=\"${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/${VOL}\"\n  mkdir -p \"$DEST\"\n  rsync -a --delete \"${SRCROOT}/data/${VOL}/\" \"$DEST/\"\ndone\n# Tide-prediction bundle (single JSON, lives under tides/)\nTIDE_DEST=\"${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/tides\"\nmkdir -p \"$TIDE_DEST\"\nrsync -a --delete \"${SRCROOT}/data/tides/\" \"$TIDE_DEST/\"\n# Offline basemap PMTiles (bundled under basemap/)\nBASEMAP_DEST=\"${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/basemap\"\nmkdir -p \"$BASEMAP_DEST\"\nrsync -a --delete \"${SRCROOT}/data/basemap/\" \"$BASEMAP_DEST/\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
