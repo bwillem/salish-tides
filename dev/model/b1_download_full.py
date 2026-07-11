@@ -42,7 +42,9 @@ POLITE_SLEEP = 3          # seconds between requests, to not overload ERDDAP
 def fetch(url, path):
     for attempt in range(RETRIES):
         try:
-            data = urllib.request.urlopen(url, timeout=900).read()
+            # Short-ish timeout so a socket left dead by a sleep/wake cycle fails
+            # fast and gets retried, rather than hanging on a frozen connection.
+            data = urllib.request.urlopen(url, timeout=240).read()
             if len(data) < 500:
                 raise IOError(f"suspiciously small response ({len(data)} bytes)")
             with open(path, "wb") as f:
