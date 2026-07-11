@@ -5,14 +5,27 @@ struct ContentView: View {
     @Environment(AppSettings.self) private var settings
     @Environment(NetworkMonitor.self) private var network
     @Environment(MapController.self) private var mapController
+    @Environment(OfflineMapManager.self) private var offline
+    @Environment(\.colorScheme) private var colorScheme
     @State private var showingSettings = false
 
-    // When a network style is shown while *confirmed* online, its tiles enter
-    // the ambient cache — record it so it stays selectable offline. Gating on
-    // didConfirmOnline avoids marking from the optimistic launch default.
-    private func recordIfOnline() {
-        if network.isOnline, network.didConfirmOnline {
-            settings.markOfflineReady(settings.basemap)
+    // When a downloadable network style is selected while *confirmed* online,
+    // pre-download its offline pack so it works offline everywhere. Gating on
+    // didConfirmOnline avoids acting on the optimistic launch default.
+    private func cacheCurrentStyleIfOnline() {
+        guard network.isOnline, network.didConfirmOnline else { return }
+        let basemap = settings.basemap
+        guard basemap.supportsOfflineDownload,
+              let url = MapStyleLoader.styleURL(for: basemap, dark: colorScheme == .dark) else { return }
+        offline.download(basemap, styleURL: url)
+    }
+
+    // Record any style whose pack has finished as offline-selectable. Runs off
+    // the manager's published state, so a download that completes after the user
+    // has switched away is still captured.
+    private func syncOfflineReady() {
+        for (raw, state) in offline.states where state == .ready {
+            if let basemap = Basemap(rawValue: raw) { settings.markOfflineReady(basemap) }
         }
     }
 
@@ -76,10 +89,11 @@ struct ContentView: View {
         .sheet(isPresented: $showingSettings) {
             SettingsView()
         }
-        .onAppear { recordIfOnline() }
-        .onChange(of: settings.basemap) { recordIfOnline() }
-        .onChange(of: network.isOnline) { recordIfOnline() }
-        .onChange(of: network.didConfirmOnline) { recordIfOnline() }
+        .onAppear { cacheCurrentStyleIfOnline(); syncOfflineReady() }
+        .onChange(of: settings.basemap) { cacheCurrentStyleIfOnline() }
+        .onChange(of: network.isOnline) { cacheCurrentStyleIfOnline() }
+        .onChange(of: network.didConfirmOnline) { cacheCurrentStyleIfOnline() }
+        .onChange(of: offline.states) { syncOfflineReady() }
     }
 }
 

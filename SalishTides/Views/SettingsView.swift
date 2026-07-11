@@ -7,6 +7,7 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(AppSettings.self) private var settings
     @Environment(NetworkMonitor.self) private var network
+    @Environment(OfflineMapManager.self) private var offline
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -70,7 +71,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Map Style")
                 } footer: {
-                    Text("Standard works fully offline. Ocean and Satellite stream from MapTiler when online and are cached for offline use over waters you've viewed.")
+                    Text("Standard works fully offline. Selecting Ocean while online downloads it for offline use across the region. Satellite streams online only.")
                 }
 
                 // ── About ────────────────────────────────────────────────
@@ -97,10 +98,11 @@ struct SettingsView: View {
         Button {
             settings.basemap = style
         } label: {
-            HStack {
+            HStack(spacing: Spacing.sm) {
                 Text(style.label)
                     .foregroundStyle(selectable ? .primary : .secondary)
                 Spacer()
+                offlineStatus(style)
                 if settings.basemap == style {
                     Image(systemName: "checkmark")
                         .foregroundStyle(.tint)
@@ -113,6 +115,33 @@ struct SettingsView: View {
             .contentShape(.rect)
         }
         .disabled(!selectable)
+    }
+
+    /// Offline-download indicator for a downloadable style: progress while a pack
+    /// downloads, a "saved" badge once it's available offline, a warning on
+    /// failure. Nothing for styles that aren't pre-downloaded.
+    @ViewBuilder
+    private func offlineStatus(_ style: Basemap) -> some View {
+        switch offline.state(for: style) {
+        case .downloading(let fraction):
+            HStack(spacing: Spacing.xs) {
+                ProgressView().controlSize(.small)
+                Text("\(Int(fraction * 100))%")
+                    .font(.caption).monospacedDigit().foregroundStyle(.secondary)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Downloading \(Int(fraction * 100)) percent")
+        case .ready:
+            Image(systemName: "arrow.down.circle.fill")
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Saved offline")
+        case .failed:
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+                .accessibilityLabel("Download failed")
+        case .none:
+            EmptyView()
+        }
     }
 
     private static var appVersion: String {
