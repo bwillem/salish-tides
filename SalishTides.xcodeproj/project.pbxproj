@@ -28,7 +28,6 @@
 		674193FB48B28EB47DDE9EF9 /* MapLibreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 705E9152F8BEA1FA75608D3F /* MapLibreView.swift */; };
 		79DB6E5EBB8738AF5B7CECFE /* MapController.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC0C2E94595CF5DDCD144C35 /* MapController.swift */; };
 		7E0271059E302369E9B87F7B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 2BB7C4074365FDAFA91601A1 /* PrivacyInfo.xcprivacy */; };
-		870299EA0FC423C3884FC681 /* VelocityField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CDD2B79EF57B05E5C19DD72 /* VelocityField.swift */; };
 		8892B94C18ABFFDE44949FD5 /* atlas_index_vol3.json in Resources */ = {isa = PBXBuildFile; fileRef = 1F71279AD0BA5885E48ABD65 /* atlas_index_vol3.json */; };
 		8A09E69E3A83AA62722D3822 /* ocean-dark.json in Resources */ = {isa = PBXBuildFile; fileRef = 29431B00732877DA2E615BF3 /* ocean-dark.json */; };
 		9CEBBFBDEB99CD300FC775BF /* TideDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = D25E37F6E08BDAD0D7CB5885 /* TideDatabase.swift */; };
@@ -61,7 +60,6 @@
 		2DB51EF67918D47D54D0733D /* atlas_lookup_vol4_2026.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = atlas_lookup_vol4_2026.json; sourceTree = "<group>"; };
 		33F90FC333D8D0174AF1A089 /* AtlasLookupTable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtlasLookupTable.swift; sourceTree = "<group>"; };
 		34E23098B238D68AE7C4E0CA /* AtlasVolume.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtlasVolume.swift; sourceTree = "<group>"; };
-		3CDD2B79EF57B05E5C19DD72 /* VelocityField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VelocityField.swift; sourceTree = "<group>"; };
 		3DDA2FAF2D0189860F478A7C /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		4FA576D80059DF72E4354E26 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		529E7D505F4A804C9AC32942 /* standard-dark.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "standard-dark.json"; sourceTree = "<group>"; };
@@ -189,7 +187,6 @@
 				B534466B629735C3AFD88226 /* CurrentVector.swift */,
 				D191057D343E390CB41EAF3B /* NetworkMonitor.swift */,
 				6EE458C039CC8A1CCE1AD9D9 /* TideStation.swift */,
-				3CDD2B79EF57B05E5C19DD72 /* VelocityField.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -389,7 +386,6 @@
 				CD10BDF599A8B4DC91FC583E /* TideStation.swift in Sources */,
 				E1217A140CE89A8A73B3C4A6 /* TimelineControlView.swift in Sources */,
 				2C6DCF8F97E181783A106DBC /* VectorDatabase.swift in Sources */,
-				870299EA0FC423C3884FC681 /* VelocityField.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
