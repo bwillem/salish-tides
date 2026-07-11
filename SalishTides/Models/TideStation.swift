@@ -38,19 +38,6 @@ enum TideCurve {
         }
         return nil
     }
-
-    static func samples(events: [TideEvent], from: Date, to: Date,
-                        stepMinutes: Int) -> [(date: Date, height: Double)] {
-        guard !events.isEmpty else { return [] }
-        let step = TimeInterval(stepMinutes * 60)
-        var out: [(Date, Double)] = []
-        var t = from
-        while t <= to {
-            if let h = height(at: t, events: events) { out.append((t, h)) }
-            t = t.addingTimeInterval(step)
-        }
-        return out
-    }
 }
 
 // MARK: - Bundle decoding (data/tides/tides_2026.json)

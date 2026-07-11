@@ -52,6 +52,18 @@ enum Basemap: String, CaseIterable, Identifiable {
     /// Online-only until cached. A style with a `bundledArchive` always works offline.
     var requiresNetwork: Bool { bundledArchive == nil }
 
+    /// Whether selecting this style while online should pre-download an offline
+    /// pack (so it works offline everywhere, not just where the ambient cache
+    /// happened to capture). Vector network styles only — raster imagery
+    /// (satellite) is far too large to pack (~1 GB+ for the region); standard is
+    /// already bundled, so it needs no pack.
+    var supportsOfflineDownload: Bool {
+        switch self {
+        case .ocean:                true   // MapTiler vector — compact enough to pack
+        case .standard, .satellite: false  // bundled already / raster imagery, too large
+        }
+    }
+
     /// Bundled style-JSON resource for the given appearance.
     /// Satellite is imagery — one style for both appearances.
     func styleResource(dark: Bool) -> String {
