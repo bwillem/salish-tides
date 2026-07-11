@@ -5,121 +5,108 @@ import simd
 import QuartzCore
 import CoreLocation
 
-// Custom Metal style layer that renders tidal current as animated, flowing
-// particles (see the particle plan / DESIGN.md).
+// Custom Metal style layer that animates tidal current as flowing particles.
 //
-// Pipeline per frame (driven by a 30 fps CADisplayLink → setNeedsDisplay):
-//   1. A compute pass advects N particles by sampling the velocity texture,
-//      reseeding any that age out, stall (land / slack), or leave the field.
-//   2. Each particle is drawn as a short "comet streak" — a line from a tail to a
-//      head offset along the local flow, length proportional to speed, fading
-//      tail→head — straight into MapLibre's render encoder, projected with the
-//      live map matrix so the streaks stay glued to the basemap.
+// Velocity comes from **inverse-distance weighting of the actual data points**
+// (no rasterized grid). Each particle interpolates the current from the nearby
+// vectors directly, so the flow is smooth everywhere (no grid blockiness) and
+// "coverage" is defined by proximity to real data (smooth falloff, so particles
+// stay on the water the data describes instead of bleeding across a coarse cell
+// onto land). This is what makes it hold up at extreme zoom — e.g. Active Pass,
+// where the ~0.7 km data grid is coarser than the channel and any texture-based
+// field fails.
 //
-// Streaks (rather than an accumulating offscreen trail buffer) keep everything in
-// the map's own render pass: no offscreen textures, no cross-queue events, and no
-// screen-space "swim" during pan/zoom. Longer comet tails could later be added via
-// a ground-locked accumulation texture if desired.
+// Pipeline (30 fps CADisplayLink → setNeedsDisplay):
+//   1. Compute pass: per particle, IDW the data points → velocity + coverage;
+//      advect; reseed (uniformly within the data bbox) when aged out or off
+//      coverage. The computed velocity + coverage are stored back in the particle.
+//   2. Render: each particle drawn as a short streak from its stored velocity,
+//      projected with the live map matrix (glued through pan/zoom). Alpha fades
+//      with coverage (smooth edge) and the particle's life.
 //
-// Race-free: particle buffers ping-pong. The compute pass (on our own command
-// queue) reads `current` and writes `next`; the render pass reads `current` — the
-// buffer produced by *last* frame's compute, long since complete. A 2-deep
-// semaphore bounds frames in flight. Positions are thus one frame stale (invisible
-// at 30 fps) but drawn with the current camera, so there's no pan/zoom swim.
-//
-// MLNCustomStyleLayer's callbacks run on the main thread, so the Metal state is
-// single-threaded in practice; @unchecked Sendable lets that hold under Swift 6
-// strict concurrency. The framework module is built with MLN_RENDER_BACKEND_METAL,
-// so backendResource()/device/renderEncoder are visible without a #if guard.
+// Race-free: particle buffers ping-pong; the render reads last frame's compute
+// output; a 2-deep semaphore bounds frames in flight. MLNCustomStyleLayer's
+// callbacks are main-thread, so the Metal state is single-threaded; @unchecked
+// Sendable holds that under Swift 6.
 final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
 
-    // GPU layout mirrors the Metal `Particle` struct (16 bytes).
+    // Matches the Metal `Particle` struct (24 bytes).
     private struct GPUParticle {
-        var pos: SIMD2<Float>   // global Web-Mercator world coords, [0,1]×[0,1]
-        var age: Float          // seconds lived
-        var pad: Float = 0
+        var pos: SIMD2<Float>    // world Mercator [0,1]
+        var vel: SIMD2<Float>    // interpolated east/north m/s (for the renderer)
+        var age: Float
+        var cov: Float           // interpolated coverage weight (for the alpha edge)
+    }
+
+    // Matches the Metal `Point` struct (16 bytes) — one per data vector.
+    private struct GPUPoint {
+        var pos: SIMD2<Float>    // world Mercator [0,1]
+        var vel: SIMD2<Float>    // east/north m/s
     }
 
     private struct AdvectUniforms {
         var speedK: Float        // screen points moved per (m/s) per frame
-        var worldSize: Float     // 512·2^zoom (points across the whole world)
-        var lonMin: Float
-        var latMax: Float
-        var lonSpan: Float
-        var latSpan: Float
+        var worldSize: Float     // 512·2^zoom
+        var vMinX: Float         // current viewport world bounds (reseed domain)
+        var vMinY: Float
+        var vMaxX: Float
+        var vMaxY: Float
         var lifetime: Float
-        var minMag: Float        // reseed cutoff (near-zero = land)
+        var radius: Float        // IDW falloff radius (world units)
+        var covThreshold: Float  // below this weight a particle is off-coverage
         var frame: UInt32
-        var count: UInt32
+        var count: UInt32        // particle count
+        var pointCount: UInt32
     }
 
-    // Render uniforms (15 floats; matrix passed separately). Order must match the
-    // Metal `RenderUniforms` struct exactly.
     private struct RenderUniforms {
-        var lonMin: Float
-        var latMax: Float
-        var lonSpan: Float
-        var latSpan: Float
         var worldSize: Float
-        var streakLenScale: Float // streak length: points per (m/s)
-        var maxStreakPx: Float    // cap on streak length (points)
-        var maxSpeed: Float       // m/s mapped to the top of the colour ramp
-        var minMag: Float         // below this sampled speed, the streak isn't drawn
-        var lifetime: Float       // seconds, for the birth/death alpha fade
-        var dark: Float           // 1 = night palette, 0 = day
-        var viewportW: Float      // drawable size in points
+        var streakLenScale: Float
+        var maxStreakPx: Float
+        var maxSpeed: Float
+        var covThreshold: Float
+        var lifetime: Float
+        var dark: Float
+        var viewportW: Float
         var viewportH: Float
-        var lineWidth: Float      // streak thickness in points
-        var pad: Float = 0
+        var lineWidth: Float
+        var pad0: Float = 0
+        var pad1: Float = 0
     }
 
     // Tunables.
-    private let particleCount = 6000
-    private let lifetime: Float = 4.0          // seconds before a forced reseed
-    // Motion + streaks are sized in SCREEN points (not geographic span) so they're
-    // independent of zoom — zooming in no longer speeds particles up.
-    private let speedPx: Float = 0.35          // screen points moved per (m/s) per frame
-    private let streakLenScale: Float = 13.0   // streak length: points per (m/s)
-    private let maxStreakPx: Float = 30.0      // cap on streak length (points)
-    // Cutoff (m/s) for both drawing and reseeding: below this a streak isn't drawn
-    // AND the particle recycles to a fresh spot. The atlas has no slack vectors
-    // (real water is ≥ ~0.59 m/s), so the only sub-threshold values are the linear-
-    // filter bleed between water and zero (land) cells — cutting there keeps streaks
-    // off the coastline and recycles particles before they creep onto land. Because
-    // water is always well above this, a time change never reseeds water particles
-    // (they redirect into the new flow), so a scrub commit doesn't repaint.
-    private let minMag: Float = 0.30
-    // Streak thickness (points). Day is thicker so it reads on the pale basemap.
+    private let particleCount = 2250
+    private let lifetime: Float = 4.0
+    private let speedPx: Float = 0.35          // screen points per (m/s) per frame
+    private let streakLenScale: Float = 7.0    // streak length: points per (m/s)
+    private let maxStreakPx: Float = 14.0
+    private let maxSpeed: Float = 2.5
     private let lineWidthDay: Float = 2.0
     private let lineWidthNight: Float = 1.4
-    private let maxSpeed: Float = 2.5          // m/s mapped to the top of the ramp
+    private let radiusFactor: Float = 1.4      // IDW radius as a multiple of point spacing
+    private let covThreshold: Float = 0.45     // total IDW weight needed to be "on water"
 
     private var device: MTLDevice?
     private var queue: MTLCommandQueue?
     private var advectPipeline: MTLComputePipelineState?
     private var renderPipeline: MTLRenderPipelineState?
     private var depthState: MTLDepthStencilState?
-    private var samplerState: MTLSamplerState?
 
     private var particleBuffers: [MTLBuffer] = []
     private var current = 0
     private var frame: UInt32 = 0
     private let inFlight = DispatchSemaphore(value: 2)
 
-    private var velocityTexture: MTLTexture?
-    private var fieldBounds: ChartBounds?
-    private var pendingField: VelocityField?
+    // Data points (interpolation source) + the IDW radius (≈ point spacing).
+    private var pointBuffer: MTLBuffer?
+    private var pointCount = 0
+    private var idwRadius: Float = 0.001
+    private var pendingVectors: [CurrentVector]?
 
-    // Night vs day palette, driven by the map's colour scheme.
     private var isDark = true
-
-    // Animation runs only while the particle style is selected (`styleActive`)
-    // and the app is foregrounded (`foreground`). Either being false stops the
-    // display link to save power and skips drawing.
     private var styleActive = true
     private var foreground = true
     private var animating: Bool { styleActive && foreground }
-
     private var displayLink: CADisplayLink?
 
     // MARK: - Lifecycle
@@ -130,15 +117,9 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
             guard let device = resource.device else { return }
             self.device = device
             self.queue = device.makeCommandQueue()
-
             buildPipelines(device: device, colorPixelFormat: resource.mtkView.colorPixelFormat)
             buildParticleBuffers(device: device)
-
-            if let field = pendingField {
-                applyField(field)
-                pendingField = nil
-            }
-
+            if let v = pendingVectors { applyVectors(v); pendingVectors = nil }
             syncDisplayLink()
         }
     }
@@ -148,21 +129,14 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
         advectPipeline = nil
         renderPipeline = nil
         depthState = nil
-        samplerState = nil
-        velocityTexture = nil
-        fieldBounds = nil
         particleBuffers = []
+        pointBuffer = nil
         queue = nil
         device = nil
     }
 
-    fileprivate func step() {
-        setNeedsDisplay()
-    }
-
-    private func syncDisplayLink() {
-        animating ? startDisplayLink() : stopDisplayLink()
-    }
+    fileprivate func step() { setNeedsDisplay() }
+    private func syncDisplayLink() { animating ? startDisplayLink() : stopDisplayLink() }
 
     private func startDisplayLink() {
         guard displayLink == nil, device != nil else { return }
@@ -181,55 +155,70 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
 
     func setDark(_ dark: Bool) { isDark = dark }
 
-    /// Whether the particle style is the selected current display. When false the
-    /// layer stops animating and draws nothing (the arrow layers take over).
     func setActive(_ active: Bool) {
         guard active != styleActive else { return }
         styleActive = active
         syncDisplayLink()
     }
 
-    /// Pauses the animation when the app leaves the foreground.
     func setForeground(_ foreground: Bool) {
         guard foreground != self.foreground else { return }
         self.foreground = foreground
         syncDisplayLink()
     }
 
-    /// Pushes a new velocity field, recreating the texture when the grid size
-    /// changes. Stashes the field if the device isn't ready yet.
-    func update(field: VelocityField?) {
-        guard let field else {
-            velocityTexture = nil
-            fieldBounds = nil
-            return
-        }
-        guard device != nil else {
-            pendingField = field
-            return
-        }
-        applyField(field)
+    /// Pushes the data vectors used as the IDW interpolation source. Cheap and
+    /// infrequent (hourly / viewport / scrub). A fresh buffer per update avoids a
+    /// CPU-write/GPU-read race; the old buffer lives until in-flight frames finish.
+    func update(vectors: [CurrentVector]) {
+        guard device != nil else { pendingVectors = vectors; return }
+        applyVectors(vectors)
     }
 
-    private func applyField(_ field: VelocityField) {
+    private func applyVectors(_ vectors: [CurrentVector]) {
         guard let device else { return }
-        // Always allocate a fresh texture rather than overwriting in place: an
-        // in-place CPU write would race the GPU compute pass still reading the
-        // texture (a one-frame garbage read = the whole field "repainting" on a
-        // scrub commit). The old texture stays retained by any in-flight frame and
-        // is released once that frame completes.
-        let desc = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: .rg32Float, width: field.cols, height: field.rows, mipmapped: false)
-        desc.usage = .shaderRead
-        desc.storageMode = .shared
-        guard let tex = device.makeTexture(descriptor: desc) else { return }
-        tex.replace(
-            region: MTLRegionMake2D(0, 0, field.cols, field.rows),
-            mipmapLevel: 0,
-            withBytes: field.uv,
-            bytesPerRow: field.cols * 2 * MemoryLayout<Float>.size)
-        velocityTexture = tex
-        fieldBounds = field.bounds
+        var pts = [GPUPoint]()
+        pts.reserveCapacity(vectors.count)
+        for v in vectors where v.isSignificant {
+            let w = Self.lonLatToWorld(lon: v.lon, lat: v.lat)
+            let theta = Float(v.direction_deg) * .pi / 180
+            let speed = Float(v.speed_ms)
+            pts.append(GPUPoint(pos: SIMD2(Float(w.x), Float(w.y)),
+                                vel: SIMD2(speed * sin(theta), speed * cos(theta))))
+        }
+        pointCount = pts.count
+        guard pointCount > 0 else {
+            pointBuffer = device.makeBuffer(length: MemoryLayout<GPUPoint>.stride, options: .storageModeShared)
+            return
+        }
+        idwRadius = max(Self.medianNearestNeighbor(pts) * radiusFactor, 1e-6)
+        pointBuffer = device.makeBuffer(bytes: pts, length: pts.count * MemoryLayout<GPUPoint>.stride,
+                                        options: .storageModeShared)
+    }
+
+    /// Median nearest-neighbour distance (world units) over a sample of the points
+    /// — a robust estimate of the data spacing regardless of how the points are
+    /// laid out (grid, channel line, sparse), used to size the IDW radius.
+    private static func medianNearestNeighbor(_ pts: [GPUPoint]) -> Float {
+        let n = pts.count
+        guard n > 1 else { return 0.001 }
+        let stride = max(1, n / 128)
+        var nn = [Float]()
+        var i = 0
+        while i < n {
+            let a = pts[i].pos
+            var best = Float.greatestFiniteMagnitude
+            for j in 0..<n where j != i {
+                let d = pts[j].pos - a
+                let dd = d.x * d.x + d.y * d.y
+                if dd < best { best = dd }
+            }
+            if best < .greatestFiniteMagnitude { nn.append(best.squareRoot()) }
+            i += stride
+        }
+        guard !nn.isEmpty else { return 0.001 }
+        nn.sort()
+        return nn[nn.count / 2]
     }
 
     // MARK: - Draw
@@ -241,41 +230,42 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
               let advectPipeline,
               let renderPipeline,
               let depthState,
-              let samplerState,
-              let texture = velocityTexture,
-              let bounds = fieldBounds,
+              let pointBuffer,
+              pointCount > 0,
               particleBuffers.count == 2 else { return }
 
         frame &+= 1
         let next = 1 - current
-
-        let lonSpan = Float(bounds.lon_max - bounds.lon_min)
-        let latSpan = Float(bounds.lat_max - bounds.lat_min)
         let vpW = Float(context.size.width)
         let vpH = Float(context.size.height)
         let worldSize = Float(512.0 * pow(2.0, context.zoomLevel))
 
-        // 1. Advection on our own command buffer: current → next. Acquire the
-        //    in-flight slot without blocking — draw() runs inside MapLibre's render
-        //    callback on the main thread, so if the GPU is genuinely backed up
-        //    (≥2 compute buffers still running) we skip advection for this frame and
-        //    re-render the existing buffer rather than stall the UI. Particles pause
-        //    for that frame; the swap below is gated on the same flag.
+        // 1. Advection (own command buffer); non-blocking acquire so we never stall
+        //    the main thread inside MapLibre's render callback.
+        // Reseed within the current viewport (with a small margin) so all the
+        // particles concentrate on the visible water at any zoom — the data set
+        // spans the whole atlas region, far larger than the view at high zoom.
+        let b = mapView.visibleCoordinateBounds
+        let sw = Self.lonLatToWorld(lon: b.sw.longitude, lat: b.sw.latitude)
+        let ne = Self.lonLatToWorld(lon: b.ne.longitude, lat: b.ne.latitude)
+        let mX = (Float(ne.x) - Float(sw.x)) * 0.08
+        let mY = (Float(sw.y) - Float(ne.y)) * 0.08   // note: world Y grows southward
+        let vMinX = Float(sw.x) - mX, vMaxX = Float(ne.x) + mX
+        let vMinY = Float(ne.y) - mY, vMaxY = Float(sw.y) + mY
+
         let didAdvect = inFlight.wait(timeout: .now()) == .success
         if didAdvect {
             var advect = AdvectUniforms(
                 speedK: speedPx, worldSize: worldSize,
-                lonMin: Float(bounds.lon_min), latMax: Float(bounds.lat_max),
-                lonSpan: lonSpan, latSpan: latSpan,
-                lifetime: lifetime, minMag: minMag,
-                frame: frame, count: UInt32(particleCount))
+                vMinX: vMinX, vMinY: vMinY, vMaxX: vMaxX, vMaxY: vMaxY,
+                lifetime: lifetime, radius: idwRadius, covThreshold: covThreshold,
+                frame: frame, count: UInt32(particleCount), pointCount: UInt32(pointCount))
             if let cb = queue.makeCommandBuffer(), let ce = cb.makeComputeCommandEncoder() {
                 ce.setComputePipelineState(advectPipeline)
                 ce.setBuffer(particleBuffers[current], offset: 0, index: 0)
                 ce.setBuffer(particleBuffers[next], offset: 0, index: 1)
                 ce.setBytes(&advect, length: MemoryLayout<AdvectUniforms>.stride, index: 2)
-                ce.setTexture(texture, index: 0)
-                ce.setSamplerState(samplerState, index: 0)
+                ce.setBuffer(pointBuffer, offset: 0, index: 3)
                 let tg = min(advectPipeline.maxTotalThreadsPerThreadgroup, 64)
                 ce.dispatchThreads(MTLSize(width: particleCount, height: 1, depth: 1),
                                    threadsPerThreadgroup: MTLSize(width: tg, height: 1, depth: 1))
@@ -287,17 +277,12 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
             }
         }
 
-        // 2. Render last frame's positions (buffer `current`, fully computed) as
-        //    comet streaks into the map's pass with the live matrix → glued.
+        // 2. Render last frame's particles as streaks with the live matrix.
         var matrix = Self.matrix(from: context.projectionMatrix)
         var render = RenderUniforms(
-            lonMin: Float(bounds.lon_min), latMax: Float(bounds.lat_max),
-            lonSpan: lonSpan, latSpan: latSpan,
-            worldSize: worldSize,
-            streakLenScale: streakLenScale, maxStreakPx: maxStreakPx,
-            maxSpeed: maxSpeed, minMag: minMag, lifetime: lifetime,
-            dark: isDark ? 1 : 0,
-            viewportW: vpW, viewportH: vpH,
+            worldSize: worldSize, streakLenScale: streakLenScale, maxStreakPx: maxStreakPx,
+            maxSpeed: maxSpeed, covThreshold: covThreshold, lifetime: lifetime,
+            dark: isDark ? 1 : 0, viewportW: vpW, viewportH: vpH,
             lineWidth: isDark ? lineWidthNight : lineWidthDay)
 
         renderEncoder.setRenderPipelineState(renderPipeline)
@@ -306,31 +291,22 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
         renderEncoder.setVertexBuffer(particleBuffers[current], offset: 0, index: 0)
         renderEncoder.setVertexBytes(&matrix, length: MemoryLayout<simd_float4x4>.stride, index: 1)
         renderEncoder.setVertexBytes(&render, length: MemoryLayout<RenderUniforms>.stride, index: 2)
-        renderEncoder.setVertexTexture(texture, index: 0)
-        renderEncoder.setVertexSamplerState(samplerState, index: 0)
-        // Six vertices per particle → one screen-space-expanded quad (thick streak).
         renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: particleCount * 6)
 
-        // Only promote the freshly written buffer if we actually advected; a
-        // skipped frame keeps rendering `current` until the GPU catches up.
         if didAdvect { current = next }
     }
 
     // MARK: - Setup
 
     private func buildParticleBuffers(device: MTLDevice) {
-        // Seed across the Salish Sea in world coords with staggered ages. Anything
-        // off the actual field reseeds into it on the first frame; the staggered
-        // ages keep births desynchronised so they don't all fade together.
         var seed = [GPUParticle]()
         seed.reserveCapacity(particleCount)
         for _ in 0..<particleCount {
             let lon = Double.random(in: -125.5 ... -122.0)
             let lat = Double.random(in: 47.0 ... 50.0)
             let w = Self.lonLatToWorld(lon: lon, lat: lat)
-            seed.append(GPUParticle(
-                pos: SIMD2(Float(w.x), Float(w.y)),
-                age: Float.random(in: 0...lifetime)))
+            seed.append(GPUParticle(pos: SIMD2(Float(w.x), Float(w.y)), vel: .zero,
+                                    age: Float.random(in: 0...lifetime), cov: 0))
         }
         let len = particleCount * MemoryLayout<GPUParticle>.stride
         guard let a = device.makeBuffer(bytes: seed, length: len, options: .storageModeShared),
@@ -340,28 +316,22 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
     }
 
     private func buildPipelines(device: MTLDevice, colorPixelFormat: MTLPixelFormat) {
-        let library: MTLLibrary
-        do {
-            library = try device.makeLibrary(source: Self.shaderSource, options: nil)
-        } catch {
-            print("CurrentParticleLayer shader compile error:\n\(error)")
+        guard let library = try? device.makeLibrary(source: Self.shaderSource, options: nil) else {
             assertionFailure("CurrentParticleLayer: failed to compile shaders")
             return
         }
-
         if let advect = library.makeFunction(name: "advect") {
             advectPipeline = try? device.makeComputePipelineState(function: advect)
         }
-
         let desc = MTLRenderPipelineDescriptor()
-        desc.label = "CurrentParticle.streaks"
+        desc.label = "CurrentParticle.idw"
         desc.vertexFunction = library.makeFunction(name: "streakVertex")
         desc.fragmentFunction = library.makeFunction(name: "streakFragment")
         desc.colorAttachments[0].pixelFormat = colorPixelFormat
         desc.colorAttachments[0].isBlendingEnabled = true
         desc.colorAttachments[0].rgbBlendOperation = .add
         desc.colorAttachments[0].alphaBlendOperation = .add
-        desc.colorAttachments[0].sourceRGBBlendFactor = .one              // premultiplied
+        desc.colorAttachments[0].sourceRGBBlendFactor = .one
         desc.colorAttachments[0].sourceAlphaBlendFactor = .one
         desc.colorAttachments[0].destinationRGBBlendFactor = .oneMinusSourceAlpha
         desc.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
@@ -373,17 +343,8 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
         depthDesc.depthCompareFunction = .always
         depthDesc.isDepthWriteEnabled = false
         depthState = device.makeDepthStencilState(descriptor: depthDesc)
-
-        let samp = MTLSamplerDescriptor()
-        samp.minFilter = .linear
-        samp.magFilter = .linear
-        samp.sAddressMode = .clampToEdge
-        samp.tAddressMode = .clampToEdge
-        samplerState = device.makeSamplerState(descriptor: samp)
     }
 
-    // lon/lat → global Web-Mercator world coords [0,1] (mirrors the shader's
-    // lonLatToWorld). Used to seed particle positions in stable world space.
     private static func lonLatToWorld(lon: Double, lat: Double) -> (x: Double, y: Double) {
         let mx = (lon + 180.0) / 360.0
         let yi = log(tan((45.0 + lat / 2.0) * .pi / 180.0))
@@ -406,19 +367,19 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
     #include <metal_stdlib>
     using namespace metal;
 
-    struct Particle { float2 pos; float age; float pad; };
+    struct Particle { float2 pos; float2 vel; float age; float cov; };
+    struct Point    { float2 pos; float2 vel; };
 
     struct AdvectUniforms {
-        float speedK; float worldSize; float lonMin; float latMax;
-        float lonSpan; float latSpan; float lifetime; float minMag;
-        uint frame; uint count;
+        float speedK; float worldSize; float vMinX; float vMinY;
+        float vMaxX; float vMaxY; float lifetime; float radius;
+        float covThreshold; uint frame; uint count; uint pointCount;
     };
 
     struct RenderUniforms {
-        float lonMin; float latMax; float lonSpan; float latSpan;
         float worldSize; float streakLenScale; float maxStreakPx; float maxSpeed;
-        float minMag; float lifetime; float dark; float viewportW;
-        float viewportH; float lineWidth; float pad;
+        float covThreshold; float lifetime; float dark; float viewportW;
+        float viewportH; float lineWidth; float pad0; float pad1;
     };
 
     static inline float hash(uint x) {
@@ -427,59 +388,53 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
         return float(x & 0x00FFFFFFu) / float(0x01000000);
     }
 
-    // lon/lat → global Web-Mercator world coords in [0,1] (stable, viewport-
-    // independent — this is what particle positions are stored in, so they stay
-    // glued to the ground through pan/zoom).
-    static inline float2 lonLatToWorld(float lon, float lat) {
-        float mx = (lon + 180.0) / 360.0;
-        float yi = log(tan((45.0 + lat / 2.0) * M_PI_F / 180.0));
-        float my = (180.0 - yi * (180.0 / M_PI_F)) / 360.0;
-        return float2(mx, my);
+    // Inverse-distance interpolation of the data points at world position `pos`.
+    // Compact-support weight (zero beyond `radius`) → smooth field, and the total
+    // weight is the "coverage" (high near data, zero where there's none).
+    static inline float3 sampleIDW(float2 pos, device const Point *pts, uint n, float radius) {
+        float r2 = radius * radius;
+        float2 vsum = float2(0.0);
+        float wsum = 0.0;
+        for (uint i = 0u; i < n; i++) {
+            float2 d = pos - pts[i].pos;
+            float t = 1.0 - dot(d, d) / r2;
+            if (t > 0.0) { float w = t * t; vsum += pts[i].vel * w; wsum += w; }
+        }
+        float2 vel = wsum > 1e-6 ? vsum / wsum : float2(0.0);
+        return float3(vel, wsum);   // xy = velocity, z = coverage
     }
 
-    // World coords → field-normalized [0,1] for the current field bbox, so the
-    // velocity texture can be sampled at a particle's world position.
-    static inline float2 worldToField(float2 w, float lonMin, float latMax,
-                                      float lonSpan, float latSpan) {
-        float lon = w.x * 360.0 - 180.0;
-        float yi = M_PI_F * (1.0 - 2.0 * w.y);
-        float lat = atan(exp(yi)) * (360.0 / M_PI_F) - 90.0;
-        return float2((lon - lonMin) / lonSpan, (latMax - lat) / latSpan);
-    }
-
-    kernel void advect(device const Particle *inP   [[buffer(0)]],
-                       device Particle       *outP  [[buffer(1)]],
-                       constant AdvectUniforms &u    [[buffer(2)]],
-                       texture2d<float> field        [[texture(0)]],
-                       sampler s                     [[sampler(0)]],
+    kernel void advect(device const Particle *inP [[buffer(0)]],
+                       device Particle       *outP [[buffer(1)]],
+                       constant AdvectUniforms &u   [[buffer(2)]],
+                       device const Point *pts      [[buffer(3)]],
                        uint id [[thread_position_in_grid]]) {
         if (id >= u.count) return;
         Particle p = inP[id];
 
-        float2 f = worldToField(p.pos, u.lonMin, u.latMax, u.lonSpan, u.latSpan);
-        bool inField = f.x >= 0.0 && f.x < 1.0 && f.y >= 0.0 && f.y < 1.0;
-        float2 vel = inField ? field.sample(s, f).xy : float2(0.0);
-        float mag = length(vel);
+        float3 s = sampleIDW(p.pos, pts, u.pointCount, u.radius);
+        float2 vel = s.xy;
+        float cov = s.z;
 
-        // Reseed on age-out, leaving the field area, or landing on true zero
-        // (land / no-coverage — u.minMag is the low reseed cutoff, ~0.05). Real
-        // water is always ≥0.59 m/s, so a time change never drops a water particle
-        // below this; they redirect into the new flow instead of teleporting.
-        bool reseed = (p.age >= u.lifetime) || (mag < u.minMag) || !inField;
-
+        bool reseed = (p.age >= u.lifetime) || (cov < u.covThreshold);
         if (reseed) {
-            // Random point within the current field bbox → world coords.
+            // Uniform within the current viewport → all particles concentrate on
+            // the visible water at any zoom. Spawns that miss the data coverage
+            // (land / no-data) recycle again next frame, so the steady state is an
+            // even fill of exactly the covered water in view.
             uint h = id * 747796405u + u.frame * 2891336453u;
-            float lon = u.lonMin + hash(h) * u.lonSpan;
-            float lat = u.latMax - hash(h ^ 0x9e3779b9u) * u.latSpan;
-            p.pos = lonLatToWorld(lon, lat);
-            // Reborn at age 0 so it fades in from zero opacity — no pop, no jump.
-            p.age = 0.0;
+            p.pos = float2(u.vMinX + hash(h) * (u.vMaxX - u.vMinX),
+                           u.vMinY + hash(h ^ 0x9e3779b9u) * (u.vMaxY - u.vMinY));
+            // Random birth phase so lifetimes never march in lockstep — otherwise
+            // a mass reseed (first frame at high zoom, or a big pan/zoom jump) sets
+            // every particle to age 0 at once and the whole field pulses together.
+            p.age = hash(h ^ 0x68bc21ebu) * u.lifetime;
+            p.vel = float2(0.0); p.cov = 0.0;
         } else {
-            // Screen-space velocity (zoom-independent): worldSize cancels the zoom
-            // because 1 world unit ≈ worldSize screen points. East → +x, north → −y.
+            // Screen-space velocity (zoom-independent). East → +x, north → −y.
             p.pos += float2(vel.x, -vel.y) * (u.speedK / u.worldSize);
             p.age += (1.0 / 30.0);
+            p.vel = vel; p.cov = cov;
         }
         outP[id] = p;
     }
@@ -489,59 +444,41 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
         float4 color;
     };
 
-    // Projects a world-Mercator position [0,1] to clip space via tile coords.
-    static inline float4 projectWorld(float2 w, float worldSize,
-                                      constant float4x4 &matrix) {
-        return matrix * float4(w * worldSize, 1.0, 1.0);
-    }
-
     vertex VertexOut streakVertex(uint vid [[vertex_id]],
                                   device const Particle *particles [[buffer(0)]],
                                   constant float4x4 &matrix        [[buffer(1)]],
-                                  constant RenderUniforms &u        [[buffer(2)]],
-                                  texture2d<float> field            [[texture(0)]],
-                                  sampler s                         [[sampler(0)]]) {
-        // Six vertices per particle form a quad (two triangles): tail/head ends,
-        // each offset ± a perpendicular in screen space to give the streak width.
+                                  constant RenderUniforms &u        [[buffer(2)]]) {
         uint pi = vid / 6u;
         uint corner = vid % 6u;
         bool isHead = (corner == 2u || corner == 4u || corner == 5u);
         float side  = (corner == 1u || corner == 2u || corner == 4u) ? 1.0 : -1.0;
         Particle p = particles[pi];
 
-        float2 f = worldToField(p.pos, u.lonMin, u.latMax, u.lonSpan, u.latSpan);
-        bool inField = f.x >= 0.0 && f.x < 1.0 && f.y >= 0.0 && f.y < 1.0;
-        float2 vel = inField ? field.sample(s, f).xy : float2(0.0);
+        float2 vel = p.vel;
         float mag = length(vel);
 
-        // Tail trails behind the head along the flow. Length is in screen points
-        // (zoom-independent) and capped so strong currents don't draw long beams.
+        // Streak: head at the particle, tail trailing along the flow (screen pts).
         float2 vp = float2(u.viewportW, u.viewportH);
-        float2 dpx = float2(vel.x, -vel.y) * u.streakLenScale;   // points
+        float2 dpx = float2(vel.x, -vel.y) * u.streakLenScale;
         float dlen = length(dpx);
         if (dlen > u.maxStreakPx) { dpx *= (u.maxStreakPx / dlen); }
-        float2 dWorld = dpx / u.worldSize;                       // points → world
+        float2 dWorld = dpx / u.worldSize;
 
-        float4 clipHead = projectWorld(p.pos, u.worldSize, matrix);
-        float4 clipTail = projectWorld(p.pos - dWorld, u.worldSize, matrix);
+        float4 clipHead = matrix * float4(p.pos * u.worldSize, 1.0, 1.0);
+        float4 clipTail = matrix * float4((p.pos - dWorld) * u.worldSize, 1.0, 1.0);
         float4 clip = isHead ? clipHead : clipTail;
 
-        // Perpendicular to the streak in screen (point) space, expanded by half
-        // the line width. Uniform scale cancels, so points are fine here.
         float2 pHead = (clipHead.xy / clipHead.w * 0.5 + 0.5) * vp;
         float2 pTail = (clipTail.xy / clipTail.w * 0.5 + 0.5) * vp;
         float2 dir = pHead - pTail;
         float dirLen = length(dir);
         float2 ndir = dirLen > 1e-4 ? dir / dirLen : float2(1.0, 0.0);
         float2 perp = float2(-ndir.y, ndir.x);
-        float2 offPts = perp * side * (u.lineWidth * 0.5);
-        clip.xy += (offPts / vp * 2.0) * clip.w;
+        clip.xy += (perp * side * (u.lineWidth * 0.5) / vp * 2.0) * clip.w;
 
         VertexOut out;
         out.position = clip;
 
-        // Colour by speed; night = cool white-blue, day = deep saturated blue so
-        // it reads on the light basemap. Fade tail→head and in/out over life.
         float t = clamp(mag / u.maxSpeed, 0.0, 1.0);
         float3 slow, fast;
         if (u.dark > 0.5) { slow = float3(0.30, 0.62, 0.95); fast = float3(0.85, 0.97, 1.00); }
@@ -550,11 +487,11 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
 
         float lifeFade = smoothstep(0.0, 0.4, p.age / u.lifetime) *
                          (1.0 - smoothstep(0.7, 1.0, p.age / u.lifetime));
-        float endFade = isHead ? 1.0 : 0.20;     // comet: bright head, faint tail
-        float a = (u.dark > 0.5 ? 0.85 : 0.95) * lifeFade * endFade;
-        // Don't draw where the sampled speed is below the water threshold (coastal
-        // linear-filter bleed / land) or the particle is outside the field area.
-        if (mag < u.minMag || !inField) { a = 0.0; }
+        float endFade  = isHead ? 1.0 : 0.20;
+        // Smooth coverage edge (fade out as the particle approaches the data boundary).
+        float covFade  = smoothstep(u.covThreshold, u.covThreshold * 2.0, p.cov);
+        float a = (u.dark > 0.5 ? 0.85 : 0.95) * lifeFade * endFade * covFade;
+
         out.color = float4(c, a);
         return out;
     }

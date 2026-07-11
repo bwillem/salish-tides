@@ -52,10 +52,9 @@ struct MapLibreView: UIViewRepresentable {
             context.coordinator.prepareForStyleReload(vm.currentVectors)
             mapView.styleURL = desiredStyleURL(for: colorScheme)
         }
+        // Pushes the vectors to both the arrow source and the particle layer.
+        // Read vm.currentVectors here so Observation re-runs updateUIView on change.
         context.coordinator.updateVectors(vm.currentVectors, on: mapView)
-        // Push the latest velocity field to the particle layer. Read here so
-        // Observation re-invokes updateUIView whenever the field changes.
-        context.coordinator.updateField(vm.velocityField)
         context.coordinator.setParticleDark(colorScheme == .dark)
         // Particles vs arrows, honouring the Reduce-Motion / Low-Power fallback,
         // plus pause-on-background. Read here so Observation re-runs updateUIView
@@ -139,25 +138,20 @@ struct MapLibreView: UIViewRepresentable {
             onBearingChange(mapView.direction)
         }
 
+        // Latest vectors, retained so they can be re-pushed (as the particle
+        // interpolation source) to a freshly created layer after a style reload.
+        nonisolated(unsafe) private var lastVectors: [CurrentVector] = []
+
         func updateVectors(_ vectors: [CurrentVector], on mapView: MLNMapView) {
+            // The same (thinned) vectors drive the arrows and feed the particle
+            // layer's IDW interpolation.
+            lastVectors = vectors
+            particleLayer?.update(vectors: vectors)
             guard let style = mapView.style else {
                 pendingVectors = vectors
                 return
             }
             applyVectors(vectors, style: style)
-        }
-
-        // Latest velocity field, retained so it can be re-pushed to a freshly
-        // created particle layer after a Day/Night style reload.
-        nonisolated(unsafe) private var lastField: VelocityField?
-
-        func updateField(_ field: VelocityField?) {
-            // Skip when unchanged: updateUIView fires ~11×/s during a scrub (the
-            // arrows' vectors change), and re-uploading the same velocity texture
-            // would race the GPU compute pass reading it, jolting the particles.
-            guard field?.id != lastField?.id else { return }
-            lastField = field
-            particleLayer?.update(field: field)
         }
 
         // Retained so a freshly created layer (after a style reload) can be
@@ -231,7 +225,7 @@ struct MapLibreView: UIViewRepresentable {
             self.particleLayer = particleLayer
             // Re-seed the freshly created layer with the field + style/scheme from
             // before the reload, so particles don't blank out on a Day/Night flip.
-            particleLayer.update(field: lastField)
+            particleLayer.update(vectors: lastVectors)
             particleLayer.setDark(lastDark)
             particleLayer.setActive(lastStyleMode != .arrows)
         }

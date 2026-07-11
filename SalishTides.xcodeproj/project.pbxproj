@@ -29,7 +29,7 @@
 		5FECA4D7D218CCCFA6B36A93 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DDA2FAF2D0189860F478A7C /* AppSettings.swift */; };
 		674193FB48B28EB47DDE9EF9 /* MapLibreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 705E9152F8BEA1FA75608D3F /* MapLibreView.swift */; };
 		79DB6E5EBB8738AF5B7CECFE /* MapController.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC0C2E94595CF5DDCD144C35 /* MapController.swift */; };
-		870299EA0FC423C3884FC681 /* VelocityField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CDD2B79EF57B05E5C19DD72 /* VelocityField.swift */; };
+		7E0271059E302369E9B87F7B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 2BB7C4074365FDAFA91601A1 /* PrivacyInfo.xcprivacy */; };
 		8892B94C18ABFFDE44949FD5 /* atlas_index_vol3.json in Resources */ = {isa = PBXBuildFile; fileRef = 1F71279AD0BA5885E48ABD65 /* atlas_index_vol3.json */; };
 		8A09E69E3A83AA62722D3822 /* ocean-dark.json in Resources */ = {isa = PBXBuildFile; fileRef = 29431B00732877DA2E615BF3 /* ocean-dark.json */; };
 		9B86D4529C65AFD7B8D03B88 /* LiveDataService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B98F7598EF156FEBB14254C0 /* LiveDataService.swift */; };
@@ -60,10 +60,10 @@
 		28E631FED305377F6178516B /* TapeSliderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TapeSliderView.swift; sourceTree = "<group>"; };
 		29431B00732877DA2E615BF3 /* ocean-dark.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "ocean-dark.json"; sourceTree = "<group>"; };
 		2A78F6D08450A43684299A05 /* ocean-light.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "ocean-light.json"; sourceTree = "<group>"; };
+		2BB7C4074365FDAFA91601A1 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		2DB51EF67918D47D54D0733D /* atlas_lookup_vol4_2026.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = atlas_lookup_vol4_2026.json; sourceTree = "<group>"; };
 		33F90FC333D8D0174AF1A089 /* AtlasLookupTable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtlasLookupTable.swift; sourceTree = "<group>"; };
 		34E23098B238D68AE7C4E0CA /* AtlasVolume.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtlasVolume.swift; sourceTree = "<group>"; };
-		3CDD2B79EF57B05E5C19DD72 /* VelocityField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VelocityField.swift; sourceTree = "<group>"; };
 		3DDA2FAF2D0189860F478A7C /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		4FA576D80059DF72E4354E26 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		529E7D505F4A804C9AC32942 /* standard-dark.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "standard-dark.json"; sourceTree = "<group>"; };
@@ -163,6 +163,7 @@
 			isa = PBXGroup;
 			children = (
 				4FA576D80059DF72E4354E26 /* Info.plist */,
+				2BB7C4074365FDAFA91601A1 /* PrivacyInfo.xcprivacy */,
 				3CC21B606D8F40553D4E2E75 /* App */,
 				55010ED328A3C0DF7CF2AFA3 /* Data */,
 				16C9E634679F3B0C6D0C972E /* Design */,
@@ -206,7 +207,6 @@
 				B534466B629735C3AFD88226 /* CurrentVector.swift */,
 				D191057D343E390CB41EAF3B /* NetworkMonitor.swift */,
 				6EE458C039CC8A1CCE1AD9D9 /* TideStation.swift */,
-				3CDD2B79EF57B05E5C19DD72 /* VelocityField.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -303,6 +303,10 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					B6FEA7A93754ADA91290175B = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
 				};
 			};
 			buildConfigurationList = 35C091A80D4474BB2BB1646A /* Build configuration list for PBXProject "SalishTides" */;
@@ -333,6 +337,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7E0271059E302369E9B87F7B /* PrivacyInfo.xcprivacy in Resources */,
 				F743BEB1EA6645CE4C8D41E9 /* atlas_index.json in Resources */,
 				41162347ABE1FEA0F4DD421B /* atlas_index_vol2.json in Resources */,
 				8892B94C18ABFFDE44949FD5 /* atlas_index_vol3.json in Resources */,
@@ -405,7 +410,6 @@
 				CD10BDF599A8B4DC91FC583E /* TideStation.swift in Sources */,
 				E1217A140CE89A8A73B3C4A6 /* TimelineControlView.swift in Sources */,
 				2C6DCF8F97E181783A106DBC /* VectorDatabase.swift in Sources */,
-				870299EA0FC423C3884FC681 /* VelocityField.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

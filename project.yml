@@ -46,6 +46,8 @@ targets:
       path: SalishTides/Info.plist
       properties:
         CFBundleDisplayName: "Salish Tides"
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         UILaunchStoryboardName: ""
         UIRequiresFullScreen: true
         UISupportedInterfaceOrientations~ipad:
