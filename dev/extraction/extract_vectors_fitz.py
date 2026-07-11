@@ -215,17 +215,25 @@ def find_scale(page, arrows, insets):
         return None
     scales.sort(key=lambda s: s['y'])
     main = scales[0]
+    # The legend reference arrow is a HORIZONTAL (~90/270deg), full-length arrow
+    # beside the label. Match it specifically -- not merely the nearest arrow:
+    # current-data arrows are often drawn closer to the label and are short and
+    # diagonal, so "nearest" gives a wildly wrong scale (Vol1 region E maps 3+
+    # picked a ~7px data arrow -> 5-6x too fast, up to 14kn). The legend arrow is
+    # 90-91deg / 38-40px across all four volumes, so a tight +/-15deg band keeps
+    # a long, near-horizontal data arrow from ever out-matching it.
     best, bd = None, 1e9
     for a in arrows:
         d = math.hypot(a['cx']-main['x'], a['cy']-main['y'])
-        if d < bd and d < 100:
+        horizontal = min(abs(a['direction_deg']-90), abs(a['direction_deg']-270)) < 15
+        if d < 110 and horizontal and a['length_px'] > 20 and d < bd:
             bd, best = d, a
-    if best and best['length_px'] > 5:
+    if best:
         return main['v'] / best['length_px']
-    return main['v'] / 39.0
+    return main['v'] / 39.0   # legend arrow is a fixed ~39px graphic
 
 
-def process(doc, page_idx, bounds, fb_geo, fb_scale):
+def process(doc, page_idx, bounds, fb_geo, fb_scale, max_speed):
     page = doc[page_idx]
     geo = build_georef(page) or fb_geo
     if geo is None:
@@ -243,7 +251,10 @@ def process(doc, page_idx, bounds, fb_geo, fb_scale):
         lon = lonf[0]*a['cx'] + lonf[1]
         lat = latf[0]*a['cy'] + latf[1]
         spd = a['length_px']*scale
-        if lat < la0 or lat > la1 or lon < lo0 or lon > lo1 or spd > 8.0:
+        # max_speed is a sanity clip against extraction errors, set per volume:
+        # it must clear the real maxima (Seymour/Nakwakto ~16kn=8.2m/s in the
+        # northern vols) while still rejecting gross (4-6x) scale blowups.
+        if lat < la0 or lat > la1 or lon < lo0 or lon > lo1 or spd > max_speed:
             continue
         out.append({'lat': round(lat, 5), 'lon': round(lon, 5),
                     'speed_ms': round(spd, 3), 'direction_deg': round(a['direction_deg'], 1)})
@@ -267,10 +278,18 @@ def process(doc, page_idx, bounds, fb_geo, fb_scale):
     return out, geo, scale
 
 
+# Per-volume speed sanity clip (m/s). Southern vols (1/2, Gulf Islands / Puget
+# Sound) top out near ~4 m/s, so a tight 8.0 catches errors; the northern vols
+# (3/4) contain Seymour Narrows / Nakwakto Rapids (~16kn = ~8.2 m/s), so allow
+# 9.0 m/s (~17.5kn) to clear the real maxima while still rejecting 4-6x blowups.
+MAX_SPEED_MS = {1: 8.0, 2: 8.0, 3: 9.0, 4: 9.0}
+
+
 def main():
     vol = int(sys.argv[1])
     outdir = sys.argv[2]
     cfg = VOLUMES[vol]
+    max_speed = MAX_SPEED_MS.get(vol, 8.0)
     os.makedirs(outdir, exist_ok=True)
     doc = fitz.open(os.path.join(PDF_DIR, cfg['pdf']))
     regions = cfg['regions']
@@ -283,7 +302,7 @@ def main():
         for i in range(maps):
             idx = start + i
             chart = i + 1
-            vecs, fb_geo, fb_scale = process(doc, idx, cfg['bounds'], fb_geo, fb_scale)
+            vecs, fb_geo, fb_scale = process(doc, idx, cfg['bounds'], fb_geo, fb_scale, max_speed)
             if vecs is None:
                 vecs = []
             with open(os.path.join(outdir, f"map_{chart}_{region}.json"), 'w') as f:
