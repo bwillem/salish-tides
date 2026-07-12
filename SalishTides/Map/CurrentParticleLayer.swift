@@ -115,6 +115,7 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
     private var idwRadius: Float = 0.001
     private var pendingVectors: [CurrentVector]?
     private var pendingMask: [CurrentVector] = []
+    private var pendingLandRings: [[SIMD2<Float>]] = []
 
     private var isDark = true
     private var styleActive = true
@@ -133,9 +134,10 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
             buildPipelines(device: device, colorPixelFormat: resource.mtkView.colorPixelFormat)
             buildParticleBuffers(device: device)
             if let v = pendingVectors {
-                applyVectors(v, mask: pendingMask)
+                applyVectors(v, mask: pendingMask, landRings: pendingLandRings)
                 pendingVectors = nil
                 pendingMask = []
+                pendingLandRings = []
             }
             syncDisplayLink()
         }
@@ -184,21 +186,27 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
         syncDisplayLink()
     }
 
-    /// Pushes the data vectors used as the IDW interpolation source, plus the
-    /// live model's dry-land cells (`mask`, empty for atlas data), which carry
-    /// zero wetness so particles die at the model coastline. Cheap and
-    /// infrequent (hourly / viewport / scrub). A fresh buffer per update avoids a
-    /// CPU-write/GPU-read race; the old buffer lives until in-flight frames finish.
-    func update(vectors: [CurrentVector], mask: [CurrentVector]) {
+    /// Pushes the data vectors used as the IDW interpolation source, plus two
+    /// descriptions of land that both become zero-wetness/zero-velocity points:
+    /// `mask` — the live model's dry cells (empty for atlas data); `landRings` —
+    /// the basemap's own rendered land polygons (world Mercator rings), so the
+    /// flow reconciles with the *drawn* coastline: velocity falls to zero and
+    /// particles die at the beach the user sees, not the model's displaced one.
+    /// Cheap and infrequent (hourly / viewport / scrub). A fresh buffer per
+    /// update avoids a CPU-write/GPU-read race; the old buffer lives until
+    /// in-flight frames finish.
+    func update(vectors: [CurrentVector], mask: [CurrentVector], landRings: [[SIMD2<Float>]]) {
         guard device != nil else {
             pendingVectors = vectors
             pendingMask = mask
+            pendingLandRings = landRings
             return
         }
-        applyVectors(vectors, mask: mask)
+        applyVectors(vectors, mask: mask, landRings: landRings)
     }
 
-    private func applyVectors(_ vectors: [CurrentVector], mask: [CurrentVector]) {
+    private func applyVectors(_ vectors: [CurrentVector], mask: [CurrentVector],
+                              landRings: [[SIMD2<Float>]]) {
         guard let device else { return }
         var pts = [GPUPoint]()
         pts.reserveCapacity(vectors.count + mask.count)
@@ -215,17 +223,87 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
             pointBuffer = device.makeBuffer(length: MemoryLayout<GPUPoint>.stride, options: .storageModeShared)
             return
         }
-        // Radius from the *data* spacing only: mask cells share the data grid,
-        // and an atlas update (empty mask) must produce the same radius as
-        // before the mask existed.
+        // Radius from the *data* spacing only: mask points are laid out at the
+        // same spacing (below), and an atlas update with no land in view must
+        // produce the same radius as before any mask existed.
         idwRadius = max(Self.medianNearestNeighbor(pts) * radiusFactor, 1e-6)
         for m in mask {
             let w = Self.lonLatToWorld(lon: m.lon, lat: m.lat)
             pts.append(GPUPoint(pos: SIMD2(Float(w.x), Float(w.y)), vel: .zero, wet: 0))
         }
+        pts.append(contentsOf: Self.landMaskPoints(
+            rings: landRings, around: pts, spacing: idwRadius / radiusFactor))
         pointCount = pts.count
         pointBuffer = device.makeBuffer(bytes: pts, length: pts.count * MemoryLayout<GPUPoint>.stride,
                                         options: .storageModeShared)
+    }
+
+    /// Zero-wetness points sampled on a regular grid over the basemap's land
+    /// polygons, at the same spacing as the data so the wet/dry weight shares
+    /// are balanced and the wetness-0.5 contour tracks the drawn coastline.
+    /// The grid covers the data's bounding box (particles can't survive beyond
+    /// it anyway) and is capped as a runaway guard. Even-odd point-in-polygon,
+    /// so interior rings (holes) need no special casing.
+    private static func landMaskPoints(rings: [[SIMD2<Float>]], around pts: [GPUPoint],
+                                       spacing: Float) -> [GPUPoint] {
+        guard !rings.isEmpty, !pts.isEmpty, spacing > 0 else { return [] }
+        var minX = Float.greatestFiniteMagnitude, minY = Float.greatestFiniteMagnitude
+        var maxX = -Float.greatestFiniteMagnitude, maxY = -Float.greatestFiniteMagnitude
+        for p in pts {
+            minX = min(minX, p.pos.x); maxX = max(maxX, p.pos.x)
+            minY = min(minY, p.pos.y); maxY = max(maxY, p.pos.y)
+        }
+        let margin = spacing * 1.5
+        minX -= margin; minY -= margin; maxX += margin; maxY += margin
+
+        // Per-ring bounding boxes: coastline rings are spatially local, so the
+        // box check prunes almost every ring per grid point — without it the
+        // grid × total-vertices product janks the main thread at wide zooms.
+        let boxes: [(lo: SIMD2<Float>, hi: SIMD2<Float>)] = rings.map { ring in
+            var lo = SIMD2<Float>(.greatestFiniteMagnitude, .greatestFiniteMagnitude)
+            var hi = -lo
+            for v in ring { lo = simd_min(lo, v); hi = simd_max(hi, v) }
+            return (lo, hi)
+        }
+
+        let maxPoints = 20_000
+        var out: [GPUPoint] = []
+        var y = minY
+        while y <= maxY {
+            var x = minX
+            while x <= maxX {
+                if Self.insideLand(SIMD2(x, y), rings: rings, boxes: boxes) {
+                    out.append(GPUPoint(pos: SIMD2(x, y), vel: .zero, wet: 0))
+                    if out.count >= maxPoints { return out }
+                }
+                x += spacing
+            }
+            y += spacing
+        }
+        return out
+    }
+
+    /// Even-odd crossing test over all rings (bbox-pruned).
+    private static func insideLand(_ p: SIMD2<Float>, rings: [[SIMD2<Float>]],
+                                   boxes: [(lo: SIMD2<Float>, hi: SIMD2<Float>)]) -> Bool {
+        var inside = false
+        for (r, ring) in rings.enumerated() {
+            let box = boxes[r]
+            guard p.x >= box.lo.x, p.x <= box.hi.x,
+                  p.y >= box.lo.y, p.y <= box.hi.y else { continue }
+            let n = ring.count
+            guard n >= 3 else { continue }
+            var j = n - 1
+            for i in 0..<n {
+                let a = ring[i], b = ring[j]
+                if (a.y > p.y) != (b.y > p.y),
+                   p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x {
+                    inside.toggle()
+                }
+                j = i
+            }
+        }
+        return inside
     }
 
     /// Median nearest-neighbour distance (world units) over a sample of the points
@@ -378,7 +456,9 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
         depthState = device.makeDepthStencilState(descriptor: depthDesc)
     }
 
-    private static func lonLatToWorld(lon: Double, lat: Double) -> (x: Double, y: Double) {
+    /// lon/lat → global Web-Mercator world coords [0,1]. Internal so the map
+    /// coordinator can convert basemap land polygons into the layer's space.
+    static func lonLatToWorld(lon: Double, lat: Double) -> (x: Double, y: Double) {
         let mx = (lon + 180.0) / 360.0
         let yi = log(tan((45.0 + lat / 2.0) * .pi / 180.0))
         let my = (180.0 - yi * (180.0 / .pi)) / 360.0

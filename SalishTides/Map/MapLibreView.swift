@@ -139,23 +139,63 @@ struct MapLibreView: UIViewRepresentable {
             onBearingChange(mapView.direction)
         }
 
-        // Latest vectors + live land mask, retained so they can be re-pushed
-        // (as the particle interpolation source) to a freshly created layer
-        // after a style reload.
+        // Latest vectors + live land mask + drawn-land rings, retained so they
+        // can be re-pushed (as the particle interpolation source) to a freshly
+        // created layer after a style reload.
         nonisolated(unsafe) private var lastVectors: [CurrentVector] = []
         nonisolated(unsafe) private var lastMask: [CurrentVector] = []
+        nonisolated(unsafe) private var lastLandRings: [[SIMD2<Float>]] = []
 
         func updateVectors(_ vectors: [CurrentVector], mask: [CurrentVector], on mapView: MLNMapView) {
             // The same (thinned) vectors drive the arrows and feed the particle
-            // layer's IDW interpolation; the mask only feeds the particles.
+            // layer's IDW interpolation; the masks only feed the particles.
             lastVectors = vectors
             lastMask = mask
-            particleLayer?.update(vectors: vectors, mask: mask)
+            lastLandRings = landRings(from: mapView)
+            particleLayer?.update(vectors: vectors, mask: mask, landRings: lastLandRings)
             guard let style = mapView.style else {
                 pendingVectors = vectors
                 return
             }
             applyVectors(vectors, style: style)
+        }
+
+        /// The basemap's rendered land polygons in the current viewport, as
+        /// world-Mercator rings (holes included — the particle layer's even-odd
+        /// test handles them). This is what reconciles the flow with the *drawn*
+        /// coastline: the model's own land mask is displaced at narrow passes
+        /// (NEMO widens them), so only the basemap knows where the user sees a
+        /// beach. Styles without an "earth" layer (Ocean/Satellite, the flat
+        /// fallback) return no rings and keep the model-mask behavior.
+        private func landRings(from mapView: MLNMapView) -> [[SIMD2<Float>]] {
+            // MLN delegate callbacks are main-thread (see the class comment);
+            // visibleFeatures is @MainActor-annotated, so assert rather than
+            // hop, and convert to Sendable rings before leaving the closure.
+            MainActor.assumeIsolated {
+                let features = mapView.visibleFeatures(in: mapView.bounds,
+                                                       styleLayerIdentifiers: ["earth"])
+                var rings: [[SIMD2<Float>]] = []
+                func add(_ polygon: MLNPolygon) {
+                    func ring(_ shape: MLNMultiPoint) -> [SIMD2<Float>] {
+                        let coords = UnsafeBufferPointer(start: shape.coordinates,
+                                                         count: Int(shape.pointCount))
+                        return coords.map {
+                            let w = CurrentParticleLayer.lonLatToWorld(lon: $0.longitude, lat: $0.latitude)
+                            return SIMD2(Float(w.x), Float(w.y))
+                        }
+                    }
+                    rings.append(ring(polygon))
+                    for hole in polygon.interiorPolygons ?? [] { rings.append(ring(hole)) }
+                }
+                for feature in features {
+                    if let polygon = feature as? MLNPolygon {
+                        add(polygon)
+                    } else if let multi = feature as? MLNMultiPolygon {
+                        multi.polygons.forEach(add)
+                    }
+                }
+                return rings
+            }
         }
 
         // Retained so a freshly created layer (after a style reload) can be
@@ -240,7 +280,7 @@ struct MapLibreView: UIViewRepresentable {
             self.particleLayer = particleLayer
             // Re-seed the freshly created layer with the field + style/scheme from
             // before the reload, so particles don't blank out on a Day/Night flip.
-            particleLayer.update(vectors: lastVectors, mask: lastMask)
+            particleLayer.update(vectors: lastVectors, mask: lastMask, landRings: lastLandRings)
             particleLayer.setDark(lastDark)
             particleLayer.setActive(lastStyleMode != .arrows)
         }
