@@ -223,9 +223,20 @@ struct MapLibreView: UIViewRepresentable {
             style.addLayer(shaftLayer)
             style.addLayer(barbLayer)
 
-            // Animated particle current overlay, drawn above the arrows.
+            // Animated particle current overlay. Inserted BELOW the basemap's
+            // land fill when the style has one (Standard orders ocean below
+            // the land fills — see standard-{light,dark}.json), so land paints
+            // over the particles: pixel-perfect clipping at the drawn
+            // coastline, which the source data can't provide (NEMO widens
+            // narrow passes ~1–3 cells; the atlas has no land mask at all).
+            // Styles without an "earth" layer (Ocean/Satellite, the flat
+            // fallback) keep the old draw-on-top behavior.
             let particleLayer = CurrentParticleLayer(identifier: particleLayerID)
-            style.addLayer(particleLayer)
+            if let earth = style.layer(withIdentifier: "earth") {
+                style.insertLayer(particleLayer, below: earth)
+            } else {
+                style.addLayer(particleLayer)
+            }
             self.particleLayer = particleLayer
             // Re-seed the freshly created layer with the field + style/scheme from
             // before the reload, so particles don't blank out on a Day/Night flip.
