@@ -17,12 +17,14 @@ import CoreLocation
 // field fails.
 //
 // Pipeline (30 fps CADisplayLink → setNeedsDisplay):
-//   1. Compute pass: per particle, IDW the data points → velocity + coverage;
-//      advect; reseed (uniformly within the data bbox) when aged out or off
-//      coverage. The computed velocity + coverage are stored back in the particle.
+//   1. Compute pass: per particle, IDW the data points → velocity + coverage +
+//      wetness (live data supplies the model's dry-land cells as zero-wetness
+//      mask points, so the interpolated wetness crosses 0.5 at the model
+//      coastline); advect; reseed (uniformly within the viewport) when aged
+//      out, off coverage, or over land. The results are stored in the particle.
 //   2. Render: each particle drawn as a short streak from its stored velocity,
 //      projected with the live map matrix (glued through pan/zoom). Alpha fades
-//      with coverage (smooth edge) and the particle's life.
+//      with coverage and wetness (smooth edges) and the particle's life.
 //
 // Race-free: particle buffers ping-pong; the render reads last frame's compute
 // output; a 2-deep semaphore bounds frames in flight. MLNCustomStyleLayer's
@@ -30,18 +32,22 @@ import CoreLocation
 // Sendable holds that under Swift 6.
 final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
 
-    // Matches the Metal `Particle` struct (24 bytes).
+    // Matches the Metal `Particle` struct (32 bytes).
     private struct GPUParticle {
         var pos: SIMD2<Float>    // world Mercator [0,1]
         var vel: SIMD2<Float>    // interpolated east/north m/s (for the renderer)
         var age: Float
         var cov: Float           // interpolated coverage weight (for the alpha edge)
+        var wet: Float           // interpolated wetness (1 water … 0 land)
+        var pad: Float = 0
     }
 
-    // Matches the Metal `Point` struct (16 bytes) — one per data vector.
+    // Matches the Metal `Point` struct (24 bytes) — one per data/mask point.
     private struct GPUPoint {
         var pos: SIMD2<Float>    // world Mercator [0,1]
-        var vel: SIMD2<Float>    // east/north m/s
+        var vel: SIMD2<Float>    // east/north m/s (zero for mask points)
+        var wet: Float           // 1 = water data point, 0 = dry land cell
+        var pad: Float = 0
     }
 
     private struct AdvectUniforms {
@@ -54,6 +60,7 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
         var lifetime: Float
         var radius: Float        // IDW falloff radius (world units)
         var covThreshold: Float  // below this weight a particle is off-coverage
+        var wetThreshold: Float  // below this wetness a particle is over land
         var frame: UInt32
         var count: UInt32        // particle count
         var pointCount: UInt32
@@ -65,13 +72,13 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
         var maxStreakPx: Float
         var maxSpeed: Float
         var covThreshold: Float
+        var wetThreshold: Float
         var lifetime: Float
         var dark: Float
         var viewportW: Float
         var viewportH: Float
         var lineWidth: Float
         var pad0: Float = 0
-        var pad1: Float = 0
     }
 
     // Tunables.
@@ -85,6 +92,11 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
     private let lineWidthNight: Float = 1.4
     private let radiusFactor: Float = 1.4      // IDW radius as a multiple of point spacing
     private let covThreshold: Float = 0.45     // total IDW weight needed to be "on water"
+    // Interpolated wetness (weight share of wet vs dry mask points) below which
+    // a particle is over model land. 0.5 puts the cut halfway between the last
+    // wet and first dry cell — the model's coastline. With no mask points in
+    // range wetness is 1, so data without a mask (the atlas) is unaffected.
+    private let wetThreshold: Float = 0.5
 
     private var device: MTLDevice?
     private var queue: MTLCommandQueue?
@@ -102,6 +114,7 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
     private var pointCount = 0
     private var idwRadius: Float = 0.001
     private var pendingVectors: [CurrentVector]?
+    private var pendingMask: [CurrentVector] = []
 
     private var isDark = true
     private var styleActive = true
@@ -119,7 +132,11 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
             self.queue = device.makeCommandQueue()
             buildPipelines(device: device, colorPixelFormat: resource.mtkView.colorPixelFormat)
             buildParticleBuffers(device: device)
-            if let v = pendingVectors { applyVectors(v); pendingVectors = nil }
+            if let v = pendingVectors {
+                applyVectors(v, mask: pendingMask)
+                pendingVectors = nil
+                pendingMask = []
+            }
             syncDisplayLink()
         }
     }
@@ -167,31 +184,46 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
         syncDisplayLink()
     }
 
-    /// Pushes the data vectors used as the IDW interpolation source. Cheap and
+    /// Pushes the data vectors used as the IDW interpolation source, plus the
+    /// live model's dry-land cells (`mask`, empty for atlas data), which carry
+    /// zero wetness so particles die at the model coastline. Cheap and
     /// infrequent (hourly / viewport / scrub). A fresh buffer per update avoids a
     /// CPU-write/GPU-read race; the old buffer lives until in-flight frames finish.
-    func update(vectors: [CurrentVector]) {
-        guard device != nil else { pendingVectors = vectors; return }
-        applyVectors(vectors)
+    func update(vectors: [CurrentVector], mask: [CurrentVector]) {
+        guard device != nil else {
+            pendingVectors = vectors
+            pendingMask = mask
+            return
+        }
+        applyVectors(vectors, mask: mask)
     }
 
-    private func applyVectors(_ vectors: [CurrentVector]) {
+    private func applyVectors(_ vectors: [CurrentVector], mask: [CurrentVector]) {
         guard let device else { return }
         var pts = [GPUPoint]()
-        pts.reserveCapacity(vectors.count)
+        pts.reserveCapacity(vectors.count + mask.count)
         for v in vectors where v.isSignificant {
             let w = Self.lonLatToWorld(lon: v.lon, lat: v.lat)
             let theta = Float(v.direction_deg) * .pi / 180
             let speed = Float(v.speed_ms)
             pts.append(GPUPoint(pos: SIMD2(Float(w.x), Float(w.y)),
-                                vel: SIMD2(speed * sin(theta), speed * cos(theta))))
+                                vel: SIMD2(speed * sin(theta), speed * cos(theta)),
+                                wet: 1))
         }
-        pointCount = pts.count
-        guard pointCount > 0 else {
+        guard !pts.isEmpty else {
+            pointCount = 0
             pointBuffer = device.makeBuffer(length: MemoryLayout<GPUPoint>.stride, options: .storageModeShared)
             return
         }
+        // Radius from the *data* spacing only: mask cells share the data grid,
+        // and an atlas update (empty mask) must produce the same radius as
+        // before the mask existed.
         idwRadius = max(Self.medianNearestNeighbor(pts) * radiusFactor, 1e-6)
+        for m in mask {
+            let w = Self.lonLatToWorld(lon: m.lon, lat: m.lat)
+            pts.append(GPUPoint(pos: SIMD2(Float(w.x), Float(w.y)), vel: .zero, wet: 0))
+        }
+        pointCount = pts.count
         pointBuffer = device.makeBuffer(bytes: pts, length: pts.count * MemoryLayout<GPUPoint>.stride,
                                         options: .storageModeShared)
     }
@@ -259,6 +291,7 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
                 speedK: speedPx, worldSize: worldSize,
                 vMinX: vMinX, vMinY: vMinY, vMaxX: vMaxX, vMaxY: vMaxY,
                 lifetime: lifetime, radius: idwRadius, covThreshold: covThreshold,
+                wetThreshold: wetThreshold,
                 frame: frame, count: UInt32(particleCount), pointCount: UInt32(pointCount))
             if let cb = queue.makeCommandBuffer(), let ce = cb.makeComputeCommandEncoder() {
                 ce.setComputePipelineState(advectPipeline)
@@ -281,8 +314,8 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
         var matrix = Self.matrix(from: context.projectionMatrix)
         var render = RenderUniforms(
             worldSize: worldSize, streakLenScale: streakLenScale, maxStreakPx: maxStreakPx,
-            maxSpeed: maxSpeed, covThreshold: covThreshold, lifetime: lifetime,
-            dark: isDark ? 1 : 0, viewportW: vpW, viewportH: vpH,
+            maxSpeed: maxSpeed, covThreshold: covThreshold, wetThreshold: wetThreshold,
+            lifetime: lifetime, dark: isDark ? 1 : 0, viewportW: vpW, viewportH: vpH,
             lineWidth: isDark ? lineWidthNight : lineWidthDay)
 
         renderEncoder.setRenderPipelineState(renderPipeline)
@@ -306,7 +339,7 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
             let lat = Double.random(in: 47.0 ... 50.0)
             let w = Self.lonLatToWorld(lon: lon, lat: lat)
             seed.append(GPUParticle(pos: SIMD2(Float(w.x), Float(w.y)), vel: .zero,
-                                    age: Float.random(in: 0...lifetime), cov: 0))
+                                    age: Float.random(in: 0...lifetime), cov: 0, wet: 0))
         }
         let len = particleCount * MemoryLayout<GPUParticle>.stride
         guard let a = device.makeBuffer(bytes: seed, length: len, options: .storageModeShared),
@@ -367,19 +400,20 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
     #include <metal_stdlib>
     using namespace metal;
 
-    struct Particle { float2 pos; float2 vel; float age; float cov; };
-    struct Point    { float2 pos; float2 vel; };
+    struct Particle { float2 pos; float2 vel; float age; float cov; float wet; float pad; };
+    struct Point    { float2 pos; float2 vel; float wet; float pad; };
 
     struct AdvectUniforms {
         float speedK; float worldSize; float vMinX; float vMinY;
         float vMaxX; float vMaxY; float lifetime; float radius;
-        float covThreshold; uint frame; uint count; uint pointCount;
+        float covThreshold; float wetThreshold;
+        uint frame; uint count; uint pointCount;
     };
 
     struct RenderUniforms {
         float worldSize; float streakLenScale; float maxStreakPx; float maxSpeed;
-        float covThreshold; float lifetime; float dark; float viewportW;
-        float viewportH; float lineWidth; float pad0; float pad1;
+        float covThreshold; float wetThreshold; float lifetime; float dark;
+        float viewportW; float viewportH; float lineWidth; float pad0;
     };
 
     static inline float hash(uint x) {
@@ -389,19 +423,24 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
     }
 
     // Inverse-distance interpolation of the data points at world position `pos`.
-    // Compact-support weight (zero beyond `radius`) → smooth field, and the total
-    // weight is the "coverage" (high near data, zero where there's none).
-    static inline float3 sampleIDW(float2 pos, device const Point *pts, uint n, float radius) {
+    // Compact-support weight (zero beyond `radius`) → smooth field, the total
+    // weight is the "coverage" (high near data, zero where there's none), and
+    // the weight share of wet points is the "wetness" (1 in open water, 0 deep
+    // in the dry-cell mask, 0.5 at the model coastline). With no mask points
+    // in range wetness stays 1, so unmasked data (the atlas) is unaffected.
+    static inline float4 sampleIDW(float2 pos, device const Point *pts, uint n, float radius) {
         float r2 = radius * radius;
         float2 vsum = float2(0.0);
         float wsum = 0.0;
+        float wetsum = 0.0;
         for (uint i = 0u; i < n; i++) {
             float2 d = pos - pts[i].pos;
             float t = 1.0 - dot(d, d) / r2;
-            if (t > 0.0) { float w = t * t; vsum += pts[i].vel * w; wsum += w; }
+            if (t > 0.0) { float w = t * t; vsum += pts[i].vel * w; wsum += w; wetsum += pts[i].wet * w; }
         }
         float2 vel = wsum > 1e-6 ? vsum / wsum : float2(0.0);
-        return float3(vel, wsum);   // xy = velocity, z = coverage
+        float wet  = wsum > 1e-6 ? wetsum / wsum : 0.0;
+        return float4(vel, wsum, wet);   // xy = velocity, z = coverage, w = wetness
     }
 
     kernel void advect(device const Particle *inP [[buffer(0)]],
@@ -412,11 +451,12 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
         if (id >= u.count) return;
         Particle p = inP[id];
 
-        float3 s = sampleIDW(p.pos, pts, u.pointCount, u.radius);
+        float4 s = sampleIDW(p.pos, pts, u.pointCount, u.radius);
         float2 vel = s.xy;
         float cov = s.z;
+        float wet = s.w;
 
-        bool reseed = (p.age >= u.lifetime) || (cov < u.covThreshold);
+        bool reseed = (p.age >= u.lifetime) || (cov < u.covThreshold) || (wet < u.wetThreshold);
         if (reseed) {
             // Uniform within the current viewport → all particles concentrate on
             // the visible water at any zoom. Spawns that miss the data coverage
@@ -429,12 +469,12 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
             // a mass reseed (first frame at high zoom, or a big pan/zoom jump) sets
             // every particle to age 0 at once and the whole field pulses together.
             p.age = hash(h ^ 0x68bc21ebu) * u.lifetime;
-            p.vel = float2(0.0); p.cov = 0.0;
+            p.vel = float2(0.0); p.cov = 0.0; p.wet = 0.0;
         } else {
             // Screen-space velocity (zoom-independent). East → +x, north → −y.
             p.pos += float2(vel.x, -vel.y) * (u.speedK / u.worldSize);
             p.age += (1.0 / 30.0);
-            p.vel = vel; p.cov = cov;
+            p.vel = vel; p.cov = cov; p.wet = wet;
         }
         outP[id] = p;
     }
@@ -490,7 +530,9 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
         float endFade  = isHead ? 1.0 : 0.20;
         // Smooth coverage edge (fade out as the particle approaches the data boundary).
         float covFade  = smoothstep(u.covThreshold, u.covThreshold * 2.0, p.cov);
-        float a = (u.dark > 0.5 ? 0.85 : 0.95) * lifeFade * endFade * covFade;
+        // Smooth land edge (fade out as the particle approaches the model coastline).
+        float wetFade  = smoothstep(u.wetThreshold, min(u.wetThreshold * 1.5, 1.0), p.wet);
+        float a = (u.dark > 0.5 ? 0.85 : 0.95) * lifeFade * endFade * covFade * wetFade;
 
         out.color = float4(c, a);
         return out;

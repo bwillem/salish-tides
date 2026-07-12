@@ -11,6 +11,10 @@ final class MapViewModel {
     // The map does NOT observe this, so per-frame updates stay cheap.
     var displayDate: Date = .now
     var currentVectors: [CurrentVector] = []
+    // Zero-speed "dry land" points bounding the live model's coastline,
+    // culled/thinned like currentVectors. Empty when the atlas renders (it has
+    // no land mask) — the particle layer treats an empty mask as all-water.
+    var currentLandMask: [CurrentVector] = []
     var currentSelections: [ChartSelection] = []
     var isMigrating = false
     var migrationProgress: Double = 0
@@ -201,13 +205,7 @@ final class MapViewModel {
         // its charts extend beyond the NEMO domain (e.g. Queen Charlotte
         // Strait in Vol 4).
         let liveVectors: [CurrentVector]? = liveField.flatMap { field in
-            guard let vp = visibleViewport else { return field }
-            let latMargin = (vp.lat_max - vp.lat_min) * 0.2
-            let lonMargin = (vp.lon_max - vp.lon_min) * 0.2
-            let culled = field.filter {
-                $0.lat >= vp.lat_min - latMargin && $0.lat <= vp.lat_max + latMargin &&
-                $0.lon >= vp.lon_min - lonMargin && $0.lon <= vp.lon_max + lonMargin
-            }
+            let culled = viewportFiltered(field)
             return culled.isEmpty ? nil : culled
         }
 
@@ -262,6 +260,13 @@ final class MapViewModel {
             vectors = liveVectors
         }
 
+        // The live coastline mask, culled like the vectors. Only meaningful
+        // when live vectors render — the atlas has no dry cells to mask with.
+        var landMask: [CurrentVector] = []
+        if liveVectors != nil, let mask = await liveData?.landMask() {
+            landMask = viewportFiltered(mask)
+        }
+
         guard generation == loadGeneration else { return }
         // Provenance reflects what is actually rendered: liveVectors is nil
         // (and the atlas populated `vectors`) whenever the cull came up empty.
@@ -273,8 +278,21 @@ final class MapViewModel {
         crosshairSpeed = crosshairVector?.speedKnots
         crosshairDirection = crosshairVector?.direction_deg
         currentVectors = thinned(vectors, for: visibleViewport)
+        currentLandMask = thinned(landMask, for: visibleViewport)
 
         await updateTides(for: date, generation: generation)
+    }
+
+    /// Points within the viewport plus a 20% margin, so pans don't immediately
+    /// hit empty edges. No viewport yet → everything.
+    private func viewportFiltered(_ points: [CurrentVector]) -> [CurrentVector] {
+        guard let vp = visibleViewport else { return points }
+        let latMargin = (vp.lat_max - vp.lat_min) * 0.2
+        let lonMargin = (vp.lon_max - vp.lon_min) * 0.2
+        return points.filter {
+            $0.lat >= vp.lat_min - latMargin && $0.lat <= vp.lat_max + latMargin &&
+            $0.lon >= vp.lon_min - lonMargin && $0.lon <= vp.lon_max + lonMargin
+        }
     }
 
     // Pick the nearest station to the crosshair and fetch a ±18 h window of

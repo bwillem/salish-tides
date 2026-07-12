@@ -110,6 +110,7 @@ final class LiveDataService {
     private var sshGeneration = 0
     private var calibrationCache: [String: Double] = [:]
     private var refreshing = false
+    private var landMaskCache: [CurrentVector]?
 
     init(settings: AppSettings, network: NetworkMonitor) {
         self.settings = settings
@@ -350,6 +351,66 @@ final class LiveDataService {
     private func touchCache(_ hourKey: Int) {
         vectorCacheOrder.removeAll { $0 == hourKey }
         vectorCacheOrder.append(hourKey)
+    }
+
+    /// Dry (land) model cells adjacent to at least one wet cell — the model's
+    /// shoreline band — as zero-speed vectors. The particle renderer feeds
+    /// these into its interpolation as "wetness 0" points so particles die at
+    /// the model coastline instead of coasting ~1 km onto land past the
+    /// outermost wet point. NEMO's land mask is time-invariant, so the band is
+    /// computed once from any cached slice and reused for the app's lifetime.
+    /// nil when live data can't be shown (offline-only, cold cache) — the
+    /// atlas needs no mask, its renderer behavior is unchanged without one.
+    func landMask() async -> [CurrentVector]? {
+        guard !settings.offlineOnly else { return nil }
+        await ensureReady()
+        guard ready, let grid else { return nil }
+        if let cached = landMaskCache { return cached }
+        guard let hourKey = sliceIndex.keys.max(),
+              let points = try? await store.loadSlicePoints(hourKey: hourKey)
+        else { return nil }
+        // Re-check after the suspension: a concurrent caller may have already
+        // computed and cached the mask.
+        if let cached = landMaskCache { return cached }
+        let mask = await Task.detached(priority: .userInitiated) {
+            Self.dryShoreline(wet: points, grid: grid)
+        }.value
+        landMaskCache = mask
+        return mask
+    }
+
+    /// The strided-grid cells with no velocity (land) that touch a wet cell,
+    /// 8-connected. Pure; runs off the main actor.
+    private nonisolated static func dryShoreline(wet points: [SalishSeaCastAPI.WetPoint],
+                                                 grid: SalishSeaCastAPI.LiveGrid) -> [CurrentVector] {
+        let rows = SalishSeaCastAPI.stridedRows
+        let cols = SalishSeaCastAPI.stridedCols
+        let cells = rows * cols
+        var isWet = [Bool](repeating: false, count: cells)
+        for p in points where Int(p.index) < cells { isWet[Int(p.index)] = true }
+
+        var seen = [Bool](repeating: false, count: cells)
+        var out: [CurrentVector] = []
+        for p in points {
+            let i = Int(p.index)
+            guard i < cells else { continue }
+            let sy = i / cols, sx = i % cols
+            for dy in -1...1 {
+                for dx in -1...1 where (dy, dx) != (0, 0) {
+                    let ny = sy + dy, nx = sx + dx
+                    guard (0..<rows).contains(ny), (0..<cols).contains(nx) else { continue }
+                    let n = ny * cols + nx
+                    guard !isWet[n], !seen[n] else { continue }
+                    seen[n] = true
+                    guard n < grid.lat.count,
+                          grid.lat[n].isFinite, grid.lon[n].isFinite else { continue }
+                    out.append(CurrentVector(lat: Double(grid.lat[n]),
+                                             lon: Double(grid.lon[n]),
+                                             speed_ms: 0, direction_deg: 0))
+                }
+            }
+        }
+        return out
     }
 
     /// Live water-level series for `station` on its own datum, or nil when no

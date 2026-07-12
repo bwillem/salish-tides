@@ -53,8 +53,9 @@ struct MapLibreView: UIViewRepresentable {
             mapView.styleURL = desiredStyleURL(for: colorScheme)
         }
         // Pushes the vectors to both the arrow source and the particle layer.
-        // Read vm.currentVectors here so Observation re-runs updateUIView on change.
-        context.coordinator.updateVectors(vm.currentVectors, on: mapView)
+        // Read vm.currentVectors / vm.currentLandMask here so Observation
+        // re-runs updateUIView on change.
+        context.coordinator.updateVectors(vm.currentVectors, mask: vm.currentLandMask, on: mapView)
         context.coordinator.setParticleDark(colorScheme == .dark)
         // Particles vs arrows, honouring the Reduce-Motion / Low-Power fallback,
         // plus pause-on-background. Read here so Observation re-runs updateUIView
@@ -138,15 +139,18 @@ struct MapLibreView: UIViewRepresentable {
             onBearingChange(mapView.direction)
         }
 
-        // Latest vectors, retained so they can be re-pushed (as the particle
-        // interpolation source) to a freshly created layer after a style reload.
+        // Latest vectors + live land mask, retained so they can be re-pushed
+        // (as the particle interpolation source) to a freshly created layer
+        // after a style reload.
         nonisolated(unsafe) private var lastVectors: [CurrentVector] = []
+        nonisolated(unsafe) private var lastMask: [CurrentVector] = []
 
-        func updateVectors(_ vectors: [CurrentVector], on mapView: MLNMapView) {
+        func updateVectors(_ vectors: [CurrentVector], mask: [CurrentVector], on mapView: MLNMapView) {
             // The same (thinned) vectors drive the arrows and feed the particle
-            // layer's IDW interpolation.
+            // layer's IDW interpolation; the mask only feeds the particles.
             lastVectors = vectors
-            particleLayer?.update(vectors: vectors)
+            lastMask = mask
+            particleLayer?.update(vectors: vectors, mask: mask)
             guard let style = mapView.style else {
                 pendingVectors = vectors
                 return
@@ -225,7 +229,7 @@ struct MapLibreView: UIViewRepresentable {
             self.particleLayer = particleLayer
             // Re-seed the freshly created layer with the field + style/scheme from
             // before the reload, so particles don't blank out on a Day/Night flip.
-            particleLayer.update(vectors: lastVectors)
+            particleLayer.update(vectors: lastVectors, mask: lastMask)
             particleLayer.setDark(lastDark)
             particleLayer.setActive(lastStyleMode != .arrows)
         }
