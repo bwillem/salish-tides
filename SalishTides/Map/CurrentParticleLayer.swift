@@ -7,24 +7,27 @@ import CoreLocation
 
 // Custom Metal style layer that animates tidal current as flowing particles.
 //
-// Velocity comes from **inverse-distance weighting of the actual data points**
-// (no rasterized grid). Each particle interpolates the current from the nearby
-// vectors directly, so the flow is smooth everywhere (no grid blockiness) and
-// "coverage" is defined by proximity to real data (smooth falloff, so particles
-// stay on the water the data describes instead of bleeding across a coarse cell
-// onto land). This is what makes it hold up at extreme zoom — e.g. Active Pass,
-// where the ~0.7 km data grid is coarser than the channel and any texture-based
-// field fails.
+// The data points (live model cells or atlas vectors) are resampled onto a
+// **viewport-anchored raster** on every update: bin-average into grid cells,
+// flood-fill outward across chart water (bounded by the data spacing, so flow
+// reaches the drawn coastline but never invents current far from real data),
+// then box-blur — a smooth, averaged field that is a general representation of
+// the current, not a reproduction of the sample layout. Land comes from the
+// basemap's own rendered polygons (exact chart-water membership; the model's
+// dry-cell mask fills in for styles with no land polygons), so particles live
+// and die at the coastline the user sees.
 //
 // Pipeline (30 fps CADisplayLink → setNeedsDisplay):
-//   1. Compute pass: per particle, IDW the data points → velocity + coverage +
-//      wetness (live data supplies the model's dry-land cells as zero-wetness
-//      mask points, so the interpolated wetness crosses 0.5 at the model
-//      coastline); advect; reseed (uniformly within the viewport) when aged
-//      out, off coverage, or over land. The results are stored in the particle.
+//   1. Compute pass: one bilinear texture sample per particle → velocity,
+//      water, data-coverage; advect; recycle dead/aged particles directly into
+//      a random *water* cell (uniform density over water, regardless of how
+//      much of the screen is land — no clustering, no burnt reseeds).
 //   2. Render: each particle drawn as a short streak from its stored velocity,
-//      projected with the live map matrix (glued through pan/zoom). Alpha fades
-//      with coverage and wetness (smooth edges) and the particle's life.
+//      projected with the live map matrix (glued through pan/zoom).
+//
+// Per-frame cost is O(particles) — a single texture fetch each — so zoomed-out
+// views cost the same as zoomed-in ones. The raster rebuild is O(cells) on a
+// background task, at the update cadence (hour change / viewport settle).
 //
 // Race-free: particle buffers ping-pong; the render reads last frame's compute
 // output; a 2-deep semaphore bounds frames in flight. MLNCustomStyleLayer's
@@ -35,35 +38,26 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
     // Matches the Metal `Particle` struct (32 bytes).
     private struct GPUParticle {
         var pos: SIMD2<Float>    // world Mercator [0,1]
-        var vel: SIMD2<Float>    // interpolated east/north m/s (for the renderer)
+        var vel: SIMD2<Float>    // sampled east/north m/s (for the renderer)
         var age: Float
-        var cov: Float           // interpolated coverage weight (for the alpha edge)
-        var wet: Float           // interpolated wetness (1 water … 0 land)
-        var pad: Float = 0
-    }
-
-    // Matches the Metal `Point` struct (24 bytes) — one per data/mask point.
-    private struct GPUPoint {
-        var pos: SIMD2<Float>    // world Mercator [0,1]
-        var vel: SIMD2<Float>    // east/north m/s (zero for mask points)
-        var wet: Float           // 1 = water data point, 0 = dry land cell
-        var pad: Float = 0
+        var fade: Float          // water × coverage fade (for the alpha edge)
+        var pad0: Float = 0
+        var pad1: Float = 0
     }
 
     private struct AdvectUniforms {
         var speedK: Float        // screen points moved per (m/s) per frame
         var worldSize: Float     // 512·2^zoom
-        var vMinX: Float         // current viewport world bounds (reseed domain)
-        var vMinY: Float
-        var vMaxX: Float
-        var vMaxY: Float
+        var originX: Float       // field origin/span in world coords
+        var originY: Float
+        var spanX: Float
+        var spanY: Float
         var lifetime: Float
-        var radius: Float        // IDW falloff radius (world units)
-        var covThreshold: Float  // below this weight a particle is off-coverage
-        var wetThreshold: Float  // below this wetness a particle is over land
         var frame: UInt32
         var count: UInt32        // particle count
-        var pointCount: UInt32
+        var fieldCols: UInt32
+        var fieldRows: UInt32
+        var waterCellCount: UInt32
     }
 
     private struct RenderUniforms {
@@ -71,14 +65,14 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
         var streakLenScale: Float
         var maxStreakPx: Float
         var maxSpeed: Float
-        var covThreshold: Float
-        var wetThreshold: Float
         var lifetime: Float
         var dark: Float
         var viewportW: Float
         var viewportH: Float
         var lineWidth: Float
         var pad0: Float = 0
+        var pad1: Float = 0
+        var pad2: Float = 0
     }
 
     // Tunables.
@@ -90,38 +84,57 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
     private let maxSpeed: Float = 2.5
     private let lineWidthDay: Float = 2.0
     private let lineWidthNight: Float = 1.4
-    private let radiusFactor: Float = 1.4      // IDW radius as a multiple of point spacing
-    private let covThreshold: Float = 0.45     // total IDW weight needed to be "on water"
-    // Interpolated wetness (weight share of wet vs dry mask points) below which
-    // a particle is over model land. 0.5 puts the cut halfway between the last
-    // wet and first dry cell — the model's coastline. With no mask points in
-    // range wetness is 1, so data without a mask (the atlas) is unaffected.
-    private let wetThreshold: Float = 0.5
+    // Raster resolution across the longer viewport axis. 160 cells ≈ 2–5 px
+    // per cell on screen — smooth to the eye, cheap to rebuild (~25k cells).
+    private let fieldCellsAcross = 160
 
     private var device: MTLDevice?
     private var queue: MTLCommandQueue?
     private var advectPipeline: MTLComputePipelineState?
     private var renderPipeline: MTLRenderPipelineState?
     private var depthState: MTLDepthStencilState?
+    private var samplerState: MTLSamplerState?
 
     private var particleBuffers: [MTLBuffer] = []
     private var current = 0
     private var frame: UInt32 = 0
     private let inFlight = DispatchSemaphore(value: 2)
 
-    // Data points (interpolation source) + the IDW radius (≈ point spacing).
-    private var pointBuffer: MTLBuffer?
-    private var pointCount = 0
-    private var idwRadius: Float = 0.001
-    private var pendingVectors: [CurrentVector]?
-    private var pendingMask: [CurrentVector] = []
-    private var pendingLandRings: [[SIMD2<Float>]] = []
+    // The resampled field + the water-cell list particles reseed into.
+    private var fieldTexture: MTLTexture?
+    private var waterCellBuffer: MTLBuffer?
+    private var appliedField: Field?
+    // Inputs stashed for rebuilds (style reloads, late device arrival) and the
+    // async build generation guard (only the newest build result applies).
+    private var lastInputs: Inputs?
+    private var buildGeneration = 0
 
     private var isDark = true
     private var styleActive = true
     private var foreground = true
     private var animating: Bool { styleActive && foreground }
     private var displayLink: CADisplayLink?
+
+    // MARK: - Field raster
+
+    /// Everything an update pushes in, kept so the field can be rebuilt.
+    private struct Inputs: Sendable {
+        let vectors: [CurrentVector]
+        let mask: [CurrentVector]
+        let landRings: [[SIMD2<Float>]]
+        let boundsWorld: (minX: Float, minY: Float, maxX: Float, maxY: Float)
+    }
+
+    /// The CPU-built raster: interleaved RGBA per cell (east, north, water,
+    /// coverage), plus the indices of live water cells for uniform reseeding.
+    private struct Field: Sendable {
+        let cols: Int
+        let rows: Int
+        let originX: Float, originY: Float
+        let spanX: Float, spanY: Float
+        let rgba: [Float]
+        let waterCells: [UInt32]
+    }
 
     // MARK: - Lifecycle
 
@@ -133,12 +146,7 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
             self.queue = device.makeCommandQueue()
             buildPipelines(device: device, colorPixelFormat: resource.mtkView.colorPixelFormat)
             buildParticleBuffers(device: device)
-            if let v = pendingVectors {
-                applyVectors(v, mask: pendingMask, landRings: pendingLandRings)
-                pendingVectors = nil
-                pendingMask = []
-                pendingLandRings = []
-            }
+            if let inputs = lastInputs { rebuildField(from: inputs) }
             syncDisplayLink()
         }
     }
@@ -148,8 +156,11 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
         advectPipeline = nil
         renderPipeline = nil
         depthState = nil
+        samplerState = nil
         particleBuffers = []
-        pointBuffer = nil
+        fieldTexture = nil
+        waterCellBuffer = nil
+        appliedField = nil
         queue = nil
         device = nil
     }
@@ -186,101 +197,243 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
         syncDisplayLink()
     }
 
-    /// Pushes the data vectors used as the IDW interpolation source, plus two
-    /// descriptions of land that both become zero-wetness/zero-velocity points:
-    /// `mask` — the live model's dry cells (empty for atlas data); `landRings` —
-    /// the basemap's own rendered land polygons (world Mercator rings), so the
-    /// flow reconciles with the *drawn* coastline: velocity falls to zero and
-    /// particles die at the beach the user sees, not the model's displaced one.
-    /// Cheap and infrequent (hourly / viewport / scrub). A fresh buffer per
-    /// update avoids a CPU-write/GPU-read race; the old buffer lives until
-    /// in-flight frames finish.
-    func update(vectors: [CurrentVector], mask: [CurrentVector], landRings: [[SIMD2<Float>]]) {
-        guard device != nil else {
-            pendingVectors = vectors
-            pendingMask = mask
-            pendingLandRings = landRings
-            return
-        }
-        applyVectors(vectors, mask: mask, landRings: landRings)
+    /// Pushes the data vectors plus land knowledge (basemap rings; model dry
+    /// cells as fallback for styles without land polygons) and the viewport in
+    /// world coords. Rebuilds the field raster off-main and swaps it in when
+    /// done — cheap and infrequent (hourly / viewport settle / scrub).
+    func update(vectors: [CurrentVector], mask: [CurrentVector],
+                landRings: [[SIMD2<Float>]],
+                boundsWorld: (minX: Float, minY: Float, maxX: Float, maxY: Float)) {
+        let inputs = Inputs(vectors: vectors, mask: mask, landRings: landRings,
+                            boundsWorld: boundsWorld)
+        lastInputs = inputs
+        guard device != nil else { return }
+        rebuildField(from: inputs)
     }
 
-    private func applyVectors(_ vectors: [CurrentVector], mask: [CurrentVector],
-                              landRings: [[SIMD2<Float>]]) {
-        guard let device else { return }
-        var pts = [GPUPoint]()
-        pts.reserveCapacity(vectors.count + mask.count)
-        for v in vectors where v.isSignificant {
-            let w = Self.lonLatToWorld(lon: v.lon, lat: v.lat)
+    private func rebuildField(from inputs: Inputs) {
+        buildGeneration += 1
+        let generation = buildGeneration
+        let cellsAcross = fieldCellsAcross
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let field = Self.buildField(inputs: inputs, cellsAcross: cellsAcross)
+            // Re-capture weakly so the strong ref never crosses the actor hop
+            // (Swift 6 region isolation); the layer is main-thread-only anyway.
+            await MainActor.run { [weak self] in
+                guard let self, generation == self.buildGeneration else { return }
+                self.applyField(field)
+            }
+        }
+    }
+
+    private func applyField(_ field: Field?) {
+        guard let device, let field, field.cols > 0, field.rows > 0 else {
+            fieldTexture = nil
+            waterCellBuffer = nil
+            appliedField = nil
+            return
+        }
+        // Always a fresh texture/buffer: in-place writes would race in-flight
+        // GPU frames; the old ones are retained by those frames until done.
+        let desc = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .rgba32Float, width: field.cols, height: field.rows, mipmapped: false)
+        desc.usage = .shaderRead
+        desc.storageMode = .shared
+        guard let tex = device.makeTexture(descriptor: desc) else { return }
+        tex.replace(region: MTLRegionMake2D(0, 0, field.cols, field.rows),
+                    mipmapLevel: 0, withBytes: field.rgba,
+                    bytesPerRow: field.cols * 4 * MemoryLayout<Float>.size)
+        // Reseed target list; a 1-entry zero buffer when there's no live water
+        // so the kernel always has something bound.
+        let cells: [UInt32] = field.waterCells.isEmpty ? [0] : field.waterCells
+        guard let cellBuf = device.makeBuffer(bytes: cells,
+                                              length: cells.count * MemoryLayout<UInt32>.stride,
+                                              options: .storageModeShared) else { return }
+        fieldTexture = tex
+        waterCellBuffer = cellBuf
+        appliedField = field
+    }
+
+    // MARK: - Field construction (pure, off-main)
+
+    private static func buildField(inputs: Inputs, cellsAcross: Int) -> Field? {
+        let b = inputs.boundsWorld
+        var minX = b.minX, minY = b.minY, maxX = b.maxX, maxY = b.maxY
+        // Margin so pans don't immediately run off the field edge.
+        let mx = (maxX - minX) * 0.15, my = (maxY - minY) * 0.15
+        minX -= mx; maxX += mx; minY -= my; maxY += my
+        let spanX = maxX - minX, spanY = maxY - minY
+        guard spanX > 0, spanY > 0 else { return nil }
+
+        var cols: Int, rows: Int
+        if spanX >= spanY {
+            cols = cellsAcross
+            rows = max(16, Int((Float(cellsAcross) * spanY / spanX).rounded()))
+        } else {
+            rows = cellsAcross
+            cols = max(16, Int((Float(cellsAcross) * spanX / spanY).rounded()))
+        }
+        let cells = cols * rows
+        let cellW = spanX / Float(cols), cellH = spanY / Float(rows)
+
+        func cellIndex(_ x: Float, _ y: Float) -> Int? {
+            let cx = Int((x - minX) / cellW), cy = Int((y - minY) / cellH)
+            guard cx >= 0, cx < cols, cy >= 0, cy < rows else { return nil }
+            return cy * cols + cx
+        }
+
+        // ── Land mask ────────────────────────────────────────────────────
+        // Basemap polygons when available (exact drawn coastline); otherwise
+        // the model's dry cells, splatted + dilated one cell.
+        var land = [Bool](repeating: false, count: cells)
+        if !inputs.landRings.isEmpty {
+            let rings = inputs.landRings
+            let boxes: [(lo: SIMD2<Float>, hi: SIMD2<Float>)] = rings.map { ring in
+                var lo = SIMD2<Float>(.greatestFiniteMagnitude, .greatestFiniteMagnitude)
+                var hi = -lo
+                for v in ring { lo = simd_min(lo, v); hi = simd_max(hi, v) }
+                return (lo, hi)
+            }
+            for cy in 0..<rows {
+                let y = minY + (Float(cy) + 0.5) * cellH
+                for cx in 0..<cols {
+                    let x = minX + (Float(cx) + 0.5) * cellW
+                    if insideLand(SIMD2(x, y), rings: rings, boxes: boxes) {
+                        land[cy * cols + cx] = true
+                    }
+                }
+            }
+        } else if !inputs.mask.isEmpty {
+            var seed = [Bool](repeating: false, count: cells)
+            for m in inputs.mask {
+                let w = lonLatToWorld(lon: m.lon, lat: m.lat)
+                if let i = cellIndex(Float(w.x), Float(w.y)) { seed[i] = true }
+            }
+            for cy in 0..<rows {
+                for cx in 0..<cols where seed[cy * cols + cx] {
+                    for dy in -1...1 {
+                        for dx in -1...1 {
+                            let ny = cy + dy, nx = cx + dx
+                            if ny >= 0, ny < rows, nx >= 0, nx < cols {
+                                land[ny * cols + nx] = true
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── Splat data ───────────────────────────────────────────────────
+        var sumU = [Float](repeating: 0, count: cells)
+        var sumV = [Float](repeating: 0, count: cells)
+        var count = [Float](repeating: 0, count: cells)
+        var dataCells = 0
+        for v in inputs.vectors {
+            let w = lonLatToWorld(lon: v.lon, lat: v.lat)
+            guard let i = cellIndex(Float(w.x), Float(w.y)), !land[i] else { continue }
             let theta = Float(v.direction_deg) * .pi / 180
             let speed = Float(v.speed_ms)
-            pts.append(GPUPoint(pos: SIMD2(Float(w.x), Float(w.y)),
-                                vel: SIMD2(speed * sin(theta), speed * cos(theta)),
-                                wet: 1))
+            if count[i] == 0 { dataCells += 1 }
+            sumU[i] += speed * sin(theta)
+            sumV[i] += speed * cos(theta)
+            count[i] += 1
         }
-        guard !pts.isEmpty else {
-            pointCount = 0
-            pointBuffer = device.makeBuffer(length: MemoryLayout<GPUPoint>.stride, options: .storageModeShared)
-            return
-        }
-        // Radius from the *data* spacing only: mask points are laid out at the
-        // same spacing (below), and an atlas update with no land in view must
-        // produce the same radius as before any mask existed.
-        idwRadius = max(Self.medianNearestNeighbor(pts) * radiusFactor, 1e-6)
-        for m in mask {
-            let w = Self.lonLatToWorld(lon: m.lon, lat: m.lat)
-            pts.append(GPUPoint(pos: SIMD2(Float(w.x), Float(w.y)), vel: .zero, wet: 0))
-        }
-        pts.append(contentsOf: Self.landMaskPoints(
-            rings: landRings, around: pts, spacing: idwRadius / radiusFactor))
-        pointCount = pts.count
-        pointBuffer = device.makeBuffer(bytes: pts, length: pts.count * MemoryLayout<GPUPoint>.stride,
-                                        options: .storageModeShared)
-    }
+        guard dataCells > 0 else { return Field(cols: cols, rows: rows,
+                                                originX: minX, originY: minY,
+                                                spanX: spanX, spanY: spanY,
+                                                rgba: [Float](repeating: 0, count: cells * 4),
+                                                waterCells: []) }
 
-    /// Zero-wetness points sampled on a regular grid over the basemap's land
-    /// polygons, at the same spacing as the data so the wet/dry weight shares
-    /// are balanced and the wetness-0.5 contour tracks the drawn coastline.
-    /// The grid covers the data's bounding box (particles can't survive beyond
-    /// it anyway) and is capped as a runaway guard. Even-odd point-in-polygon,
-    /// so interior rings (holes) need no special casing.
-    private static func landMaskPoints(rings: [[SIMD2<Float>]], around pts: [GPUPoint],
-                                       spacing: Float) -> [GPUPoint] {
-        guard !rings.isEmpty, !pts.isEmpty, spacing > 0 else { return [] }
-        var minX = Float.greatestFiniteMagnitude, minY = Float.greatestFiniteMagnitude
-        var maxX = -Float.greatestFiniteMagnitude, maxY = -Float.greatestFiniteMagnitude
-        for p in pts {
-            minX = min(minX, p.pos.x); maxX = max(maxX, p.pos.x)
-            minY = min(minY, p.pos.y); maxY = max(maxY, p.pos.y)
-        }
-        let margin = spacing * 1.5
-        minX -= margin; minY -= margin; maxX += margin; maxY += margin
-
-        // Per-ring bounding boxes: coastline rings are spatially local, so the
-        // box check prunes almost every ring per grid point — without it the
-        // grid × total-vertices product janks the main thread at wide zooms.
-        let boxes: [(lo: SIMD2<Float>, hi: SIMD2<Float>)] = rings.map { ring in
-            var lo = SIMD2<Float>(.greatestFiniteMagnitude, .greatestFiniteMagnitude)
-            var hi = -lo
-            for v in ring { lo = simd_min(lo, v); hi = simd_max(hi, v) }
-            return (lo, hi)
+        var velU = [Float](repeating: 0, count: cells)
+        var velV = [Float](repeating: 0, count: cells)
+        var dist = [Int](repeating: .max, count: cells)
+        var queue: [Int] = []
+        queue.reserveCapacity(dataCells)
+        for i in 0..<cells where count[i] > 0 {
+            velU[i] = sumU[i] / count[i]
+            velV[i] = sumV[i] / count[i]
+            dist[i] = 0
+            queue.append(i)
         }
 
-        let maxPoints = 20_000
-        var out: [GPUPoint] = []
-        var y = minY
-        while y <= maxY {
-            var x = minX
-            while x <= maxX {
-                if Self.insideLand(SIMD2(x, y), rings: rings, boxes: boxes) {
-                    out.append(GPUPoint(pos: SIMD2(x, y), vel: .zero, wet: 0))
-                    if out.count >= maxPoints { return out }
+        // ── Flood-fill across water, bounded by the data spacing ─────────
+        // Reach ≈ 0.8× the estimated point spacing: enough to close the gaps
+        // between samples and reach the drawn shoreline, not enough to invent
+        // current well beyond real coverage (off the model domain, unsampled
+        // bays stay empty → no particles there, which is the honest render).
+        let waterCellCountEstimate = max(1, cells - land.lazy.filter { $0 }.count)
+        let spacingCells = (Float(waterCellCountEstimate) / Float(dataCells)).squareRoot()
+        let reach = min(28, max(2, Int((spacingCells * 0.8).rounded(.up))))
+
+        var head = 0
+        while head < queue.count {
+            let i = queue[head]; head += 1
+            let d = dist[i]
+            guard d < reach else { continue }
+            let cy = i / cols, cx = i % cols
+            for dy in -1...1 {
+                for dx in -1...1 where (dy, dx) != (0, 0) {
+                    let ny = cy + dy, nx = cx + dx
+                    guard ny >= 0, ny < rows, nx >= 0, nx < cols else { continue }
+                    let n = ny * cols + nx
+                    guard !land[n], dist[n] == .max else { continue }
+                    // Average of already-assigned neighbours (≥1: cell `i`).
+                    var u: Float = 0, v: Float = 0, k: Float = 0
+                    for ey in -1...1 {
+                        for ex in -1...1 {
+                            let my = ny + ey, mx2 = nx + ex
+                            guard my >= 0, my < rows, mx2 >= 0, mx2 < cols else { continue }
+                            let m = my * cols + mx2
+                            if dist[m] <= d { u += velU[m]; v += velV[m]; k += 1 }
+                        }
+                    }
+                    velU[n] = u / max(1, k)
+                    velV[n] = v / max(1, k)
+                    dist[n] = d + 1
+                    queue.append(n)
                 }
-                x += spacing
             }
-            y += spacing
         }
-        return out
+
+        // ── Smooth (two 3×3 passes over covered water) ───────────────────
+        for _ in 0..<2 {
+            var outU = velU, outV = velV
+            for cy in 0..<rows {
+                for cx in 0..<cols {
+                    let i = cy * cols + cx
+                    guard !land[i], dist[i] != .max else { continue }
+                    var u: Float = 0, v: Float = 0, k: Float = 0
+                    for dy in -1...1 {
+                        for dx in -1...1 {
+                            let ny = cy + dy, nx = cx + dx
+                            guard ny >= 0, ny < rows, nx >= 0, nx < cols else { continue }
+                            let n = ny * cols + nx
+                            guard !land[n], dist[n] != .max else { continue }
+                            u += velU[n]; v += velV[n]; k += 1
+                        }
+                    }
+                    outU[i] = u / max(1, k)
+                    outV[i] = v / max(1, k)
+                }
+            }
+            velU = outU; velV = outV
+        }
+
+        // ── Pack ─────────────────────────────────────────────────────────
+        var rgba = [Float](repeating: 0, count: cells * 4)
+        var waterCells: [UInt32] = []
+        waterCells.reserveCapacity(cells / 4)
+        for i in 0..<cells {
+            let covered = dist[i] != .max
+            let cov: Float = covered ? max(0, 1 - Float(dist[i]) / Float(reach)) : 0
+            rgba[i * 4]     = covered ? velU[i] : 0
+            rgba[i * 4 + 1] = covered ? velV[i] : 0
+            rgba[i * 4 + 2] = land[i] ? 0 : 1
+            rgba[i * 4 + 3] = cov
+            if !land[i], cov >= 0.15 { waterCells.append(UInt32(i)) }
+        }
+        return Field(cols: cols, rows: rows, originX: minX, originY: minY,
+                     spanX: spanX, spanY: spanY, rgba: rgba, waterCells: waterCells)
     }
 
     /// Even-odd crossing test over all rings (bbox-pruned).
@@ -306,31 +459,6 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
         return inside
     }
 
-    /// Median nearest-neighbour distance (world units) over a sample of the points
-    /// — a robust estimate of the data spacing regardless of how the points are
-    /// laid out (grid, channel line, sparse), used to size the IDW radius.
-    private static func medianNearestNeighbor(_ pts: [GPUPoint]) -> Float {
-        let n = pts.count
-        guard n > 1 else { return 0.001 }
-        let stride = max(1, n / 128)
-        var nn = [Float]()
-        var i = 0
-        while i < n {
-            let a = pts[i].pos
-            var best = Float.greatestFiniteMagnitude
-            for j in 0..<n where j != i {
-                let d = pts[j].pos - a
-                let dd = d.x * d.x + d.y * d.y
-                if dd < best { best = dd }
-            }
-            if best < .greatestFiniteMagnitude { nn.append(best.squareRoot()) }
-            i += stride
-        }
-        guard !nn.isEmpty else { return 0.001 }
-        nn.sort()
-        return nn[nn.count / 2]
-    }
-
     // MARK: - Draw
 
     override func draw(in mapView: MLNMapView, with context: MLNStyleLayerDrawingContext) {
@@ -340,8 +468,10 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
               let advectPipeline,
               let renderPipeline,
               let depthState,
-              let pointBuffer,
-              pointCount > 0,
+              let samplerState,
+              let texture = fieldTexture,
+              let waterCellBuffer,
+              let field = appliedField,
               particleBuffers.count == 2 else { return }
 
         frame &+= 1
@@ -350,33 +480,24 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
         let vpH = Float(context.size.height)
         let worldSize = Float(512.0 * pow(2.0, context.zoomLevel))
 
-        // 1. Advection (own command buffer); non-blocking acquire so we never stall
-        //    the main thread inside MapLibre's render callback.
-        // Reseed within the current viewport (with a small margin) so all the
-        // particles concentrate on the visible water at any zoom — the data set
-        // spans the whole atlas region, far larger than the view at high zoom.
-        let b = mapView.visibleCoordinateBounds
-        let sw = Self.lonLatToWorld(lon: b.sw.longitude, lat: b.sw.latitude)
-        let ne = Self.lonLatToWorld(lon: b.ne.longitude, lat: b.ne.latitude)
-        let mX = (Float(ne.x) - Float(sw.x)) * 0.08
-        let mY = (Float(sw.y) - Float(ne.y)) * 0.08   // note: world Y grows southward
-        let vMinX = Float(sw.x) - mX, vMaxX = Float(ne.x) + mX
-        let vMinY = Float(ne.y) - mY, vMaxY = Float(sw.y) + mY
-
         let didAdvect = inFlight.wait(timeout: .now()) == .success
         if didAdvect {
             var advect = AdvectUniforms(
                 speedK: speedPx, worldSize: worldSize,
-                vMinX: vMinX, vMinY: vMinY, vMaxX: vMaxX, vMaxY: vMaxY,
-                lifetime: lifetime, radius: idwRadius, covThreshold: covThreshold,
-                wetThreshold: wetThreshold,
-                frame: frame, count: UInt32(particleCount), pointCount: UInt32(pointCount))
+                originX: field.originX, originY: field.originY,
+                spanX: field.spanX, spanY: field.spanY,
+                lifetime: lifetime, frame: frame,
+                count: UInt32(particleCount),
+                fieldCols: UInt32(field.cols), fieldRows: UInt32(field.rows),
+                waterCellCount: UInt32(field.waterCells.count))
             if let cb = queue.makeCommandBuffer(), let ce = cb.makeComputeCommandEncoder() {
                 ce.setComputePipelineState(advectPipeline)
                 ce.setBuffer(particleBuffers[current], offset: 0, index: 0)
                 ce.setBuffer(particleBuffers[next], offset: 0, index: 1)
                 ce.setBytes(&advect, length: MemoryLayout<AdvectUniforms>.stride, index: 2)
-                ce.setBuffer(pointBuffer, offset: 0, index: 3)
+                ce.setBuffer(waterCellBuffer, offset: 0, index: 3)
+                ce.setTexture(texture, index: 0)
+                ce.setSamplerState(samplerState, index: 0)
                 let tg = min(advectPipeline.maxTotalThreadsPerThreadgroup, 64)
                 ce.dispatchThreads(MTLSize(width: particleCount, height: 1, depth: 1),
                                    threadsPerThreadgroup: MTLSize(width: tg, height: 1, depth: 1))
@@ -388,12 +509,11 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
             }
         }
 
-        // 2. Render last frame's particles as streaks with the live matrix.
         var matrix = Self.matrix(from: context.projectionMatrix)
         var render = RenderUniforms(
             worldSize: worldSize, streakLenScale: streakLenScale, maxStreakPx: maxStreakPx,
-            maxSpeed: maxSpeed, covThreshold: covThreshold, wetThreshold: wetThreshold,
-            lifetime: lifetime, dark: isDark ? 1 : 0, viewportW: vpW, viewportH: vpH,
+            maxSpeed: maxSpeed, lifetime: lifetime,
+            dark: isDark ? 1 : 0, viewportW: vpW, viewportH: vpH,
             lineWidth: isDark ? lineWidthNight : lineWidthDay)
 
         renderEncoder.setRenderPipelineState(renderPipeline)
@@ -417,7 +537,7 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
             let lat = Double.random(in: 47.0 ... 50.0)
             let w = Self.lonLatToWorld(lon: lon, lat: lat)
             seed.append(GPUParticle(pos: SIMD2(Float(w.x), Float(w.y)), vel: .zero,
-                                    age: Float.random(in: 0...lifetime), cov: 0, wet: 0))
+                                    age: Float.random(in: 0...lifetime), fade: 0))
         }
         let len = particleCount * MemoryLayout<GPUParticle>.stride
         guard let a = device.makeBuffer(bytes: seed, length: len, options: .storageModeShared),
@@ -435,7 +555,7 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
             advectPipeline = try? device.makeComputePipelineState(function: advect)
         }
         let desc = MTLRenderPipelineDescriptor()
-        desc.label = "CurrentParticle.idw"
+        desc.label = "CurrentParticle.field"
         desc.vertexFunction = library.makeFunction(name: "streakVertex")
         desc.fragmentFunction = library.makeFunction(name: "streakFragment")
         desc.colorAttachments[0].pixelFormat = colorPixelFormat
@@ -454,6 +574,13 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
         depthDesc.depthCompareFunction = .always
         depthDesc.isDepthWriteEnabled = false
         depthState = device.makeDepthStencilState(descriptor: depthDesc)
+
+        let samp = MTLSamplerDescriptor()
+        samp.minFilter = .linear
+        samp.magFilter = .linear
+        samp.sAddressMode = .clampToEdge
+        samp.tAddressMode = .clampToEdge
+        samplerState = device.makeSamplerState(descriptor: samp)
     }
 
     /// lon/lat → global Web-Mercator world coords [0,1]. Internal so the map
@@ -480,20 +607,18 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
     #include <metal_stdlib>
     using namespace metal;
 
-    struct Particle { float2 pos; float2 vel; float age; float cov; float wet; float pad; };
-    struct Point    { float2 pos; float2 vel; float wet; float pad; };
+    struct Particle { float2 pos; float2 vel; float age; float fade; float2 pad; };
 
     struct AdvectUniforms {
-        float speedK; float worldSize; float vMinX; float vMinY;
-        float vMaxX; float vMaxY; float lifetime; float radius;
-        float covThreshold; float wetThreshold;
-        uint frame; uint count; uint pointCount;
+        float speedK; float worldSize; float originX; float originY;
+        float spanX; float spanY; float lifetime;
+        uint frame; uint count; uint fieldCols; uint fieldRows; uint waterCellCount;
     };
 
     struct RenderUniforms {
         float worldSize; float streakLenScale; float maxStreakPx; float maxSpeed;
-        float covThreshold; float wetThreshold; float lifetime; float dark;
-        float viewportW; float viewportH; float lineWidth; float pad0;
+        float lifetime; float dark; float viewportW; float viewportH;
+        float lineWidth; float pad0; float pad1; float pad2;
     };
 
     static inline float hash(uint x) {
@@ -502,59 +627,51 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
         return float(x & 0x00FFFFFFu) / float(0x01000000);
     }
 
-    // Inverse-distance interpolation of the data points at world position `pos`.
-    // Compact-support weight (zero beyond `radius`) → smooth field, the total
-    // weight is the "coverage" (high near data, zero where there's none), and
-    // the weight share of wet points is the "wetness" (1 in open water, 0 deep
-    // in the dry-cell mask, 0.5 at the model coastline). With no mask points
-    // in range wetness stays 1, so unmasked data (the atlas) is unaffected.
-    static inline float4 sampleIDW(float2 pos, device const Point *pts, uint n, float radius) {
-        float r2 = radius * radius;
-        float2 vsum = float2(0.0);
-        float wsum = 0.0;
-        float wetsum = 0.0;
-        for (uint i = 0u; i < n; i++) {
-            float2 d = pos - pts[i].pos;
-            float t = 1.0 - dot(d, d) / r2;
-            if (t > 0.0) { float w = t * t; vsum += pts[i].vel * w; wsum += w; wetsum += pts[i].wet * w; }
-        }
-        float2 vel = wsum > 1e-6 ? vsum / wsum : float2(0.0);
-        float wet  = wsum > 1e-6 ? wetsum / wsum : 0.0;
-        return float4(vel, wsum, wet);   // xy = velocity, z = coverage, w = wetness
-    }
-
     kernel void advect(device const Particle *inP [[buffer(0)]],
                        device Particle       *outP [[buffer(1)]],
                        constant AdvectUniforms &u   [[buffer(2)]],
-                       device const Point *pts      [[buffer(3)]],
+                       device const uint *waterCells [[buffer(3)]],
+                       texture2d<float> field        [[texture(0)]],
+                       sampler s                     [[sampler(0)]],
                        uint id [[thread_position_in_grid]]) {
         if (id >= u.count) return;
         Particle p = inP[id];
 
-        float4 s = sampleIDW(p.pos, pts, u.pointCount, u.radius);
-        float2 vel = s.xy;
-        float cov = s.z;
-        float wet = s.w;
+        float2 uv = float2((p.pos.x - u.originX) / u.spanX,
+                           (p.pos.y - u.originY) / u.spanY);
+        bool inField = uv.x >= 0.0 && uv.x < 1.0 && uv.y >= 0.0 && uv.y < 1.0;
+        float4 smp = inField ? field.sample(s, uv) : float4(0.0);
+        float water = smp.z;
+        float cov   = smp.w;
+        bool alive = inField && water > 0.5 && cov > 0.1;
 
-        bool reseed = (p.age >= u.lifetime) || (cov < u.covThreshold) || (wet < u.wetThreshold);
+        bool reseed = (p.age >= u.lifetime) || !alive;
         if (reseed) {
-            // Uniform within the current viewport → all particles concentrate on
-            // the visible water at any zoom. Spawns that miss the data coverage
-            // (land / no-data) recycle again next frame, so the steady state is an
-            // even fill of exactly the covered water in view.
+            if (u.waterCellCount == 0u) {
+                p.fade = 0.0; p.vel = float2(0.0);
+                outP[id] = p;
+                return;
+            }
+            // Uniform over the *water* cells — density never depends on how
+            // much of the viewport is land, and never clusters.
             uint h = id * 747796405u + u.frame * 2891336453u;
-            p.pos = float2(u.vMinX + hash(h) * (u.vMaxX - u.vMinX),
-                           u.vMinY + hash(h ^ 0x9e3779b9u) * (u.vMaxY - u.vMinY));
-            // Random birth phase so lifetimes never march in lockstep — otherwise
-            // a mass reseed (first frame at high zoom, or a big pan/zoom jump) sets
-            // every particle to age 0 at once and the whole field pulses together.
-            p.age = hash(h ^ 0x68bc21ebu) * u.lifetime;
-            p.vel = float2(0.0); p.cov = 0.0; p.wet = 0.0;
+            uint cell = waterCells[uint(hash(h) * float(u.waterCellCount)) % u.waterCellCount];
+            float cy = float(cell / u.fieldCols);
+            float cx = float(cell % u.fieldCols);
+            float jx = hash(h ^ 0x9e3779b9u);
+            float jy = hash(h ^ 0x68bc21ebu);
+            p.pos = float2(u.originX + (cx + jx) / float(u.fieldCols) * u.spanX,
+                           u.originY + (cy + jy) / float(u.fieldRows) * u.spanY);
+            // Random birth phase so lifetimes never march in lockstep.
+            p.age = hash(h ^ 0x1b873593u) * u.lifetime;
+            p.vel = float2(0.0); p.fade = 0.0;
         } else {
+            float2 vel = smp.xy;
             // Screen-space velocity (zoom-independent). East → +x, north → −y.
             p.pos += float2(vel.x, -vel.y) * (u.speedK / u.worldSize);
             p.age += (1.0 / 30.0);
-            p.vel = vel; p.cov = cov; p.wet = wet;
+            p.vel = vel;
+            p.fade = smoothstep(0.5, 0.8, water) * smoothstep(0.1, 0.35, cov);
         }
         outP[id] = p;
     }
@@ -577,7 +694,6 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
         float2 vel = p.vel;
         float mag = length(vel);
 
-        // Streak: head at the particle, tail trailing along the flow (screen pts).
         float2 vp = float2(u.viewportW, u.viewportH);
         float2 dpx = float2(vel.x, -vel.y) * u.streakLenScale;
         float dlen = length(dpx);
@@ -608,11 +724,7 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
         float lifeFade = smoothstep(0.0, 0.4, p.age / u.lifetime) *
                          (1.0 - smoothstep(0.7, 1.0, p.age / u.lifetime));
         float endFade  = isHead ? 1.0 : 0.20;
-        // Smooth coverage edge (fade out as the particle approaches the data boundary).
-        float covFade  = smoothstep(u.covThreshold, u.covThreshold * 2.0, p.cov);
-        // Smooth land edge (fade out as the particle approaches the model coastline).
-        float wetFade  = smoothstep(u.wetThreshold, min(u.wetThreshold * 1.5, 1.0), p.wet);
-        float a = (u.dark > 0.5 ? 0.85 : 0.95) * lifeFade * endFade * covFade * wetFade;
+        float a = (u.dark > 0.5 ? 0.85 : 0.95) * lifeFade * endFade * p.fade;
 
         out.color = float4(c, a);
         return out;

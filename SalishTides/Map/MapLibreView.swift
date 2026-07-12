@@ -139,25 +139,38 @@ struct MapLibreView: UIViewRepresentable {
             onBearingChange(mapView.direction)
         }
 
-        // Latest vectors + live land mask + drawn-land rings, retained so they
-        // can be re-pushed (as the particle interpolation source) to a freshly
-        // created layer after a style reload.
+        // Latest vectors + live land mask + drawn-land rings + viewport, all
+        // retained so they can be re-pushed (as the particle field inputs) to
+        // a freshly created layer after a style reload.
         nonisolated(unsafe) private var lastVectors: [CurrentVector] = []
         nonisolated(unsafe) private var lastMask: [CurrentVector] = []
         nonisolated(unsafe) private var lastLandRings: [[SIMD2<Float>]] = []
+        nonisolated(unsafe) private var lastBoundsWorld: (minX: Float, minY: Float, maxX: Float, maxY: Float) = (0, 0, 0, 0)
 
         func updateVectors(_ vectors: [CurrentVector], mask: [CurrentVector], on mapView: MLNMapView) {
             // The same (thinned) vectors drive the arrows and feed the particle
-            // layer's IDW interpolation; the masks only feed the particles.
+            // layer's field raster; the masks/rings only feed the particles.
             lastVectors = vectors
             lastMask = mask
             lastLandRings = landRings(from: mapView)
-            particleLayer?.update(vectors: vectors, mask: mask, landRings: lastLandRings)
+            lastBoundsWorld = worldBounds(of: mapView)
+            particleLayer?.update(vectors: vectors, mask: mask,
+                                  landRings: lastLandRings, boundsWorld: lastBoundsWorld)
             guard let style = mapView.style else {
                 pendingVectors = vectors
                 return
             }
             applyVectors(vectors, style: style)
+        }
+
+        /// The visible viewport as world-Mercator min/max (the particle field's
+        /// raster extent).
+        private func worldBounds(of mapView: MLNMapView) -> (minX: Float, minY: Float, maxX: Float, maxY: Float) {
+            let b = MainActor.assumeIsolated { mapView.visibleCoordinateBounds }
+            let sw = CurrentParticleLayer.lonLatToWorld(lon: b.sw.longitude, lat: b.sw.latitude)
+            let ne = CurrentParticleLayer.lonLatToWorld(lon: b.ne.longitude, lat: b.ne.latitude)
+            // World y grows southward: the north-east corner has the smaller y.
+            return (Float(sw.x), Float(ne.y), Float(ne.x), Float(sw.y))
         }
 
         /// The basemap's rendered land polygons in the current viewport, as
@@ -280,7 +293,8 @@ struct MapLibreView: UIViewRepresentable {
             self.particleLayer = particleLayer
             // Re-seed the freshly created layer with the field + style/scheme from
             // before the reload, so particles don't blank out on a Day/Night flip.
-            particleLayer.update(vectors: lastVectors, mask: lastMask, landRings: lastLandRings)
+            particleLayer.update(vectors: lastVectors, mask: lastMask,
+                                 landRings: lastLandRings, boundsWorld: lastBoundsWorld)
             particleLayer.setDark(lastDark)
             particleLayer.setActive(lastStyleMode != .arrows)
         }
