@@ -10,7 +10,7 @@ actor LiveDataStore {
     // Bump when the schema OR a packed-blob layout changes (see
     // SalishSeaCastAPI's pack/unpack). Combined with the grid stride so a
     // stride retune also invalidates cached geometry/slices.
-    private static let schemaVersion = 1
+    private static let schemaVersion = 2
 
     private var pool: DatabasePool?
 
@@ -22,7 +22,8 @@ actor LiveDataStore {
             let expected = Self.schemaVersion * 1000 + SalishSeaCastAPI.gridStride
             let version = try Int.fetchOne(db, sql: "PRAGMA user_version") ?? 0
             if version != expected {
-                for table in ["live_blobs", "live_current_slices", "live_ssh", "live_meta"] {
+                for table in ["live_blobs", "live_current_slices", "live_native_slices",
+                              "live_ssh", "live_meta"] {
                     try db.execute(sql: "DROP TABLE IF EXISTS \(table)")
                 }
                 try db.execute(sql: "PRAGMA user_version = \(expected)")
@@ -35,6 +36,16 @@ actor LiveDataStore {
                 t.primaryKey("t", .integer)                  // slice hour start, epoch s (UTC)
                 t.column("fetched_at", .integer).notNull()
                 t.column("data", .blob).notNull()            // packed WetPoints
+            }
+            try db.create(table: "live_native_slices", ifNotExists: true) { t in
+                t.column("t", .integer).notNull()            // slice hour start, epoch s (UTC)
+                t.column("y0", .integer).notNull()           // inclusive native-index window
+                t.column("y1", .integer).notNull()
+                t.column("x0", .integer).notNull()
+                t.column("x1", .integer).notNull()
+                t.column("fetched_at", .integer).notNull()
+                t.column("data", .blob).notNull()            // packed NativePoints
+                t.uniqueKey(["t", "y0", "y1", "x0", "x1"])
             }
             try db.create(table: "live_ssh", ifNotExists: true) { t in
                 t.column("gauge", .text).notNull()           // gauge dataset id
@@ -107,6 +118,58 @@ actor LiveDataStore {
         guard let pool else { return }
         try pool.write { db in
             try db.execute(sql: "DELETE FROM live_current_slices WHERE t < ?", arguments: [hourKey])
+        }
+    }
+
+    // ── Native-resolution subwindows ─────────────────────────────────────
+
+    func saveNativeSlice(hourKey: Int, window: SalishSeaCastAPI.NativeWindow,
+                         points: [SalishSeaCastAPI.NativePoint], fetchedAt: Date) throws {
+        guard let pool else { return }
+        let blob = SalishSeaCastAPI.pack(points)
+        try pool.write { db in
+            try db.execute(
+                sql: """
+                    INSERT OR REPLACE INTO live_native_slices
+                    (t, y0, y1, x0, x1, fetched_at, data) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                arguments: [hourKey, window.y0, window.y1, window.x0, window.x1,
+                            Int(fetchedAt.timeIntervalSince1970), blob])
+        }
+    }
+
+    /// The freshest cached window for `hourKey` that CONTAINS `window` (a
+    /// zoom-in reuses the surrounding zoom-out fetch), with its own bounds
+    /// and fetch time so callers can judge staleness.
+    func loadNativeSlice(hourKey: Int, containing window: SalishSeaCastAPI.NativeWindow) throws
+        -> (window: SalishSeaCastAPI.NativeWindow, fetchedAt: Date,
+            points: [SalishSeaCastAPI.NativePoint])? {
+        guard let pool else { return nil }
+        return try pool.read { db in
+            let row = try Row.fetchOne(db, sql: """
+                SELECT y0, y1, x0, x1, fetched_at, data FROM live_native_slices
+                WHERE t = ? AND y0 <= ? AND y1 >= ? AND x0 <= ? AND x1 >= ?
+                ORDER BY fetched_at DESC LIMIT 1
+                """, arguments: [hourKey, window.y0, window.y1, window.x0, window.x1])
+            guard let row else { return nil }
+            return (SalishSeaCastAPI.NativeWindow(y0: row["y0"], y1: row["y1"],
+                                                  x0: row["x0"], x1: row["x1"]),
+                    Date(timeIntervalSince1970: TimeInterval(row["fetched_at"] as Int)),
+                    SalishSeaCastAPI.unpackNativePoints(row["data"]))
+        }
+    }
+
+    /// Prunes native windows for hours older than `hourKey`, and caps the
+    /// table (oldest-fetched first) so heavy panning can't grow it unbounded.
+    func deleteNativeSlices(before hourKey: Int, keepingNewest cap: Int = 200) throws {
+        guard let pool else { return }
+        try pool.write { db in
+            try db.execute(sql: "DELETE FROM live_native_slices WHERE t < ?", arguments: [hourKey])
+            try db.execute(sql: """
+                DELETE FROM live_native_slices WHERE rowid IN (
+                    SELECT rowid FROM live_native_slices
+                    ORDER BY fetched_at DESC LIMIT -1 OFFSET ?)
+                """, arguments: [cap])
         }
     }
 

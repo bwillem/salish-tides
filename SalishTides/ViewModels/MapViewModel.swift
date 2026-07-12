@@ -204,9 +204,20 @@ final class MapViewModel {
         // (or all land at this resolution), and the atlas must take over —
         // its charts extend beyond the NEMO domain (e.g. Queen Charlotte
         // Strait in Vol 4).
-        let liveVectors: [CurrentVector]? = liveField.flatMap { field in
+        var liveVectors: [CurrentVector]? = liveField.flatMap { field in
             let culled = viewportFiltered(field)
             return culled.isEmpty ? nil : culled
+        }
+
+        // At navigation zooms, upgrade the strided field to the native-
+        // resolution window — the stride drops ~3/4 of the model's wet cells
+        // in constricted water (whole bays vanish). Strided keeps rendering
+        // until the window lands, so the upgrade is seamless.
+        if liveVectors != nil, visibleViewport != nil,
+           let native = await liveData?.nativeCurrents(for: date, viewport: visibleViewport!) {
+            guard generation == loadGeneration else { return }
+            let culled = viewportFiltered(native)
+            if !culled.isEmpty { liveVectors = culled }
         }
 
         // Find all volumes whose geographic bounds intersect the current viewport.

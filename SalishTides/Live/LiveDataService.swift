@@ -83,6 +83,13 @@ final class LiveDataService {
     // Cached, unpacked vector slices kept in memory (scrubbing revisits
     // hours; ~0.5 MB per entry).
     private static let vectorCacheLimit = 8
+    // Native-resolution subwindow fetches: the whole-domain slices are
+    // strided (every 2nd cell), which discards ~3/4 of the model's wet
+    // velocity cells in constricted water — so zoomed-in viewports refetch
+    // their window at full resolution. The cap bounds the request size
+    // (~8k cells ≈ 400 KB JSON); wider viewports stay on the strided field.
+    private static let maxNativeCells = 8_000
+    private static let nativeCacheLimit = 6
 
     private let settings: AppSettings
     private let network: NetworkMonitor
@@ -111,6 +118,15 @@ final class LiveDataService {
     private var calibrationCache: [String: Double] = [:]
     private var refreshing = false
     private var landMaskCache: [CurrentVector]?
+    // Native-window state. The window derivation scans the whole strided
+    // grid, so it's memoized per viewport (scrubs change the hour, not the
+    // viewport). Keys are "hourKey|windowKey".
+    private var lastNativeViewport: ChartBounds?
+    private var lastNativeWindow: SalishSeaCastAPI.NativeWindow?
+    private var nativeCache: [String: [CurrentVector]] = [:]
+    private var nativeCacheOrder: [String] = []                     // LRU, most recent last
+    private var nativeRetryAfter: [String: Date] = [:]
+    private var nativesInFlight: Set<String> = []
 
     init(settings: AppSettings, network: NetworkMonitor) {
         self.settings = settings
@@ -230,6 +246,7 @@ final class LiveDataService {
 
         let cutoff = Self.hourKey(for: Date().addingTimeInterval(-48 * 3600))
         try? await store.deleteSlices(before: cutoff)
+        try? await store.deleteNativeSlices(before: cutoff)
         sliceIndex = sliceIndex.filter { $0.key >= cutoff }
     }
 
@@ -353,6 +370,106 @@ final class LiveDataService {
         vectorCacheOrder.append(hourKey)
     }
 
+    /// Full-resolution current vectors for the hour containing `date` over
+    /// (a window covering) `viewport`, or nil when the viewport is too wide
+    /// for a native fetch, off the model domain, or the window isn't cached
+    /// yet — callers keep rendering the strided field meanwhile. A cache miss
+    /// kicks off an on-demand fetch; `dataGeneration` bumps when it lands.
+    ///
+    /// Why this exists: the strided whole-domain slices keep only every 2nd
+    /// cell per axis, which in constricted water (Active Pass) throws away
+    /// ~3/4 of the model's wet velocity cells — including entire bays whose
+    /// only strided candidates are the coast-masked ones. Navigation zooms
+    /// need every cell the model has.
+    func nativeCurrents(for date: Date, viewport: ChartBounds) async -> [CurrentVector]? {
+        guard !settings.offlineOnly else { return nil }
+        await ensureReady()
+        guard ready, let grid else { return nil }
+
+        // Window for the viewport + the same 20% margin the view model culls
+        // with, memoized per viewport (the derivation scans the strided grid).
+        if lastNativeViewport != viewport {
+            let latMargin = (viewport.lat_max - viewport.lat_min) * 0.2
+            let lonMargin = (viewport.lon_max - viewport.lon_min) * 0.2
+            lastNativeWindow = SalishSeaCastAPI.nativeWindow(
+                latMin: viewport.lat_min - latMargin, latMax: viewport.lat_max + latMargin,
+                lonMin: viewport.lon_min - lonMargin, lonMax: viewport.lon_max + lonMargin,
+                grid: grid)
+            lastNativeViewport = viewport
+        }
+        guard let window = lastNativeWindow, window.cellCount <= Self.maxNativeCells else { return nil }
+
+        let hourKey = Self.hourKey(for: date)
+        let key = "\(hourKey)|\(window.key)"
+        if let cached = nativeCache[key] {
+            touchNativeCache(key)
+            return cached
+        }
+
+        if let row = try? await store.loadNativeSlice(hourKey: hourKey, containing: window) {
+            // Re-check after the suspension (same LRU-desync hazard as the
+            // strided path).
+            if let cached = nativeCache[key] {
+                touchNativeCache(key)
+                return cached
+            }
+            let vectors = await Task.detached(priority: .userInitiated) {
+                Self.vectors(from: row.points, grid: grid)
+            }.value
+            nativeCache[key] = vectors
+            touchNativeCache(key)
+            if nativeCacheOrder.count > Self.nativeCacheLimit {
+                nativeCache[nativeCacheOrder.removeFirst()] = nil
+            }
+            // Serve the cached window but refresh it if a newer model run
+            // should be available by now.
+            if Date().timeIntervalSince(row.fetchedAt) >= Self.sliceMaxAge {
+                kickNativeFetch(hourKey: hourKey, window: window, key: key)
+            }
+            return vectors
+        }
+
+        kickNativeFetch(hourKey: hourKey, window: window, key: key)
+        return nil
+    }
+
+    private func kickNativeFetch(hourKey: Int, window: SalishSeaCastAPI.NativeWindow, key: String) {
+        let offset = TimeInterval(hourKey) - Date().timeIntervalSince1970
+        guard fetchingAllowed, offset > Self.onDemandPast, offset < Self.onDemandFuture,
+              nativeRetryAfter[key].map({ $0 <= Date() }) ?? true
+        else { return }
+        Task { await fetchNativeSlice(hourKey: hourKey, window: window, key: key) }
+    }
+
+    private func fetchNativeSlice(hourKey: Int, window: SalishSeaCastAPI.NativeWindow,
+                                  key: String) async {
+        guard !nativesInFlight.contains(key) else { return }
+        nativesInFlight.insert(key)
+        defer { nativesInFlight.remove(key) }
+        do {
+            guard let (center, points) = try await client.fetchNativeCurrents(
+                      center: Self.sliceCenter(hourKey: hourKey), window: window),
+                  Self.hourKey(for: center) == hourKey
+            else {
+                nativeRetryAfter[key] = Date().addingTimeInterval(Self.sliceRetryDelay)
+                return
+            }
+            try await store.saveNativeSlice(hourKey: hourKey, window: window,
+                                            points: points, fetchedAt: Date())
+            nativeRetryAfter[key] = nil
+            nativeCache[key] = nil
+            nativeCacheOrder.removeAll { $0 == key }
+            if hourKey == displayedHourKey { dataGeneration += 1 }
+        } catch {
+            nativeRetryAfter[key] = Date().addingTimeInterval(Self.sliceRetryDelay)
+        }
+    }
+
+    private func touchNativeCache(_ key: String) {
+        nativeCacheOrder.removeAll { $0 == key }
+        nativeCacheOrder.append(key)
+    }
+
     /// Dry (land) model cells adjacent to at least one wet cell — the model's
     /// shoreline band — as zero-speed vectors. The particle renderer feeds
     /// these into its interpolation as "wetness 0" points so particles die at
@@ -428,6 +545,26 @@ final class LiveDataService {
     }
 
     // MARK: - Conversion & calibration
+
+    /// Native-resolution points → CurrentVectors, with cell coordinates
+    /// interpolated from the strided geometry. Nonisolated so callers can run
+    /// it off the main actor.
+    private nonisolated static func vectors(from points: [SalishSeaCastAPI.NativePoint],
+                                            grid: SalishSeaCastAPI.LiveGrid) -> [CurrentVector] {
+        var out: [CurrentVector] = []
+        out.reserveCapacity(points.count)
+        for p in points {
+            guard let (lat, lon) = SalishSeaCastAPI.nativeLatLon(y: Int(p.y), x: Int(p.x),
+                                                                 grid: grid) else { continue }
+            let e = Double(p.east), n = Double(p.north)
+            var dir = atan2(e, n) * 180 / .pi
+            if dir < 0 { dir += 360 }
+            out.append(CurrentVector(lat: lat, lon: lon,
+                                     speed_ms: (e * e + n * n).squareRoot(),
+                                     direction_deg: dir))
+        }
+        return out
+    }
 
     /// NEMO east/north components → the app's speed + compass flow bearing
     /// (0 = N, the convention `VelocityField`/arrows expect). Nonisolated so

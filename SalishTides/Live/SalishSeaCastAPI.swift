@@ -29,6 +29,121 @@ enum SalishSeaCastAPI {
         (gridY / gridStride) * stridedCols + (gridX / gridStride)
     }
 
+    // ── Native-resolution windows ────────────────────────────────────────
+    // The strided whole-domain slices drop ~3/4 of the model's wet velocity
+    // cells in constricted water (the surviving samples near shore are often
+    // the masked ones), so zoomed-in viewports fetch full-resolution
+    // subwindows instead. A window is an inclusive native-index rectangle,
+    // aligned to `windowQuantum` so panning reuses cached windows.
+
+    /// Inclusive native-index rectangle on the model grid.
+    struct NativeWindow: Sendable, Hashable {
+        let y0: Int, y1: Int, x0: Int, x1: Int
+        var cellCount: Int { (y1 - y0 + 1) * (x1 - x0 + 1) }
+        var key: String { "\(y0):\(y1):\(x0):\(x1)" }
+        func contains(_ other: NativeWindow) -> Bool {
+            y0 <= other.y0 && y1 >= other.y1 && x0 <= other.x0 && x1 >= other.x1
+        }
+    }
+
+    /// Window alignment (native cells). Coarse enough that a small pan maps
+    /// to the same window, fine enough not to inflate requests much.
+    static let windowQuantum = 16
+
+    /// One native-resolution grid cell with velocity (water only).
+    struct NativePoint: Sendable, Equatable {
+        let y: UInt16       // native gridY
+        let x: UInt16       // native gridX
+        let east: Float     // m/s
+        let north: Float    // m/s
+    }
+
+    /// The native-index window covering every strided cell whose coordinate
+    /// falls in `latMin...latMax` / `lonMin...lonMax`, expanded by a stride
+    /// margin, quantized, and clamped to the grid. nil when no strided cell
+    /// is inside (viewport entirely off the model domain).
+    static func nativeWindow(latMin: Double, latMax: Double,
+                             lonMin: Double, lonMax: Double,
+                             grid: LiveGrid) -> NativeWindow? {
+        var sy0 = Int.max, sy1 = Int.min, sx0 = Int.max, sx1 = Int.min
+        for i in 0..<grid.lat.count {
+            let la = Double(grid.lat[i]), lo = Double(grid.lon[i])
+            guard la >= latMin, la <= latMax, lo >= lonMin, lo <= lonMax else { continue }
+            let sy = i / stridedCols, sx = i % stridedCols
+            sy0 = min(sy0, sy); sy1 = max(sy1, sy)
+            sx0 = min(sx0, sx); sx1 = max(sx1, sx)
+        }
+        guard sy0 <= sy1 else { return nil }
+        let q = windowQuantum
+        // Strided → native indices (+1 stride margin), then quantize outward.
+        let y0 = max(0, ((sy0 - 1) * gridStride / q) * q)
+        let x0 = max(0, ((sx0 - 1) * gridStride / q) * q)
+        let y1 = min(nativeRows - 1, (((sy1 + 1) * gridStride) / q + 1) * q - 1)
+        let x1 = min(nativeCols - 1, (((sx1 + 1) * gridStride) / q + 1) * q - 1)
+        return NativeWindow(y0: y0, y1: y1, x0: x0, x1: x1)
+    }
+
+    /// lat/lon of a native cell, bilinearly interpolated from the strided
+    /// geometry (the native curvilinear grid is smooth at ~500 m spacing, so
+    /// midpoint interpolation is accurate to metres — no native-resolution
+    /// geometry fetch needed). nil near the domain edge where a neighbour is
+    /// missing.
+    static func nativeLatLon(y: Int, x: Int, grid: LiveGrid) -> (lat: Double, lon: Double)? {
+        func strided(_ sy: Int, _ sx: Int) -> (Double, Double)? {
+            guard sy >= 0, sy < stridedRows, sx >= 0, sx < stridedCols else { return nil }
+            let i = sy * stridedCols + sx
+            let la = Double(grid.lat[i]), lo = Double(grid.lon[i])
+            guard la.isFinite, lo.isFinite else { return nil }
+            return (la, lo)
+        }
+        let sy = y / gridStride, sx = x / gridStride
+        let oy = y % gridStride, ox = x % gridStride
+        var sum = (lat: 0.0, lon: 0.0)
+        var count = 0.0
+        for dy in 0...(oy == 0 ? 0 : 1) {
+            for dx in 0...(ox == 0 ? 0 : 1) {
+                // Clamp the far neighbour at the grid edge (≤ half-cell error,
+                // only on the outermost native row/col).
+                let p = strided(min(sy + dy, stridedRows - 1), min(sx + dx, stridedCols - 1))
+                guard let p else { return nil }
+                sum.lat += p.0; sum.lon += p.1
+                count += 1
+            }
+        }
+        return (sum.lat / count, sum.lon / count)
+    }
+
+    /// One hourly native-resolution velocity subwindow.
+    static func nativeCurrentsSliceURL(center: Date, window: NativeWindow) -> URL {
+        let t = "[(\(iso(center)))]"
+        let s = "[\(window.y0):1:\(window.y1)][\(window.x0):1:\(window.x1)]"
+        return url(dataset: currentsDataset, query: "VelEast5\(t)\(s),VelNorth5\(t)\(s)")
+    }
+
+    /// Rows are [time, gridY, gridX, east, north]; land/masked cells have null
+    /// velocities and are dropped. Same closest-match caveat as
+    /// `parseCurrentsSlice` — callers must verify the returned center.
+    static func parseNativeCurrentsSlice(_ data: Data) throws -> (center: Date, points: [NativePoint])? {
+        let rows = try tableRows(data)
+        guard let isoTime = rows.first?.first as? String,
+              let epoch = TideBundleEvent.epochUTC(from: isoTime)
+        else { return nil }
+
+        var points: [NativePoint] = []
+        points.reserveCapacity(rows.count / 2)
+        for row in rows {
+            guard row.count >= 5,
+                  let y = (row[1] as? NSNumber)?.intValue,
+                  let x = (row[2] as? NSNumber)?.intValue,
+                  (0..<nativeRows).contains(y), (0..<nativeCols).contains(x),
+                  let e = (row[3] as? NSNumber)?.floatValue,
+                  let n = (row[4] as? NSNumber)?.floatValue
+            else { continue }   // null velocity → land / masked
+            points.append(NativePoint(y: UInt16(y), x: UInt16(x), east: e, north: n))
+        }
+        return (Date(timeIntervalSince1970: TimeInterval(epoch)), points)
+    }
+
     // ── Datasets ─────────────────────────────────────────────────────────
     // Depth-averaged velocity over the upper ~5 m — the closest match to what
     // a vessel experiences and to the atlas's surface currents.
@@ -227,6 +342,37 @@ enum SalishSeaCastAPI {
                 let o = i * recordSize
                 out.append(WetPoint(
                     index: UInt32(littleEndian: buf.loadUnaligned(fromByteOffset: o, as: UInt32.self)),
+                    east: Float(bitPattern: UInt32(littleEndian: buf.loadUnaligned(fromByteOffset: o + 4, as: UInt32.self))),
+                    north: Float(bitPattern: UInt32(littleEndian: buf.loadUnaligned(fromByteOffset: o + 8, as: UInt32.self)))
+                ))
+            }
+        }
+        return out
+    }
+
+    /// [UInt16 y, UInt16 x, Float east, Float north] × n.
+    static func pack(_ points: [NativePoint]) -> Data {
+        var data = Data(capacity: points.count * 12)
+        for p in points {
+            withUnsafeBytes(of: p.y.littleEndian) { data.append(contentsOf: $0) }
+            withUnsafeBytes(of: p.x.littleEndian) { data.append(contentsOf: $0) }
+            withUnsafeBytes(of: p.east.bitPattern.littleEndian) { data.append(contentsOf: $0) }
+            withUnsafeBytes(of: p.north.bitPattern.littleEndian) { data.append(contentsOf: $0) }
+        }
+        return data
+    }
+
+    static func unpackNativePoints(_ data: Data) -> [NativePoint] {
+        let recordSize = 12
+        let count = data.count / recordSize
+        var out: [NativePoint] = []
+        out.reserveCapacity(count)
+        data.withUnsafeBytes { buf in
+            for i in 0..<count {
+                let o = i * recordSize
+                out.append(NativePoint(
+                    y: UInt16(littleEndian: buf.loadUnaligned(fromByteOffset: o, as: UInt16.self)),
+                    x: UInt16(littleEndian: buf.loadUnaligned(fromByteOffset: o + 2, as: UInt16.self)),
                     east: Float(bitPattern: UInt32(littleEndian: buf.loadUnaligned(fromByteOffset: o + 4, as: UInt32.self))),
                     north: Float(bitPattern: UInt32(littleEndian: buf.loadUnaligned(fromByteOffset: o + 8, as: UInt32.self)))
                 ))
