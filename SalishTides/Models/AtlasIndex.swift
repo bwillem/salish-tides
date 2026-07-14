@@ -13,7 +13,7 @@ struct RegionInfo: Decodable, Sendable {
     let landmark: String
 }
 
-struct ChartBounds: Decodable, Sendable {
+struct ChartBounds: Decodable, Sendable, Equatable {
     let lat_min: Double
     let lat_max: Double
     let lon_min: Double

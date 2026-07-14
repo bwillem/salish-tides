@@ -1,6 +1,6 @@
 import Foundation
 
-struct CurrentVector: Codable, Sendable {
+struct CurrentVector: Codable, Sendable, Equatable {
     let lat: Double
     let lon: Double
     let speed_ms: Double

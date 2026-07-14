@@ -30,6 +30,14 @@ struct SalishSeaCastClient: Sendable {
         return try SalishSeaCastAPI.parseCurrentsSlice(data)
     }
 
+    /// One hourly native-resolution velocity subwindow (see NativeWindow).
+    /// Same closest-match caveat as `fetchCurrentsSlice`.
+    func fetchNativeCurrents(center: Date, window: SalishSeaCastAPI.NativeWindow) async throws
+        -> (center: Date, points: [SalishSeaCastAPI.NativePoint])? {
+        let data = try await get(SalishSeaCastAPI.nativeCurrentsSliceURL(center: center, window: window))
+        return try SalishSeaCastAPI.parseNativeCurrentsSlice(data)
+    }
+
     /// Lon/lat of every strided grid cell — static geometry, fetched once.
     func fetchGrid() async throws -> SalishSeaCastAPI.LiveGrid {
         try SalishSeaCastAPI.parseGrid(try await get(SalishSeaCastAPI.gridURL()))
