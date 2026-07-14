@@ -41,14 +41,23 @@ struct EpochUTCTests {
         #expect(TideBundleEvent.epochUTC(from: "2026-06-30T23:59:60Z") != nil)
     }
 
+    @Test func allowsISOEndOfDay() {
+        // ISO 8601 24:00:00 is next-day midnight; 24 with nonzero mm/ss isn't.
+        #expect(TideBundleEvent.epochUTC(from: "2026-07-14T24:00:00Z")
+                == TideBundleEvent.epochUTC(from: "2026-07-15T00:00:00Z"))
+        #expect(TideBundleEvent.epochUTC(from: "2026-07-14T24:00:01Z") == nil)
+    }
+
     @Test(arguments: [
         "9223372036854775807-01-01T00:00:00Z",  // Int.max year — would trap in daysFromCivil
         "10000-01-01T00:00:00Z",                // out of accepted year range
         "2026-13-01T00:00:00Z",                 // month 13
         "2026-00-01T00:00:00Z",                 // month 0
         "2026-01-32T00:00:00Z",                 // day 32
-        "2026-01-01T24:00:00Z",                 // hour 24
         "2026-01-01T00:61:00Z",                 // minute 61
+        "2026-07-14T12:34.5Z",                  // fractional minutes — must not shift into seconds
+        "2026.07.14T12:34:56Z",                 // dotted date
+        "2026-07-14T12:34:56x99Z",              // junk after seconds
         "not a date",
         "",
         "2026-01-01",                           // too few fields

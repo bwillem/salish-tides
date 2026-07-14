@@ -107,7 +107,16 @@ struct ContentView: View {
             get: { vm.migrationError != nil },
             set: { if !$0 { vm.migrationError = nil } }
         )) {
-            Button("Retry") { Task { await vm.initialize() } }
+            Button("Retry") {
+                Task {
+                    // Let the dismissal transition finish before retrying: a
+                    // fast failure (setup throws in ms) would re-set the error
+                    // mid-dismissal, and SwiftUI drops an alert re-presented
+                    // during one — the failure would become invisible.
+                    try? await Task.sleep(for: .milliseconds(600))
+                    await vm.initialize()
+                }
+            }
             Button("OK", role: .cancel) {}
         } message: {
             Text(vm.migrationError ?? "")

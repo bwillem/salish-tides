@@ -16,15 +16,22 @@ struct TapeSliderView: View {
     @State private var dragTranslation: CGFloat = 0
 
     private let pixelsPerHour: CGFloat = 27
-    // Static so the bound TimelineControlView can clamp to the same range
-    // when re-anchoring "now".
+    // Static so TimelineControlView's re-anchoring can respect the same range.
     static let maxHours: Int = 48
-    private var maxHours: Int { Self.maxHours }
+
+    /// The single clamp into the tape's representable offset range.
+    static func clampOffset(_ hours: Double) -> Double {
+        max(-Double(maxHours), min(Double(maxHours), hours))
+    }
+
+    static func clampOffset(_ hours: Int) -> Int {
+        max(-maxHours, min(maxHours, hours))
+    }
 
     // Continuous display offset — drives all Canvas drawing
     private var displayedOffset: Double {
         let raw = Double(offsetHours) + Double(-dragTranslation) / pixelsPerHour
-        return max(-Double(maxHours), min(Double(maxHours), raw))
+        return Self.clampOffset(raw)
     }
 
     // VoiceOver value: the current offset relative to "now".
@@ -37,7 +44,7 @@ struct TapeSliderView: View {
 
     // Adjustable-action step (VoiceOver swipe up/down), clamped + committed.
     private func step(by delta: Int) {
-        let clamped = max(-maxHours, min(maxHours, offsetHours + delta))
+        let clamped = Self.clampOffset(offsetHours + delta)
         guard clamped != offsetHours else { return }
         offsetHours = clamped
         dragTranslation = 0
@@ -58,7 +65,7 @@ struct TapeSliderView: View {
                 .onEnded { v in
                     // Compute final continuous position and snap to nearest hour
                     let raw = Double(offsetHours) + Double(-v.translation.width) / pixelsPerHour
-                    let clamped = max(-Double(maxHours), min(Double(maxHours), raw))
+                    let clamped = Self.clampOffset(raw)
                     let snapped = Int(clamped.rounded())
 
                     // Set dragTranslation to the fractional remainder so the tape
@@ -104,7 +111,7 @@ struct TapeSliderView: View {
         // ── Tick marks ───────────────────────────────────────────────────────
         // sessionAnchor is the top of an hour, so every tick is an exact clock
         // hour: labels are accurate and midnight lands precisely on a tick.
-        for tick in -maxHours ... maxHours {
+        for tick in -Self.maxHours ... Self.maxHours {
             let x = cx + CGFloat(Double(tick) - offset) * pixelsPerHour
             guard x >= -4 && x <= size.width + 4 else { continue }
 

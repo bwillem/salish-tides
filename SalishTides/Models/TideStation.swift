@@ -86,15 +86,25 @@ struct TideBundleEvent: Decodable {
     // Pure/Sendable and far cheaper than a Foundation formatter over ~200k events.
     // Also used on server responses, so every field is range-checked: an
     // unbounded year would overflow (trap) in daysFromCivil, and this parser
-    // must never crash on hostile input. Fractional seconds are truncated —
-    // "." is a separator, so ".500" becomes a trailing part that's ignored.
+    // must never crash — or return a wrong instant — on hostile input.
     static func epochUTC(from s: String) -> Int? {
-        let parts = s.split(whereSeparator: { "-T:Z.".contains($0) })
+        let parts = s.split(whereSeparator: { "-T:Z".contains($0) })
         guard parts.count >= 6,
               let y = Int(parts[0]), let mo = Int(parts[1]), let d = Int(parts[2]),
-              let h = Int(parts[3]), let mi = Int(parts[4]), let se = Int(parts[5]),
+              let h = Int(parts[3]), let mi = Int(parts[4])
+        else { return nil }
+        // Fractional seconds ("56.5") are truncated. '.' must NOT be a
+        // general separator: a mangled field like "12:34.5" would shift its
+        // digits into the seconds slot and parse to a wrong instant instead
+        // of nil. Any non-fraction trailing characters are malformed.
+        let secField = parts[5]
+        let secDigits = secField.prefix(while: { $0.isASCII && $0.isNumber })
+        guard let se = Int(secDigits),
+              secDigits.endIndex == secField.endIndex || secField[secDigits.endIndex] == ".",
               (1...9999).contains(y), (1...12).contains(mo), (1...31).contains(d),
-              (0...23).contains(h), (0...59).contains(mi), (0...60).contains(se)
+              (0...59).contains(mi), (0...60).contains(se),
+              // ISO 8601 allows 24:00:00 as end-of-day (next-day midnight).
+              (0...23).contains(h) || (h == 24 && mi == 0 && se == 0)
         else { return nil }
         return daysFromCivil(y, mo, d) * 86_400 + h * 3_600 + mi * 60 + se
     }

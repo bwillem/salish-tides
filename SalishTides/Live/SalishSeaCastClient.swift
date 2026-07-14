@@ -56,25 +56,20 @@ struct SalishSeaCastClient: Sendable {
     }
 
     private func get(_ url: URL) async throws -> Data {
-        let (bytes, response) = try await session.bytes(from: url)
+        let (data, response) = try await session.data(from: url)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             // ERDDAP reports out-of-range/unpublished requests as errors —
             // treated upstream as "no live data for that hour", not a failure.
             throw FetchError.badStatus((response as? HTTPURLResponse)?.statusCode ?? -1)
         }
-        guard http.expectedContentLength <= Self.maxResponseBytes else {
+        // Checking after the download is deliberate: the cap's job is to
+        // bound what reaches JSONSerialization (whose object graph inflates
+        // several× over the byte size), and timeoutIntervalForResource
+        // already bounds a stalling server. Per-byte streaming enforcement
+        // costs far more than it buys (~millions of iterator steps on the
+        // multi-MB grid fetch).
+        guard data.count <= Self.maxResponseBytes else {
             throw FetchError.responseTooLarge
-        }
-        // Accumulate with a hard cap rather than trusting Content-Length —
-        // a chunked/lying server could otherwise stream unbounded data.
-        var data = Data()
-        data.reserveCapacity(http.expectedContentLength > 0
-                             ? Int(http.expectedContentLength) : 1 << 16)
-        for try await byte in bytes {
-            data.append(byte)
-            guard data.count <= Self.maxResponseBytes else {
-                throw FetchError.responseTooLarge
-            }
         }
         return data
     }

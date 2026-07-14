@@ -85,9 +85,12 @@ actor TideDatabase {
     // Nearest station to a coordinate (simple equirectangular distance — fine at
     // this latitude/scale for picking the closest of ~142 stations).
     func nearestStation(lat: Double, lon: Double) -> TideStation? {
-        stations.min(by: {
-            GeoMath.distanceSquared(fromLat: lat, fromLon: lon, toLat: $0.lat, toLon: $0.lon) <
-            GeoMath.distanceSquared(fromLat: lat, fromLon: lon, toLat: $1.lat, toLon: $1.lon)
+        let cosLat = cos(lat * .pi / 180)
+        return stations.min(by: {
+            GeoMath.distanceSquared(fromLat: lat, fromLon: lon,
+                                    toLat: $0.lat, toLon: $0.lon, cosLat: cosLat) <
+            GeoMath.distanceSquared(fromLat: lat, fromLon: lon,
+                                    toLat: $1.lat, toLon: $1.lon, cosLat: cosLat)
         })
     }
 

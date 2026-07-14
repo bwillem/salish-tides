@@ -5,14 +5,31 @@ import Foundation
 /// accurate for nearest-point picks at this scale.
 enum GeoMath {
     /// Squared equirectangular distance in degrees², with longitude corrected
-    /// by cos(query latitude). Cheap enough for per-point min scans; compare
-    /// against squared thresholds.
+    /// by cos(query latitude). Compare against squared thresholds.
     static func distanceSquared(fromLat: Double, fromLon: Double,
                                 toLat: Double, toLon: Double) -> Double {
-        let cosLat = cos(fromLat * .pi / 180)
+        distanceSquared(fromLat: fromLat, fromLon: fromLon,
+                        toLat: toLat, toLon: toLon,
+                        cosLat: cos(fromLat * .pi / 180))
+    }
+
+    /// Same distance with a caller-hoisted cosine — for min-scans over
+    /// thousands of points, where recomputing cos per comparison adds up
+    /// (nearestVector runs on the main actor during scrubs).
+    static func distanceSquared(fromLat: Double, fromLon: Double,
+                                toLat: Double, toLon: Double,
+                                cosLat: Double) -> Double {
         let dLat = toLat - fromLat
         let dLon = (toLon - fromLon) * cosLat
         return dLat * dLat + dLon * dLon
+    }
+
+    /// Ground (and, on a conformal map, screen) length of one degree of
+    /// longitude relative to one degree of latitude at `lat`, clamped away
+    /// from zero near the poles. Divide an east–west degree offset by this
+    /// to keep geometry ground-true.
+    static func lonScale(atLat lat: Double) -> Double {
+        max(0.1, cos(lat * .pi / 180))
     }
 
     /// NEMO east/north velocity components → compass flow bearing in degrees

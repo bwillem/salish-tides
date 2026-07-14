@@ -59,6 +59,19 @@ struct GeoMathTests {
         let dLat = GeoMath.distanceSquared(fromLat: 60, fromLon: 0, toLat: 61, toLon: 0)
         #expect(abs(dLat - 1.0) < 1e-9)
     }
+
+    @Test func hoistedOverloadMatchesBase() {
+        let base = GeoMath.distanceSquared(fromLat: 49, fromLon: -123, toLat: 49.3, toLon: -123.7)
+        let hoisted = GeoMath.distanceSquared(fromLat: 49, fromLon: -123,
+                                              toLat: 49.3, toLon: -123.7,
+                                              cosLat: cos(49 * .pi / 180))
+        #expect(abs(base - hoisted) < 1e-12)
+    }
+
+    @Test func lonScaleIsClampedCosLat() {
+        #expect(abs(GeoMath.lonScale(atLat: 60) - 0.5) < 1e-9)
+        #expect(GeoMath.lonScale(atLat: 89.9) == 0.1)   // clamp floor
+    }
 }
 
 struct ChartBoundsTests {

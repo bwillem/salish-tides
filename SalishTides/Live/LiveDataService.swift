@@ -567,8 +567,10 @@ final class LiveDataService {
     }
 
     private static func nearestGauge(lat: Double, lon: Double) -> SalishSeaCastAPI.Gauge? {
+        let cosLat = cos(lat * .pi / 180)
         func dist2(_ g: SalishSeaCastAPI.Gauge) -> Double {
-            GeoMath.distanceSquared(fromLat: lat, fromLon: lon, toLat: g.lat, toLon: g.lon)
+            GeoMath.distanceSquared(fromLat: lat, fromLon: lon,
+                                    toLat: g.lat, toLon: g.lon, cosLat: cosLat)
         }
         guard let gauge = SalishSeaCastAPI.gauges.min(by: { dist2($0) < dist2($1) }),
               dist2(gauge) <= gaugeMaxDistanceDeg * gaugeMaxDistanceDeg else { return nil }

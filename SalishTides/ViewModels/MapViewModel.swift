@@ -369,7 +369,7 @@ final class MapViewModel {
         // Square-ish cells on screen: a degree of longitude is shorter than a
         // degree of latitude by cos(lat), so widen the longitude cell to match.
         let centerLat = (vp.lat_min + vp.lat_max) / 2
-        let cosLat = max(0.1, cos(centerLat * .pi / 180))
+        let cosLat = GeoMath.lonScale(atLat: centerLat)
         let screenSpan = max(latSpan, lonSpan * cosLat)
         let cellLat = screenSpan / thinTargetAcross
         let cellLon = cellLat / cosLat
@@ -393,10 +393,7 @@ final class MapViewModel {
     // to order active volumes; ties keep their original (volume-id) order.
     private func rank(_ spec: VolumeSpec, center: (lat: Double, lon: Double)?) -> Int {
         guard let c = center else { return 0 }
-        let b = spec.bounds
-        let contains = c.lat >= b.lat_min && c.lat <= b.lat_max &&
-                       c.lon >= b.lon_min && c.lon <= b.lon_max
-        return contains ? 0 : 1
+        return spec.bounds.contains(lat: c.lat, lon: c.lon) ? 0 : 1
     }
 
     // Beyond this, the nearest current vector is too far to be "under" the
@@ -408,8 +405,12 @@ final class MapViewModel {
         guard let vp = viewport else { return nil }
         let cLat = (vp.lat_min + vp.lat_max) / 2
         let cLon = (vp.lon_min + vp.lon_max) / 2
+        // Hoisted: min(by:) evaluates dist2 ~2× per element over the full-
+        // resolution set on the main actor during scrubs.
+        let cosLat = cos(cLat * .pi / 180)
         func dist2(_ v: CurrentVector) -> Double {
-            GeoMath.distanceSquared(fromLat: cLat, fromLon: cLon, toLat: v.lat, toLon: v.lon)
+            GeoMath.distanceSquared(fromLat: cLat, fromLon: cLon,
+                                    toLat: v.lat, toLon: v.lon, cosLat: cosLat)
         }
         guard let nearest = vectors.filter({ $0.isSignificant }).min(by: { dist2($0) < dist2($1) }),
               dist2(nearest) <= crosshairMaxDistanceDeg * crosshairMaxDistanceDeg
