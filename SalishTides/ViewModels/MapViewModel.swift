@@ -241,10 +241,19 @@ final class MapViewModel {
         // full-resolution model water instead of the atlas's sparse arrows.
         // nil when the viewport is off the model domain → atlas takes over.
         var modelVectors: [CurrentVector]?
+        var modelCoverage: ChartBounds?
         if liveVectors == nil {
             modelVectors = await OfflineCurrentModel.shared.currents(for: date,
                                                                      viewport: visibleViewport)
             guard generation == loadGeneration else { return }
+            if modelVectors != nil {
+                // The atlas charts water beyond the model domain (Queen
+                // Charlotte Strait in Vol 4): a straddling viewport keeps its
+                // atlas arrows outside this box, model water inside —
+                // otherwise the out-of-domain half goes blank offline.
+                modelCoverage = await OfflineCurrentModel.shared.coverage()
+                guard generation == loadGeneration else { return }
+            }
         }
 
         // Find all volumes whose geographic bounds intersect the current viewport.
@@ -272,7 +281,10 @@ final class MapViewModel {
         for (spec, selector) in activeSelectors {
             guard let sel = selector.selection(for: date) else { continue }
             selections.append(sel)
-            guard liveVectors == nil, modelVectors == nil else { continue }
+            guard liveVectors == nil else { continue }
+            // With the model rendering, only volumes extending beyond the
+            // model domain still contribute (their out-of-domain arrows).
+            if modelVectors != nil, let cov = modelCoverage, cov.contains(spec.bounds) { continue }
 
             // Use the volume's index for viewport-based region culling when
             // available; fall back to all regions if the index failed to load.
@@ -285,9 +297,14 @@ final class MapViewModel {
             guard !regions.isEmpty else { continue }
 
             do {
-                let vecs = try await VectorDatabase.shared.vectors(volume: spec.id, chart: sel.chart, regions: regions)
+                var vecs = try await VectorDatabase.shared.vectors(volume: spec.id, chart: sel.chart, regions: regions)
                 // A newer load started while we were awaiting — drop these stale results.
                 guard generation == loadGeneration else { return }
+                if modelVectors != nil, let cov = modelCoverage {
+                    // Model water renders inside the domain; keep only the
+                    // arrows the model can't cover.
+                    vecs.removeAll { cov.contains(lat: $0.lat, lon: $0.lon) }
+                }
                 vectors.append(contentsOf: vecs)
             } catch {
                 // Non-fatal: one volume failing doesn't hide the others
@@ -298,13 +315,19 @@ final class MapViewModel {
         if let liveVectors {
             vectors = liveVectors
         } else if let modelVectors {
-            vectors = modelVectors
+            // Any atlas arrows outside the model domain are already in
+            // `vectors`; the model fills everything inside.
+            vectors.append(contentsOf: modelVectors)
         }
 
-        // The live coastline mask, culled like the vectors. Only meaningful
-        // when live vectors render — the atlas has no dry cells to mask with.
+        // The coastline mask, culled like the vectors. Both NEMO-derived
+        // tiers provide one (live from cached wet cells, model from its own
+        // mesh) so particles clip at the shoreline; the atlas has no dry
+        // cells to mask with.
         var landMask: [CurrentVector] = []
         if liveVectors != nil, let mask = await liveData?.landMask() {
+            landMask = viewportFiltered(mask)
+        } else if modelVectors != nil, let mask = await OfflineCurrentModel.shared.landMask() {
             landMask = viewportFiltered(mask)
         }
 

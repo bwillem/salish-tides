@@ -92,26 +92,20 @@ enum TidalHarmonics {
              + c.offset * 90.0
     }
 
-    /// One constituent's harmonic for a single component (amplitude + Greenwich
-    /// phase). Provided as `(f·amp, phaseArg)` so U and V can reuse the shared
-    /// `f`/`V`/`u` and only differ in their amplitude and phase.
-    struct Term: Sendable {
-        let amp: Double      // component amplitude (e.g. m/s for currents)
-        let phase: Double    // Greenwich phase lag g (degrees)
+    /// Date-dependent factors for every constituent (in `constituents` order),
+    /// hoisted once per synthesis pass: nodal amplitude factor `f` and the full
+    /// phase argument `V + u` (degrees). A node's contribution is then just
+    /// `f·A·cos(arg − g)` per component — see `TidalCurrentField.velocity`.
+    struct SynthesisTerm: Sendable {
+        let f: Double
+        let arg: Double
     }
 
-    /// Synthesize a scalar value at `date` from `[(constituentName, Term)]`.
-    /// Used directly for tide height; the U/V current predictor calls it twice.
-    static func value(of terms: [(String, Term)], at date: Date) -> Double {
+    static func synthesisTerms(at date: Date) -> [SynthesisTerm] {
         let a = astro(date)
-        let byName = Dictionary(uniqueKeysWithValues: constituents.map { ($0.name, $0) })
-        var total = 0.0
-        for (name, term) in terms {
-            guard let c = byName[name] else { continue }
-            let (f, u) = nodeFactors(name, a.N)
-            let V = equilibrium(c, a)
-            total += f * term.amp * cosd(V + u - term.phase)
+        return constituents.map { c in
+            let (f, u) = nodeFactors(c.name, a.N)
+            return SynthesisTerm(f: f, arg: equilibrium(c, a) + u)
         }
-        return total
     }
 }

@@ -1,82 +1,61 @@
 import Foundation
 
 /// A bundled grid of tidal-current harmonic constituents (one set per water
-/// node) plus the on-device sampler that turns it into a current vector at any
-/// lat/lon and time. This is the "Model" current source that fills the bays the
-/// print atlas doesn't chart; the grid itself is produced offline from
-/// SalishSeaCast (or supplied by UBC-MOAD) and packed onto a regular lat/lon
-/// mesh so device lookup is a plain bilinear interpolation.
+/// node) plus the per-node synthesizer that turns them into an east/north
+/// velocity at any instant. This is the "Model" current source that fills the
+/// bays the print atlas doesn't chart; the grid is produced offline from
+/// SalishSeaCast (dev/model pipeline) and packed onto a regular lat/lon mesh.
+///
+/// Storage is flat structure-of-arrays: one `Int32` per mesh cell mapping to a
+/// water-node ordinal, and one contiguous coefficient array — ~4 MB resident
+/// for the 2.86 MB asset with zero per-node allocations. (The obvious
+/// per-node `[String: Constituent]` dictionaries cost ~18 MB and a string
+/// hash per constituent per node per synthesis.)
 ///
 /// Synthesis reuses the NOAA-validated `TidalHarmonics` engine, applied to the
 /// east (U) and north (V) components.
 struct TidalCurrentField: Sendable {
 
-    /// Per-constituent harmonic for one node: amplitude + Greenwich phase for
-    /// the east (U) and north (V) current components.
-    struct NodeConstituent: Sendable {
-        let uAmp, uPhase, vAmp, vPhase: Double
-    }
-
-    /// One grid node: its constituents keyed by name (M2, K1, …), plus the
-    /// steady (tidally-averaged) residual flow. The means default to 0 so
-    /// purely harmonic callers can omit them.
-    struct Node: Sendable {
-        let constituents: [String: NodeConstituent]
-        var uMean = 0.0, vMean = 0.0
-    }
-
-    // Regular lat/lon mesh. `nodes` is row-major: index = row*cols + col,
-    // row indexes latitude (lat0 + row*dLat), col indexes longitude.
+    // Regular lat/lon mesh; row-major cell index = row*cols + col,
+    // lat = lat0 + row*dLat, lon = lon0 + col*dLon.
     let lat0, lon0, dLat, dLon: Double
     let rows, cols: Int
-    let nodes: [Node?]            // nil = land / no data
 
-    private func node(_ r: Int, _ c: Int) -> Node? {
-        guard r >= 0, r < rows, c >= 0, c < cols else { return nil }
-        return nodes[r * cols + c]
+    /// Water-node ordinal per mesh cell; -1 = land / no data.
+    let nodeIndex: [Int32]
+    let nodeCount: Int
+
+    /// `nodeCount × coeffStride` doubles per node: uMean, vMean, then per
+    /// constituent in `TidalHarmonics.constituents` order:
+    /// uAmp, uPhase°, vAmp, vPhase°.
+    let coeffs: [Double]
+
+    /// Nodes dropped at decode for non-finite coefficients — 0 for a healthy
+    /// asset; anything else is a packing bug worth a log line.
+    let droppedNodes: Int
+
+    static var coeffStride: Int { 2 + 4 * TidalHarmonics.constituents.count }
+
+    /// Geographic bounding box of the mesh (used to keep atlas coverage alive
+    /// outside the model domain).
+    var coverage: ChartBounds {
+        ChartBounds(lat_min: lat0, lat_max: lat0 + Double(rows - 1) * dLat,
+                    lon_min: lon0, lon_max: lon0 + Double(cols - 1) * dLon)
     }
 
-    /// Predict the current at one node and time → east/north velocity (m/s).
-    static func velocity(_ node: Node, at date: Date) -> (u: Double, v: Double) {
-        let a = TidalHarmonics.astro(date)
-        var u = 0.0, v = 0.0
-        for c in TidalHarmonics.constituents {
-            guard let comp = node.constituents[c.name] else { continue }
-            let (f, nu) = TidalHarmonics.nodeFactors(c.name, a.N)
-            let V = TidalHarmonics.equilibrium(c, a)
-            let arg = V + nu
-            u += f * comp.uAmp * cos((arg - comp.uPhase) * .pi / 180)
-            v += f * comp.vAmp * cos((arg - comp.vPhase) * .pi / 180)
+    /// East/north velocity (m/s) of one water node at the instant captured by
+    /// `terms`. Callers hoist `TidalHarmonics.synthesisTerms(at:)` ONCE per
+    /// pass — the astronomy is date-only, and recomputing it per node is ~20×
+    /// the per-node cost of these 16 cosines.
+    func velocity(ofNode node: Int, terms: [TidalHarmonics.SynthesisTerm]) -> (u: Double, v: Double) {
+        let base = node * Self.coeffStride
+        var u = coeffs[base], v = coeffs[base + 1]   // steady residual flow
+        var o = base + 2
+        for t in terms {
+            u += t.f * coeffs[o]     * cos((t.arg - coeffs[o + 1]) * .pi / 180)
+            v += t.f * coeffs[o + 2] * cos((t.arg - coeffs[o + 3]) * .pi / 180)
+            o += 4
         }
-        u += node.uMean
-        v += node.vMean
         return (u, v)
-    }
-
-    /// Bilinearly-interpolated current at an arbitrary lat/lon and time.
-    /// Returns nil if the point isn't surrounded by enough water nodes.
-    func current(lat: Double, lon: Double, at date: Date) -> CurrentVector? {
-        let fr = (lat - lat0) / dLat
-        let fc = (lon - lon0) / dLon
-        let r0 = Int(floor(fr)), c0 = Int(floor(fc))
-        let tr = fr - Double(r0), tc = fc - Double(c0)
-
-        // Interpolate the predicted U/V (not the raw constituents — phase
-        // interpolation is unsafe across wraps), weighting only water corners.
-        var su = 0.0, sv = 0.0, sw = 0.0
-        let corners = [(r0, c0, (1-tr)*(1-tc)), (r0, c0+1, (1-tr)*tc),
-                       (r0+1, c0, tr*(1-tc)),   (r0+1, c0+1, tr*tc)]
-        for (r, c, w) in corners {
-            guard w > 0, let n = node(r, c) else { continue }
-            let (u, v) = Self.velocity(n, at: date)
-            su += u * w; sv += v * w; sw += w
-        }
-        guard sw > 0.5 else { return nil }   // mostly land → no usable current
-        let u = su / sw, v = sv / sw
-        let speed = (u*u + v*v).squareRoot()
-        // Compass bearing the flow is heading toward: 0°=N, 90°=E.
-        var dir = atan2(u, v) * 180 / .pi
-        if dir < 0 { dir += 360 }
-        return CurrentVector(lat: lat, lon: lon, speed_ms: speed, direction_deg: dir)
     }
 }

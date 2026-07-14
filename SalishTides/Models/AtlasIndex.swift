@@ -34,6 +34,11 @@ struct ChartBounds: Decodable, Sendable, Equatable {
         lat >= lat_min && lat <= lat_max && lon >= lon_min && lon <= lon_max
     }
 
+    func contains(_ other: ChartBounds) -> Bool {
+        other.lat_min >= lat_min && other.lat_max <= lat_max &&
+        other.lon_min >= lon_min && other.lon_max <= lon_max
+    }
+
     func expanded(byFraction f: Double) -> ChartBounds {
         let latMargin = (lat_max - lat_min) * f
         let lonMargin = (lon_max - lon_min) * f
