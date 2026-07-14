@@ -430,11 +430,15 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
         }
 
         // ── Flood-fill across water, bounded by the data spacing ─────────
-        // Reach ≈ 0.8× the estimated point spacing: enough to close the gaps
-        // between samples and reach the drawn shoreline, not enough to invent
-        // current well beyond real coverage (off the model domain, unsampled
-        // bays stay empty → no particles there, which is the honest render).
-        let reach = min(28, max(2, Int((spacingCells * 0.8).rounded(.up))))
+        // Reach ≈ 1.1× the estimated point spacing: enough to close the
+        // diagonal gaps between samples AND bridge one-sample holes in the
+        // model's coast-eroded velocity mask (fills meet from both sides),
+        // without inventing current much beyond real coverage — off the model
+        // domain and in unsampled bays the fill stops and no particles render.
+        // The cap must scale with spacing (at navigation zooms one sample is
+        // 20+ cells), or the narrowest throats go dark exactly where currents
+        // are strongest.
+        let reach = min(64, max(2, Int((spacingCells * 1.1).rounded(.up)) + 2))
 
         var head = 0
         while head < queue.count {
@@ -491,12 +495,21 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
         }
 
         // ── Pack ─────────────────────────────────────────────────────────
+        // Coverage is a PLATEAU with a short frontier fade, not a gradient:
+        // distance-to-nearest-sample must not modulate brightness inside the
+        // interpolated interior, or every model sample renders as a bright
+        // bullseye with dim/dead lanes along the lattice between samples —
+        // exactly the clumped, banded look at navigation zooms where one
+        // sample spans ~20 raster cells. Full coverage wherever the fill
+        // connects to data; fade only over the last few cells at the edge of
+        // real coverage.
+        let edge = max(1, min(4, reach / 3))
         var rgba = [Float](repeating: 0, count: cells * 4)
         var waterCells: [UInt32] = []
         waterCells.reserveCapacity(cells / 4)
         for i in 0..<cells {
             let covered = dist[i] != .max
-            let cov: Float = covered ? max(0, 1 - Float(dist[i]) / Float(reach)) : 0
+            let cov: Float = covered ? min(1, Float(reach - dist[i]) / Float(edge)) : 0
             rgba[i * 4]     = covered ? velU[i] : 0
             rgba[i * 4 + 1] = covered ? velV[i] : 0
             rgba[i * 4 + 2] = land[i] ? 0 : 1
