@@ -30,3 +30,10 @@ __pycache__/
 
 # Local build output (xcodebuild -derivedDataPath)
 /build/
+
+# B1 model: large derived artifacts. The reproducible pipeline (b1_download_full
+# → b1_analyze_full) is tracked; its bulky outputs are not. b1_grid_full.parts/
+# is the resumable per-tile utide cache; b1_grid_full.json is the fat unpacked
+# grid. The compact packed grid that actually ships is tracked separately.
+/dev/model/b1_grid_full.parts/
+/dev/model/b1_grid_full.json

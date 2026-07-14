@@ -10,7 +10,9 @@ Grid: gridY 0-897, gridX 0-397. Tiles are 150x150 native cells; stride-2
 sampling within each tile stays on the global even-index grid (all tile
 origins are even), so tiles mosaic without gaps or overlaps.
 """
-import urllib.request, os, time, sys
+import urllib.request, os, time, sys, threading
+from datetime import datetime, timedelta, timezone
+import numpy as np, xarray as xr
 
 BASE = "https://salishsea.eos.ubc.ca/erddap/griddap"
 YEAR = 2023
@@ -39,22 +41,113 @@ RETRIES = 8
 BACKOFF = [15, 30, 60, 90, 120, 150, 180, 180]
 POLITE_SLEEP = 3          # seconds between requests, to not overload ERDDAP
 
-def fetch(url, path):
-    for attempt in range(RETRIES):
+# urllib's socket timeout does NOT reliably fire on a half-dead TCP connection
+# left behind by a sleep/wake cycle, and a SIGALRM/itimer backstop is no good
+# either: macOS suspends interval timers while the machine sleeps, so a sleep
+# landing inside a socket read leaves the read wedged with the alarm frozen
+# (observed: workers stuck 0% CPU for hours).
+#
+# The one clock that survives sleep is the wall clock (time.time() jumps forward
+# by the sleep duration on wake). So run each fetch in a daemon thread and have
+# the main thread abandon it once wall-clock elapsed exceeds HARD_TIMEOUT. A
+# thread stuck on a dead socket is simply orphaned (it holds one doomed socket
+# and errors out later) while we retry on a fresh connection. This self-heals a
+# sleep-wedge within ~HARD_TIMEOUT of wake, no external watchdog required.
+HARD_TIMEOUT = 300        # wall-clock seconds; > the 240s socket timeout
+SLICE_DAYS = 10           # sub-month slice size for the heavy-tile fallback
+
+def _url(var, ds, t0, t1, gy0, gy1, gx0, gx1):
+    return (f"{BASE}/{ds}.nc?{var}"
+            f"%5B({t0}):({t1})%5D%5B0%5D"
+            f"%5B{gy0}:{STRIDE}:{gy1}%5D%5B{gx0}:{STRIDE}:{gx1}%5D")
+
+def fetch_bytes(url, retries=RETRIES, timeout=240):
+    """Download a URL to bytes, or None. Wall-clock thread timeout survives
+    sleep/wake (see note above): a read wedged on a dead socket is abandoned
+    once real time — not a suspendable itimer — passes HARD_TIMEOUT."""
+    for attempt in range(retries):
+        box = {}
+        def _do():
+            try:
+                box["data"] = urllib.request.urlopen(url, timeout=timeout).read()
+            except Exception as e:            # noqa: BLE001 (retry on anything)
+                box["err"] = e
+        th = threading.Thread(target=_do, daemon=True)
+        start = time.time()                   # wall clock — advances across sleep
+        th.start()
+        while th.is_alive() and (time.time() - start) < HARD_TIMEOUT:
+            th.join(5)
         try:
-            # Short-ish timeout so a socket left dead by a sleep/wake cycle fails
-            # fast and gets retried, rather than hanging on a frozen connection.
-            data = urllib.request.urlopen(url, timeout=240).read()
+            if th.is_alive():
+                raise TimeoutError(f"wall-clock timeout after {HARD_TIMEOUT}s "
+                                   f"(likely dead socket after sleep) — abandoning")
+            if "err" in box:
+                raise box["err"]
+            data = box["data"]
             if len(data) < 500:
                 raise IOError(f"suspiciously small response ({len(data)} bytes)")
-            with open(path, "wb") as f:
-                f.write(data)
-            return len(data)
+            return data
         except Exception as e:
             wait = BACKOFF[min(attempt, len(BACKOFF)-1)]
-            print(f"    retry {attempt+1}/{RETRIES} (wait {wait}s): {e}", flush=True)
+            print(f"    retry {attempt+1}/{retries} (wait {wait}s): {e}", flush=True)
             time.sleep(wait)
     return None
+
+def month_slices(y, m, days=SLICE_DAYS):
+    """Yield (t0,t1) ISO sub-ranges tiling month m. Ranges are inclusive on both
+    ends in ERDDAP, so consecutive slices share a boundary hour — harmless, the
+    concat step drops the duplicate timestamp."""
+    start = datetime(y, m, 1, 0, 30, tzinfo=timezone.utc)
+    nm, ny = (1, y+1) if m == 12 else (m+1, y)
+    end = datetime(ny, nm, 1, 0, 30, tzinfo=timezone.utc)
+    a = start
+    while a < end:
+        b = min(a + timedelta(days=days), end)
+        yield (a.strftime("%Y-%m-%dT%H:%M:%SZ"), b.strftime("%Y-%m-%dT%H:%M:%SZ"))
+        a = b
+
+def fetch_file(var, ds, m, gy0, gy1, gx0, gx1, path):
+    """Fetch one month to `path`. Tries the whole month first (cheap for most
+    tiles); the tall northern/eastern edge tiles are too heavy for ERDDAP to
+    serve in one request and time out, so fall back to SLICE_DAYS sub-requests
+    concatenated into the same monthly NetCDF the analyzer expects."""
+    t0, t1 = month_range(YEAR, m)
+    data = fetch_bytes(_url(var, ds, t0, t1, gy0, gy1, gx0, gx1),
+                       retries=1, timeout=180)     # one quick try, then slice
+    if data:
+        with open(path, "wb") as f:
+            f.write(data)
+        return len(data)
+    print(f"    whole-month failed; slicing {var} {YEAR}-{m:02d} "
+          f"tile {gy0},{gx0}", flush=True)
+    parts = []
+    try:
+        for i, (s0, s1) in enumerate(month_slices(YEAR, m)):
+            d = fetch_bytes(_url(var, ds, s0, s1, gy0, gy1, gx0, gx1),
+                            retries=4, timeout=200)
+            if not d:
+                print(f"    slice {s0}..{s1} failed — leave file for next pass",
+                      flush=True)
+                return None
+            pp = f"{path}.part{i}"
+            with open(pp, "wb") as f:
+                f.write(d)
+            parts.append(pp)
+        dsx = [xr.open_dataset(p) for p in parts]
+        combined = xr.concat(dsx, dim="time")
+        _, idx = np.unique(combined["time"].values, return_index=True)
+        combined = combined.isel(time=np.sort(idx))
+        combined.to_netcdf(path + ".tmp")
+        for d_ in dsx:
+            d_.close()
+        os.replace(path + ".tmp", path)
+        return os.path.getsize(path)
+    finally:
+        for p in parts:
+            try:
+                os.remove(p)
+            except OSError:
+                pass
 
 def all_targets():
     """Every (tile, var, month) file we need, with its request params."""
@@ -92,11 +185,7 @@ def main():
             if have(path):
                 continue
             os.makedirs(tdir, exist_ok=True)
-            t0, t1 = month_range(YEAR, m)
-            url = (f"{BASE}/{ds}.nc?{var}"
-                   f"%5B({t0}):({t1})%5D%5B0%5D"
-                   f"%5B{gy0}:{STRIDE}:{gy1}%5D%5B{gx0}:{STRIDE}:{gx1}%5D")
-            n = fetch(url, path)
+            n = fetch_file(var, ds, m, gy0, gy1, gx0, gx1, path)
             if n:
                 time.sleep(POLITE_SLEEP)     # be gentle on ERDDAP between hits
         pass_num += 1
