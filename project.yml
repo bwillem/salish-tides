@@ -33,6 +33,15 @@ targets:
       # rsyncs fail the build if the source dirs are missing.
       - name: Copy Atlas & Tide Data
         script: |
+          # Guard: fail the build if bundled atlas data is missing/empty (it is
+          # gitignored — run dev/extraction/regenerate_all.sh to generate it).
+          for VOL in maps maps_vol2 maps_vol3 maps_vol4; do
+            SRC="${SRCROOT}/data/${VOL}"
+            if [ ! -d "$SRC" ] || [ -z "$(ls -A "$SRC" 2>/dev/null)" ]; then
+              echo "error: ${SRC} is missing or empty. Run dev/extraction/regenerate_all.sh to generate bundled atlas data." >&2
+              exit 1
+            fi
+          done
           for VOL in maps maps_vol2 maps_vol3 maps_vol4; do
             DEST="${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/${VOL}"
             mkdir -p "$DEST"
@@ -42,10 +51,16 @@ targets:
           TIDE_DEST="${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/tides"
           mkdir -p "$TIDE_DEST"
           rsync -a --delete "${SRCROOT}/data/tides/" "$TIDE_DEST/"
+          # Offline basemap PMTiles (bundled under basemap/)
+          BASEMAP_DEST="${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/basemap"
+          mkdir -p "$BASEMAP_DEST"
+          rsync -a --delete "${SRCROOT}/data/basemap/" "$BASEMAP_DEST/"
     info:
       path: SalishTides/Info.plist
       properties:
         CFBundleDisplayName: "Salish Tides"
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         UILaunchStoryboardName: ""
         UIRequiresFullScreen: true
         UISupportedInterfaceOrientations~ipad:
@@ -76,3 +91,32 @@ targets:
         Release:
           SWIFT_OPTIMIZATION_LEVEL: "-O"
           SWIFT_COMPILATION_MODE: wholemodule
+
+  # Unit tests for the pure logic (date parsing, interpolation, grid math,
+  # packing) — no UI tests, no network.
+  SalishTidesTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: SalishTidesTests
+    dependencies:
+      - target: SalishTides
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: "YES"
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
+
+schemes:
+  SalishTides:
+    build:
+      targets:
+        SalishTides: all
+        SalishTidesTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - SalishTidesTests

@@ -8,8 +8,17 @@ struct TideChartView: View {
     @Environment(AppSettings.self) private var settings
 
     let currentDate: Date
-    let station: TideStation?
     let events: [TideEvent]
+    /// Live model water levels (already on the station's datum). Where the
+    /// series covers a sample time it overrides the interpolated prediction,
+    /// cross-fading into the prediction near its coverage edges so the curve
+    /// never steps where the sources hand off.
+    let live: LiveTideSeries?
+
+    private func height(at t: Date) -> Double? {
+        let predicted = TideCurve.height(at: t, events: events)
+        return live?.blendedHeight(at: t, fallback: predicted) ?? predicted
+    }
 
     // Visible window: ±windowHalfHours on each side of cursor
     private let windowHalfHours: Double = 6.0
@@ -32,12 +41,13 @@ struct TideChartView: View {
                 return
             }
 
-            let samples = TideCurve.samples(
-                events: events,
-                from: currentDate.addingTimeInterval(-windowHalfHours * 3600),
-                to:   currentDate.addingTimeInterval(windowHalfHours * 3600),
-                stepMinutes: stepMinutes
-            )
+            var samples: [(date: Date, height: Double)] = []
+            var t = currentDate.addingTimeInterval(-windowHalfHours * 3600)
+            let windowEnd = currentDate.addingTimeInterval(windowHalfHours * 3600)
+            while t <= windowEnd {
+                if let h = height(at: t) { samples.append((t, h)) }
+                t = t.addingTimeInterval(TimeInterval(stepMinutes * 60))
+            }
             guard samples.count >= 2 else { return }
 
             // Dynamic y-domain from the visible samples (real tides go negative
@@ -108,7 +118,7 @@ struct TideChartView: View {
             cursor.addLine(to: CGPoint(x: cx, y: chartBot))
             ctx.stroke(cursor, with: .color(.primary.opacity(0.90)), lineWidth: 1.5)
 
-            let currentH = conv(TideCurve.height(at: currentDate, events: events) ?? 0)
+            let currentH = conv(height(at: currentDate) ?? 0)
             let cy = yOf(currentH)
             let dotR: CGFloat = 4
             ctx.fill(
@@ -124,25 +134,8 @@ struct TideChartView: View {
                 at: CGPoint(x: cx + 6, y: labelY),
                 anchor: .leading
             )
-
-            // ── Station provenance (name top-left, datum tag top-right) ─────
-            // Split so neither collides with the always-centred cursor label.
-            if let station {
-                ctx.draw(
-                    Text(station.name)
-                        .font(.system(size: 8, design: .monospaced))
-                        .foregroundStyle(.primary.opacity(0.45)),
-                    at: CGPoint(x: chartLeft + 1, y: chartTop + 1),
-                    anchor: .topLeading
-                )
-                ctx.draw(
-                    Text(station.datum)
-                        .font(.system(size: 8, design: .monospaced))
-                        .foregroundStyle(.primary.opacity(0.40)),
-                    at: CGPoint(x: chartRight - 3, y: chartTop + 1),
-                    anchor: .topTrailing
-                )
-            }
+            // Station provenance (name + datum) is rendered as a caption below
+            // the chart in PhaseIndicatorView, so it never overlaps the curve.
 
             // ── X-axis: time labels every 3h aligned to clock hours ─────────
             let cal = Calendar.salish

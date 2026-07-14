@@ -1,17 +1,13 @@
 {
   "version": 8,
-  "name": "Salish Tides — Night",
+  "name": "Salish Standard \u2014 Night",
+  "metadata": {
+    "comment": "Offline vector basemap. Source tiles are the bundled Protomaps/OSM (ODbL) PMTiles, injected at load time via the {{LOCAL_TILES}} placeholder. Geometry only \u2014 no symbol layers, so no glyphs are required and the style renders with zero network. Add place labels later by bundling a glyph PBF set and a `glyphs` URL."
+  },
   "sources": {
-    "carto-dark": {
-      "type": "raster",
-      "tiles": [
-        "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-        "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-        "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png"
-      ],
-      "tileSize": 256,
-      "attribution": "© OpenStreetMap contributors © CARTO",
-      "maxzoom": 19
+    "protomaps": {
+      "type": "vector",
+      "url": "{{LOCAL_TILES}}"
     }
   },
   "layers": [
@@ -19,13 +15,129 @@
       "id": "background",
       "type": "background",
       "paint": {
-        "background-color": "#1a3a5c"
+        "background-color": "#0f1c28"
       }
     },
     {
-      "id": "carto-dark-tiles",
-      "type": "raster",
-      "source": "carto-dark"
+      "id": "water",
+      "type": "fill",
+      "source": "protomaps",
+      "source-layer": "water",
+      "paint": {
+        "fill-color": "#0f1c28"
+      }
+    },
+    {
+      "id": "earth",
+      "type": "fill",
+      "source": "protomaps",
+      "source-layer": "earth",
+      "paint": {
+        "fill-color": "#1c2935"
+      }
+    },
+    {
+      "id": "landcover",
+      "type": "fill",
+      "source": "protomaps",
+      "source-layer": "landcover",
+      "paint": {
+        "fill-color": [
+          "match",
+          [
+            "get",
+            "kind"
+          ],
+          "forest",
+          "#1f2d2c",
+          [
+            "grassland",
+            "scrub",
+            "wood"
+          ],
+          "#21302d",
+          [
+            "glacier",
+            "barren"
+          ],
+          "#26323a",
+          "#202d38"
+        ],
+        "fill-opacity": 0.5
+      }
+    },
+    {
+      "id": "landuse-green",
+      "type": "fill",
+      "source": "protomaps",
+      "source-layer": "landuse",
+      "filter": [
+        "match",
+        [
+          "get",
+          "kind"
+        ],
+        [
+          "park",
+          "forest",
+          "nature_reserve",
+          "grass",
+          "recreation_ground",
+          "golf_course",
+          "cemetery"
+        ],
+        true,
+        false
+      ],
+      "paint": {
+        "fill-color": "#22332b",
+        "fill-opacity": 0.6
+      }
+    },
+    {
+      "id": "water-inland",
+      "type": "fill",
+      "source": "protomaps",
+      "source-layer": "water",
+      "paint": {
+        "fill-color": "#0f1c28"
+      },
+      "filter": [
+        "!=",
+        [
+          "get",
+          "kind"
+        ],
+        "ocean"
+      ]
+    },
+    {
+      "id": "boundaries",
+      "type": "line",
+      "source": "protomaps",
+      "source-layer": "boundaries",
+      "filter": [
+        "match",
+        [
+          "get",
+          "kind"
+        ],
+        [
+          "country",
+          "region"
+        ],
+        true,
+        false
+      ],
+      "paint": {
+        "line-color": "#4a5a68",
+        "line-dasharray": [
+          2,
+          2
+        ],
+        "line-width": 0.8,
+        "line-opacity": 0.7
+      }
     }
   ]
 }

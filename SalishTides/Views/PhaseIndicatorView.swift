@@ -1,67 +1,82 @@
 import SwiftUI
 
+/// Tide chart + its phase state, as one floating card. The current speed at the
+/// crosshair lives in its own card — see `CurrentSpeedView`.
 struct PhaseIndicatorView: View {
     @Environment(MapViewModel.self) private var vm
     @Environment(AppSettings.self) private var settings
 
     var body: some View {
         if let sel = vm.currentSelection {
-            VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: Spacing.md) {
 
-                // ── Tide height chart ────────────────────────────────────────
-                TideChartView(currentDate: vm.displayDate,
-                              station: vm.tideStation,
-                              events: vm.tideEvents)
-                    .frame(height: 108)
-                    .padding(.horizontal, Spacing.sm)
-                    .padding(.top, Spacing.sm)
-                    .padding(.bottom, Spacing.xs)
-                    .accessibilityElement()
-                    .accessibilityLabel(tideChartLabel)
+                // Chart + its station label, tightly grouped.
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    TideChartView(currentDate: vm.displayDate,
+                                  events: vm.tideEvents,
+                                  live: vm.liveTideSeries)
+                        .frame(height: 108)
+                        .accessibilityElement()
+                        .accessibilityLabel(tideChartLabel)
 
-                Rectangle()
-                    .fill(.white.opacity(0.12))
-                    .frame(height: 0.5)
-
-                // ── Phase info row ───────────────────────────────────────────
-                HStack(spacing: Spacing.sm) {
-                    Image(systemName: tendencyIcon(sel.tendency))
-                        .foregroundStyle(tendencyColor(sel.tendency))
-                        .imageScale(.medium)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(sel.phase.replacingOccurrences(of: "_", with: " ").capitalized)
-                            .font(.stHeadline)
-
-                        // Em dash when the crosshair is on land / off coverage —
-                        // there's no current speed to report there.
-                        HStack(spacing: Spacing.xxs) {
-                            Image(systemName: "scope")
-                            if let speed = vm.crosshairSpeed {
-                                Text(settings.formatSpeed(knots: speed))
-                            } else {
-                                Text("—")
-                            }
-                        }
-                        .font(.stMono)
-                        .foregroundStyle(.secondary)
+                    // Provenance: which station the curve is from + its datum,
+                    // and whether the drawn curve itself is live model data.
+                    if let station = vm.tideStation {
+                        Text("\(station.name) · \(station.datum)\(isLiveTide ? " · Live" : "")")
+                            .font(.stCaption)
+                            .foregroundStyle(Color.inkSecondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     }
-
-                    Spacer(minLength: 0)
                 }
-                .padding(.horizontal, Spacing.md)
-                .padding(.vertical, Spacing.sm)
+
+                // Phase state — separated from the chart group by more space.
+                HStack(spacing: Spacing.xs) {
+                    Image(systemName: tendencyIcon(sel.tendency))
+                        .font(.stPhase.weight(.semibold))
+                        .foregroundStyle(tendencyColor(sel.tendency))
+                    Text(phaseText(sel))
+                        .font(.stPhase)
+                        .foregroundStyle(.primary)
+                }
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(phaseRowLabel(sel))
+                .accessibilityLabel("\(phaseText(sel)) tide.")
+
+                // Currents provenance: shown only while the rendered current
+                // field is live SalishSeaCast data (the tide curve's own
+                // provenance is the "· Live" suffix on the station caption
+                // above — the two can differ, e.g. no gauge near the station).
+                // Full attribution lives in Settings → Data Sources.
+                if vm.isLiveCurrents {
+                    HStack(spacing: Spacing.xs) {
+                        Circle()
+                            .fill(Color.brandAccent)
+                            .frame(width: 5, height: 5)
+                        Text("Online mode")
+                            .font(.stCaption)
+                            .foregroundStyle(Color.inkSecondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Online mode: showing live SalishSeaCast current forecast.")
+                }
             }
+            .padding(Spacing.md)
             .frame(width: 248)
             .floatingCard()
         }
     }
 
+    /// Whether the drawn tide curve is live model data at the cursor.
+    private var isLiveTide: Bool {
+        vm.liveTideSeries?.covers(vm.displayDate) == true
+    }
+
     private var tideChartLabel: String {
+        let predicted = TideCurve.height(at: vm.displayDate, events: vm.tideEvents)
         guard let station = vm.tideStation,
-              let h = TideCurve.height(at: vm.displayDate, events: vm.tideEvents) else {
+              let h = vm.liveTideSeries?.blendedHeight(at: vm.displayDate, fallback: predicted)
+                ?? predicted else {
             return "Tide chart. Data unavailable."
         }
         let datum = station.datum == "MLLW" ? "mean lower low water" : "chart datum"
@@ -70,19 +85,13 @@ struct PhaseIndicatorView: View {
         return String(format: "Tide %.1f %@ at %@, above %@.", height, unit, station.name, datum)
     }
 
-    private func phaseRowLabel(_ sel: ChartSelection) -> String {
-        let phase = sel.phase.replacingOccurrences(of: "_", with: " ").lowercased()
-        var label = "\(phase) tide."
-        if let speed = vm.crosshairSpeed {
-            label += " \(settings.formatSpeed(knots: speed)) at crosshair."
-        } else {
-            label += " No current at crosshair."
-        }
-        return label
+    /// Display name for the tide phase, e.g. "Small Flood".
+    private func phaseText(_ sel: ChartSelection) -> String {
+        sel.phase.replacingOccurrences(of: "_", with: " ").capitalized
     }
 
     private func tendencyIcon(_ tendency: Tendency) -> String {
-        tendency == .flood ? "arrow.up.circle.fill" : "arrow.down.circle.fill"
+        tendency == .flood ? "arrow.up" : "arrow.down"
     }
 
     private func tendencyColor(_ tendency: Tendency) -> Color {

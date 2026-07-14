@@ -4,14 +4,30 @@ struct ContentView: View {
     @Environment(MapViewModel.self) private var vm
     @Environment(AppSettings.self) private var settings
     @Environment(NetworkMonitor.self) private var network
+    @Environment(MapController.self) private var mapController
+    @Environment(OfflineMapManager.self) private var offline
+    @Environment(LiveDataService.self) private var liveData
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.scenePhase) private var scenePhase
     @State private var showingSettings = false
 
-    // When a network style is shown while *confirmed* online, its tiles enter
-    // the ambient cache — record it so it stays selectable offline. Gating on
-    // didConfirmOnline avoids marking from the optimistic launch default.
-    private func recordIfOnline() {
-        if network.isOnline, network.didConfirmOnline {
-            settings.markOfflineReady(settings.basemap)
+    // When a downloadable network style is selected while *confirmed* online,
+    // pre-download its offline pack so it works offline everywhere. Gating on
+    // didConfirmOnline avoids acting on the optimistic launch default.
+    private func cacheCurrentStyleIfOnline() {
+        guard network.isOnline, network.didConfirmOnline else { return }
+        let basemap = settings.basemap
+        guard basemap.supportsOfflineDownload,
+              let url = MapStyleLoader.styleURL(for: basemap, dark: colorScheme == .dark) else { return }
+        offline.download(basemap, styleURL: url)
+    }
+
+    // Record any style whose pack has finished as offline-selectable. Runs off
+    // the manager's published state, so a download that completes after the user
+    // has switched away is still captured.
+    private func syncOfflineReady() {
+        for (raw, state) in offline.states where state == .ready {
+            if let basemap = Basemap(rawValue: raw) { settings.markOfflineReady(basemap) }
         }
     }
 
@@ -24,6 +40,22 @@ struct ContentView: View {
             }
         }
         .task { await vm.initialize() }
+        // Live SalishSeaCast fetching runs for the life of the view; its own
+        // kicks below cover the moments worth re-checking between its periodic
+        // staleness passes.
+        .task { await liveData.start() }
+        .onChange(of: scenePhase) {
+            if scenePhase == .active { liveData.kick() }
+        }
+        .onChange(of: settings.offlineOnly) {
+            // Flipping the switch swaps the rendered source immediately, both
+            // directions — not just on the next fetch.
+            liveData.kick()
+            Task { await vm.refresh() }
+        }
+        .onChange(of: liveData.dataGeneration) {
+            Task { await vm.refresh() }
+        }
     }
 
     private var mapView: some View {
@@ -35,13 +67,28 @@ struct ContentView: View {
             }
             VStack(spacing: 0) {
                 HStack(alignment: .top) {
-                    SettingsButton { showingSettings = true }
-                        .padding(.leading)
-                        .padding(.top, Spacing.sm)
+                    // Top-left control cluster: settings, compass (only when
+                    // rotated), locate.
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        SettingsButton { showingSettings = true }
+                        if !mapController.isNorthUp {
+                            CompassButton(bearing: mapController.bearing) {
+                                mapController.resetNorth()
+                            }
+                            .transition(.scale.combined(with: .opacity))
+                        }
+                        LocateButton { mapController.recenterOnUser() }
+                    }
+                    .animation(.snappy, value: mapController.isNorthUp)
+                    .padding(.leading)
+                    .padding(.top, Spacing.sm)
                     Spacer()
-                    PhaseIndicatorView()
-                        .padding(.trailing)
-                        .padding(.top, Spacing.sm)
+                    VStack(alignment: .trailing, spacing: Spacing.sm) {
+                        PhaseIndicatorView()
+                        CurrentSpeedView()
+                    }
+                    .padding(.trailing)
+                    .padding(.top, Spacing.sm)
                 }
                 Spacer()
                 TimelineControlView()
@@ -52,18 +99,39 @@ struct ContentView: View {
                     .padding(.bottom, Spacing.sm)
             }
         }
-        .alert("Setup Error", isPresented: .constant(vm.migrationError != nil)) {
-            Button("OK") {}
+        // The binding must clear the error on dismiss — a `.constant` binding
+        // here re-presents the alert forever. Retry re-runs the idempotent
+        // setup/migration path, so a transient failure (e.g. low disk) is
+        // recoverable without relaunching.
+        .alert("Setup Error", isPresented: Binding(
+            get: { vm.migrationError != nil },
+            set: { if !$0 { vm.migrationError = nil } }
+        )) {
+            Button("Retry") {
+                Task {
+                    // Let the dismissal transition finish before retrying: a
+                    // fast failure (setup throws in ms) would re-set the error
+                    // mid-dismissal, and SwiftUI drops an alert re-presented
+                    // during one — the failure would become invisible.
+                    try? await Task.sleep(for: .milliseconds(600))
+                    await vm.initialize()
+                }
+            }
+            Button("OK", role: .cancel) {}
         } message: {
             Text(vm.migrationError ?? "")
         }
         .sheet(isPresented: $showingSettings) {
             SettingsView()
         }
-        .onAppear { recordIfOnline() }
-        .onChange(of: settings.basemap) { recordIfOnline() }
-        .onChange(of: network.isOnline) { recordIfOnline() }
-        .onChange(of: network.didConfirmOnline) { recordIfOnline() }
+        .onAppear { cacheCurrentStyleIfOnline(); syncOfflineReady() }
+        .onChange(of: settings.basemap) { cacheCurrentStyleIfOnline() }
+        .onChange(of: network.isOnline) {
+            cacheCurrentStyleIfOnline()
+            if network.isOnline { liveData.kick() }
+        }
+        .onChange(of: network.didConfirmOnline) { cacheCurrentStyleIfOnline() }
+        .onChange(of: offline.states) { syncOfflineReady() }
     }
 }
 
@@ -82,6 +150,50 @@ private struct SettingsButton: View {
         }
         .floatingCard(cornerRadius: Radius.lg)
         .accessibilityLabel("Settings")
+    }
+}
+
+/// Compass control — a needle (red north / muted south) rotated so north always
+/// points up-screen as the map turns. Tap to animate back to north-up.
+private struct CompassButton: View {
+    let bearing: Double
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Image(systemName: "arrowtriangle.up.fill")
+                    .foregroundStyle(.red)
+                    .offset(y: -4.5)
+                Image(systemName: "arrowtriangle.down.fill")
+                    .foregroundStyle(.secondary)
+                    .offset(y: 4.5)
+            }
+            .font(.system(size: 9))
+            .rotationEffect(.degrees(-bearing))
+            .frame(width: 44, height: 44)
+        }
+        .floatingCard(cornerRadius: Radius.lg)
+        .accessibilityLabel("Compass")
+        .accessibilityValue("\(Int(bearing.rounded()))°")
+        .accessibilityHint("Rotates the map back to north")
+    }
+}
+
+/// Locate control — centers and follows the user's location (Maps-style).
+private struct LocateButton: View {
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "location.fill")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(.primary)
+                .frame(width: 44, height: 44)
+        }
+        .floatingCard(cornerRadius: Radius.lg)
+        .accessibilityLabel("Locate me")
+        .accessibilityHint("Centers the map on your location")
     }
 }
 

@@ -1,5 +1,6 @@
 import SwiftUI
 import Observation
+import UIKit
 
 // MARK: - Salish Sea local time
 
@@ -126,6 +127,22 @@ enum ClockFormat: String, CaseIterable, Identifiable {
     var is24Hour: Bool { self == .twentyFourHour }
 }
 
+/// How tidal current is drawn on the map. Particles (animated flow) is the
+/// default; arrows are the static fallback and the automatic substitute when
+/// Reduce Motion or Low Power Mode is on (see `AppSettings.effectiveCurrentStyle`).
+enum CurrentStyle: String, CaseIterable, Identifiable {
+    case particles, arrows
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .particles: "Particles"
+        case .arrows:    "Arrows"
+        }
+    }
+}
+
 // MARK: - Settings Store
 
 /// App-wide user preferences, persisted to `UserDefaults` and observed by the
@@ -151,9 +168,20 @@ final class AppSettings {
     var clockFormat: ClockFormat {
         didSet { defaults.set(clockFormat.rawValue, forKey: Keys.clockFormat) }
     }
+    var currentStyle: CurrentStyle {
+        didSet { defaults.set(currentStyle.rawValue, forKey: Keys.currentStyle) }
+    }
+
     /// Selected base map style (see Settings → Map Style).
     var basemap: Basemap {
         didSet { defaults.set(basemap.rawValue, forKey: Keys.basemap) }
+    }
+
+    /// Disables live SalishSeaCast data entirely — no fetching, and cached
+    /// live data is not rendered — so the app behaves exactly like the pure
+    /// offline build. Off by default: live data is a silent enhancement.
+    var offlineOnly: Bool {
+        didSet { defaults.set(offlineOnly, forKey: Keys.offlineOnly) }
     }
 
     /// Raw values of network styles that have been viewed online and are thus
@@ -161,6 +189,18 @@ final class AppSettings {
     /// the user already has, while gating ones they don't.
     private(set) var offlineReadyStyles: Set<String> {
         didSet { defaults.set(Array(offlineReadyStyles), forKey: Keys.offlineReadyStyles) }
+    }
+
+    // Mirrors the accessibility / power state; updated via notifications so
+    // `effectiveCurrentStyle` re-evaluates (and observers re-render) when the
+    // user toggles Reduce Motion or Low Power Mode while the app is running.
+    private(set) var reduceMotion: Bool = UIAccessibility.isReduceMotionEnabled
+    private(set) var lowPowerMode: Bool = ProcessInfo.processInfo.isLowPowerModeEnabled
+
+    /// The style actually rendered: particles unless the user picked arrows, or
+    /// Reduce Motion / Low Power Mode forces the static fallback.
+    var effectiveCurrentStyle: CurrentStyle {
+        (currentStyle == .arrows || reduceMotion || lowPowerMode) ? .arrows : .particles
     }
 
     private let defaults: UserDefaults
@@ -171,10 +211,26 @@ final class AppSettings {
         self.heightUnit = defaults.string(forKey: Keys.heightUnit).flatMap(HeightUnit.init) ?? .metres
         self.appearance = defaults.string(forKey: Keys.appearance).flatMap(AppearanceMode.init) ?? .system
         self.clockFormat = defaults.string(forKey: Keys.clockFormat).flatMap(ClockFormat.init) ?? .twentyFourHour
+        self.currentStyle = defaults.string(forKey: Keys.currentStyle).flatMap(CurrentStyle.init) ?? .particles
         self.basemap    = defaults.string(forKey: Keys.basemap).flatMap(Basemap.init) ?? .standard
+        self.offlineOnly = defaults.object(forKey: Keys.offlineOnly) as? Bool ?? false
         self.offlineReadyStyles = Set(defaults.stringArray(forKey: Keys.offlineReadyStyles) ?? [])
         // Bool keys default to `true` (feature visible) when never set.
         self.showCrosshair = defaults.object(forKey: Keys.showCrosshair) as? Bool ?? true
+
+        observeAccessibilityAndPower()
+    }
+
+    private func observeAccessibilityAndPower() {
+        let nc = NotificationCenter.default
+        nc.addObserver(forName: UIAccessibility.reduceMotionStatusDidChangeNotification,
+                       object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.reduceMotion = UIAccessibility.isReduceMotionEnabled }
+        }
+        nc.addObserver(forName: .NSProcessInfoPowerStateDidChange,
+                       object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.lowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled }
+        }
     }
 
     // MARK: Basemap availability
@@ -241,7 +297,9 @@ final class AppSettings {
         static let showCrosshair = "settings.showCrosshair"
         static let appearance    = "settings.appearance"
         static let clockFormat   = "settings.clockFormat"
+        static let currentStyle  = "settings.currentStyle"
         static let basemap       = "settings.basemap"
+        static let offlineOnly   = "settings.offlineOnly"
         static let offlineReadyStyles = "settings.offlineReadyStyles"
     }
 }

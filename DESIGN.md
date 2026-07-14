@@ -260,28 +260,40 @@ the map visible around and beneath them.
 
 **Location:** Top-right, `.padding(.trailing)` + `.padding(.top, 8)` from safe area  
 **Surface:** Floating card (§4.1b), fixed `width: 248`  
-**Composition:** tide height chart on top, hairline divider, phase row below
+**Composition:** two groups separated by spacing alone (no divider) — the tide
+chart + its phase state on top, then the current-speed hero.
 
 **Anatomy:**
 ```
 ╭──────────────────────────────╮
 │  [TideChartView — 108 pt]     │  ← station name · datum, curve, cursor height
-│  ──────────────────────────   │  ← 0.5 pt divider, white @ 12%
-│  [icon] Phase Name            │
-│         X.X kn ✛              │
+│  ↑ Phase Name                 │  ← tide group: tendency + phase, tied to chart
+│                               │  ← separation by spacing (Spacing.lg), no line
+│  ✛ X.X kn                     │  ← HERO: crosshair speed (.stReadout, large/bold)
 ╰──────────────────────────────╯
 ```
 
+**Information hierarchy & grouping:**
+- The **current speed at the crosshair is the primary datum** — large, bold
+  `.stReadout` with a smaller `.stReadoutUnit` unit beside it. It scales down
+  (`minimumScaleFactor`) rather than wrap at large Dynamic Type (fixed 248 pt).
+- The **tide phase + tendency** is conceptually part of the chart (it names the
+  state the curve shows), so it sits **directly under the chart** as one group.
+- The two groups are separated by **spacing only** — no hairline divider — in
+  keeping with the matte/purposeful principle (§1). The size jump from the small
+  phase label to the big readout reinforces the break.
+
 **States:**
-- **Normal:** flood icon (arrow.up.circle.fill, `.tideFlood`) or ebb icon (arrow.down.circle.fill, `.tideEbb`)
+- **Normal:** plain tendency arrow on the phase line — `arrow.up` `.tideFlood` (flood) or `arrow.down` `.tideEbb` (ebb). Not the filled-circle variants.
 - **No selection:** hidden (conditional on `vm.currentSelection != nil`)
-- **Speed available:** shows crosshair speed with `✛` suffix
+- **Crosshair on land / off coverage:** hero shows an em dash (`—`) — no speed to report
 - **Tide data unavailable:** chart shows a "Tide data unavailable" placeholder
 
-**Speed readout:** value is formatted by `AppSettings.formatSpeed(knots:)` so it
-honours the user's unit (kn / km·h / m·s — see §9). The crosshair association is
-shown with the `scope` SF Symbol, not the former non-standard `✛` glyph (which
-did not read naturally on VoiceOver).
+**Speed readout:** value is formatted from `AppSettings.speedUnit` so it honours
+the user's unit (kn / km·h / m·s — see §9). The crosshair association uses the
+`scope` SF Symbol, not the former non-standard `✛` glyph (which did not read
+naturally on VoiceOver). The accessibility label leads with the speed to match
+the visual hierarchy.
 
 ### 5.2 Timeline Control Bar
 
@@ -329,6 +341,27 @@ Rendered by MapLibre, not SwiftUI. Color is controlled by `speedColorExpression(
 **Design intent:** Both color and weight encode speed (redundant encoding), which helps colorblind users and improves sunlight readability.
 
 **Arrow geometry:** ±25° barb spread, barb length = 70% of half-shaft. This is close to standard meteorological wind barb convention, which sailors recognize.
+
+**Role:** arrows are now the *fallback* current display — used when the user picks "Arrows" in Settings, or automatically under Reduce Motion / Low Power Mode. The default is the animated particle layer (§5.4a). The two are mutually exclusive: `MapLibreView.Coordinator.applyCurrentStyle(_:on:)` toggles the shaft/barb layers' visibility and the particle layer's active state from `AppSettings.effectiveCurrentStyle`.
+
+### 5.4a Current Particles (default)
+
+The default current display is an animated GPU particle field — flowing "comet streaks" that convey both direction and speed (see `CurrentParticleLayer`, an `MLNCustomStyleLayer` Metal subclass). Particles are the headline; arrows (§5.4) are the static fallback.
+
+**Pipeline (30 fps, driven by a `CADisplayLink` → `setNeedsDisplay`):**
+1. **Velocity field.** `MapViewModel.loadVectors` builds a `VelocityField` (Sendable: bbox, grid dims, interleaved east/north m/s) from the *full-resolution* vectors over the visible viewport — denser and more directional than the thinned arrow set. It's uploaded to an `RG32Float` texture.
+2. **Advection (compute).** Each frame a kernel advects N≈6000 particles by bilinearly sampling the velocity texture, reseeding any that age out, stall (land / slack — the data has no slack vectors, so zero velocity means "no current"), or leave the field. Motion is exaggerated by `speedScale` for legibility.
+3. **Streaks (render).** Each particle draws as a 2-vertex line from a tail (offset back along the local flow, length ∝ speed) to a bright head, fading tail→head and over the particle's life. Drawn straight into MapLibre's render encoder with the live projection matrix, so streaks stay glued to the basemap through pan/zoom/rotate.
+
+**Why streaks, not an offscreen trail buffer:** keeping everything in the map's own render pass avoids offscreen textures, cross-queue GPU sync, and screen-space "swim" during pans. The tradeoff is shorter tails than an accumulation buffer; longer comet tails could be added later via a ground-locked trail texture.
+
+**Race-free buffering:** particle buffers ping-pong. The compute pass (own command queue) reads `current` → writes `next`; the render pass reads `current` (last frame's result, already complete). A 2-deep semaphore bounds frames in flight. Positions are one frame stale (invisible at 30 fps) but drawn with the current camera, so no swim.
+
+**Per-theme color:** night = cool white-blue; day = deeper saturated blue so streaks read on the light basemap. Driven by `setDark(_:)` from the map color scheme, mirroring the arrow ramp's per-theme logic (§2.1).
+
+**Performance / power:** the display link runs only while particles are the selected style *and* the app is foregrounded (`setActive` / `setForeground`), so the GPU is idle in arrows mode or in the background. 30 fps (not 60) halves the energy cost — chosen for an all-day on-the-water app.
+
+**Gotcha (recorded):** MapLibre leaves a cull mode set from its own draws; the custom layer must call `renderEncoder.setCullMode(.none)` or its geometry is silently culled by winding.
 
 ### 5.5 Migration/Splash Screen
 
@@ -414,7 +447,7 @@ All text uses semantic font styles → scales automatically. Verify at "Accessib
 
 ### 6.4 Reduce Motion
 
-The app has no animations currently. When animations are added (e.g., arrow fade transitions between charts), wrap in:
+The animated current particles (§5.4a) are the one continuous animation in the app. Under **Reduce Motion** — and under **Low Power Mode** — `AppSettings.effectiveCurrentStyle` automatically falls back to the static arrows (§5.4), and the particle display link stops. `AppSettings` observes `UIAccessibility.reduceMotionStatusDidChangeNotification` and `NSProcessInfoPowerStateDidChange`, so the switch happens live without a relaunch. Any future SwiftUI animations should additionally gate on:
 ```swift
 @Environment(\.accessibilityReduceMotion) var reduceMotion
 ```

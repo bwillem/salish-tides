@@ -7,6 +7,7 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(AppSettings.self) private var settings
     @Environment(NetworkMonitor.self) private var network
+    @Environment(OfflineMapManager.self) private var offline
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -35,11 +36,17 @@ struct SettingsView: View {
 
                 // ── Map & Display ────────────────────────────────────────
                 Section {
+                    Picker("Current", selection: $settings.currentStyle) {
+                        ForEach(CurrentStyle.allCases) { style in
+                            Text(style.label).tag(style)
+                        }
+                    }
+                    .pickerStyle(.segmented)
                     Toggle("Crosshair", isOn: $settings.showCrosshair)
                 } header: {
                     Text("Map & Display")
                 } footer: {
-                    Text("The crosshair marks the point used for the speed readout.")
+                    Text("Particles animate the flow of the current; Arrows show it statically. Arrows are used automatically when Reduce Motion or Low Power Mode is on. The crosshair marks the point used for the speed readout.")
                 }
 
                 // ── Appearance ───────────────────────────────────────────
@@ -64,7 +71,16 @@ struct SettingsView: View {
                 } header: {
                     Text("Map Style")
                 } footer: {
-                    Text("Standard works fully offline. Ocean and Satellite stream from MapTiler when online and are cached for offline use over waters you've viewed.")
+                    Text("Standard works fully offline. Selecting Ocean while online downloads it for offline use across the region. Satellite streams online only.")
+                }
+
+                // ── Live Data ────────────────────────────────────────────
+                Section {
+                    Toggle("Offline only", isOn: $settings.offlineOnly)
+                } header: {
+                    Text("Live Data")
+                } footer: {
+                    Text("When online, real-time current and water-level forecasts from the SalishSeaCast model (UBC) are downloaded in the background and shown in place of the bundled atlas data for the next ~36 hours. Turn on Offline Only to use bundled data exclusively.")
                 }
 
                 // ── About ────────────────────────────────────────────────
@@ -91,10 +107,11 @@ struct SettingsView: View {
         Button {
             settings.basemap = style
         } label: {
-            HStack {
+            HStack(spacing: Spacing.sm) {
                 Text(style.label)
                     .foregroundStyle(selectable ? .primary : .secondary)
                 Spacer()
+                offlineStatus(style)
                 if settings.basemap == style {
                     Image(systemName: "checkmark")
                         .foregroundStyle(.tint)
@@ -107,6 +124,33 @@ struct SettingsView: View {
             .contentShape(.rect)
         }
         .disabled(!selectable)
+    }
+
+    /// Offline-download indicator for a downloadable style: progress while a pack
+    /// downloads, a "saved" badge once it's available offline, a warning on
+    /// failure. Nothing for styles that aren't pre-downloaded.
+    @ViewBuilder
+    private func offlineStatus(_ style: Basemap) -> some View {
+        switch offline.state(for: style) {
+        case .downloading(let fraction):
+            HStack(spacing: Spacing.xs) {
+                ProgressView().controlSize(.small)
+                Text("\(Int(fraction * 100))%")
+                    .font(.caption).monospacedDigit().foregroundStyle(.secondary)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Downloading \(Int(fraction * 100)) percent")
+        case .ready:
+            Image(systemName: "arrow.down.circle.fill")
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Saved offline")
+        case .failed:
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+                .accessibilityLabel("Download failed")
+        case .none:
+            EmptyView()
+        }
     }
 
     private static var appVersion: String {
@@ -123,8 +167,15 @@ private struct DataSourcesView: View {
     var body: some View {
         Form {
             Section {
-                Text("Salish Tides is a fully offline planning aid. It is **not** an official source for navigation. Always consult official charts and current tables.")
+                Text("Salish Tides is an offline-first planning aid. It is **not** an official source for navigation. Always consult official charts and current tables.")
                     .font(.callout)
+            }
+
+            Section("Live Forecasts") {
+                LabeledContent("Model", value: "SalishSeaCast · UBC")
+                Text("When online, real-time surface-current and water-level forecasts from the SalishSeaCast NEMO ocean model (UBC Earth, Ocean & Atmospheric Sciences) are shown in place of the sources below, out to roughly 36 hours ahead. Model water levels are aligned to each station's datum against its official predictions.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
 
             Section("Tidal Currents") {

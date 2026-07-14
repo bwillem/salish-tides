@@ -12,11 +12,11 @@ enum MapConfig {
 
 /// The chart's base map style.
 ///
-/// Offline-first: `.standard` always works (bundled style, no key). `.ocean` and
-/// `.satellite` are MapTiler styles that stream when online and are cached by
-/// MapLibre's ambient cache, so they keep working offline over waters you've
-/// already viewed. Each style has a light + dark variant (bundled JSON), so a
-/// Day→Night flip offline still renders.
+/// Offline-first: a style with a `bundledArchive` (local tiles in the app) works
+/// with no network. `.ocean` and `.satellite` are MapTiler styles that stream
+/// when online and are cached by MapLibre's ambient cache, so they keep working
+/// offline over waters you've already viewed. Each style has a light + dark
+/// variant (bundled JSON), so a Day→Night flip offline still renders.
 enum Basemap: String, CaseIterable, Identifiable {
     case standard
     case ocean
@@ -32,16 +32,44 @@ enum Basemap: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Online-only until cached. `.standard` is bundled and always available.
-    var requiresNetwork: Bool { self != .standard }
-
-    /// Bundled style-JSON resource for the given appearance, or `nil` for
-    /// `.standard` (whose styles are handled in `MapLibreView`).
-    /// Satellite is imagery — one style for both appearances.
-    func styleResource(dark: Bool) -> String? {
+    /// A local tile archive bundled in the app's `basemap/` resource folder that
+    /// backs this style offline, or `nil` for online-only styles. The extension
+    /// selects the source mechanism: `.pmtiles` → vector (`pmtiles://`),
+    /// `.mbtiles` → raster (`mbtiles://`). The matching style JSON references the
+    /// archive through a `{{LOCAL_TILES}}` placeholder, injected at load time.
+    ///
+    /// This is the single switch that decides *which* basemap ships offline:
+    /// give a style a bundled archive (+ a `{{LOCAL_TILES}}` source) and it works
+    /// with no network; leave it `nil` and it streams.
+    var bundledArchive: String? {
         switch self {
-        case .standard:  nil
-        case .ocean:     dark ? "ocean-dark" : "ocean-light"
+        case .standard:  "salish.pmtiles"   // Protomaps vector — the offline baseline
+        case .ocean:     nil                 // online until an open bathymetry archive is sourced
+        case .satellite: nil                 // online — imagery is impractical / licence-bound offline
+        }
+    }
+
+    /// Online-only until cached. A style with a `bundledArchive` always works offline.
+    var requiresNetwork: Bool { bundledArchive == nil }
+
+    /// Whether selecting this style while online should pre-download an offline
+    /// pack (so it works offline everywhere, not just where the ambient cache
+    /// happened to capture). Vector network styles only — raster imagery
+    /// (satellite) is far too large to pack (~1 GB+ for the region); standard is
+    /// already bundled, so it needs no pack.
+    var supportsOfflineDownload: Bool {
+        switch self {
+        case .ocean:                true   // MapTiler vector — compact enough to pack
+        case .standard, .satellite: false  // bundled already / raster imagery, too large
+        }
+    }
+
+    /// Bundled style-JSON resource for the given appearance.
+    /// Satellite is imagery — one style for both appearances.
+    func styleResource(dark: Bool) -> String {
+        switch self {
+        case .standard:  dark ? "standard-dark" : "standard-light"
+        case .ocean:     dark ? "ocean-dark"    : "ocean-light"
         case .satellite: "satellite"
         }
     }

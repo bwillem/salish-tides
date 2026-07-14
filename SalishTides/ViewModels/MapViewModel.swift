@@ -11,21 +11,40 @@ final class MapViewModel {
     // The map does NOT observe this, so per-frame updates stay cheap.
     var displayDate: Date = .now
     var currentVectors: [CurrentVector] = []
+    // Full-resolution (viewport-culled, unthinned) vectors for the particle
+    // field raster — currentVectors is display-thinned for the arrows and
+    // would starve/bias the field.
+    var currentFieldVectors: [CurrentVector] = []
+    // Zero-speed "dry land" points bounding the live model's coastline,
+    // culled (not thinned — it's a contiguous barrier band) like the vectors.
+    // Empty when the atlas renders (it has no land mask) — the particle layer
+    // treats an empty mask as all-water.
+    var currentLandMask: [CurrentVector] = []
     var currentSelections: [ChartSelection] = []
     var isMigrating = false
     var migrationProgress: Double = 0
     var migrationError: String?
     var visibleViewport: ChartBounds?
     var crosshairSpeed: Double?
+    /// Flow direction (compass degrees, 0 = N) of the current at the crosshair,
+    /// from the same nearest vector as `crosshairSpeed`.
+    var crosshairDirection: Double?
 
     // Nearest tide station to the crosshair + its hi/lo events spanning the
     // visible time window (drives TideChartView).
     var tideStation: TideStation?
     var tideEvents: [TideEvent] = []
 
+    // Live SalishSeaCast data currently in use (nil / false → bundled data).
+    // The vectors themselves flow through the same currentVectors property;
+    // these only carry provenance for the UI.
+    var isLiveCurrents = false
+    var liveTideSeries: LiveTideSeries?
+
     // Convenience for views that only need one selection (e.g. phase indicator)
     var currentSelection: ChartSelection? { currentSelections.first }
 
+    private let liveData: LiveDataService?
     private let selectors: [(VolumeSpec, ChartSelector)]
     // Per-volume region index for viewport culling, keyed by volume id.
     private let atlasIndexes: [Int: AtlasIndex]
@@ -52,7 +71,8 @@ final class MapViewModel {
     // stays roughly constant as the user zooms instead of collapsing into mush.
     private let thinTargetAcross = 70.0
 
-    init() {
+    init(liveData: LiveDataService? = nil) {
+        self.liveData = liveData
         // Build one selector per unique lookup resource — Vol 1 and Vol 3 share a file,
         // so we load it once and reuse it for both volume IDs.
         var loaded: [String: AtlasLookupTable] = [:]
@@ -123,7 +143,13 @@ final class MapViewModel {
     func scrub(to date: Date) {
         displayDate = date
         let snapped = Self.snapToHour(date)
-        guard snapped != currentDate else { return }
+        guard snapped != currentDate else {
+            // Already on this hour — but a trailing load scheduled for an older
+            // target may still be pending; cancel it or it fires 90 ms from now
+            // and drags currentDate back to that stale hour mid-drag.
+            scrubLoadTask?.cancel()
+            return
+        }
 
         if Date().timeIntervalSince(lastScrubLoadAt) >= scrubThrottle {
             // Supersede any pending trailing load — otherwise an older hour could
@@ -166,9 +192,44 @@ final class MapViewModel {
         }
     }
 
+    /// Reload for the current committed time — used when new live data arrives
+    /// or the offline-only setting flips, so the map reflects the new source.
+    func refresh() async {
+        await loadVectors(for: currentDate)
+    }
+
     private func loadVectors(for date: Date) async {
         loadGeneration &+= 1
         let generation = loadGeneration
+
+        // Live SalishSeaCast field for this hour, when available. The service
+        // needs to know the on-screen hour either way, so its background
+        // prefetch can trigger a reload the moment visible data lands.
+        liveData?.displayedHourKey = LiveDataService.hourKey(for: date)
+        let liveField = await liveData?.currents(for: date)
+        guard generation == loadGeneration else { return }
+
+        // Cull the whole-domain live field to the viewport (with margin, so
+        // pans don't immediately hit empty edges) BEFORE choosing the source:
+        // an empty result means the viewport is outside the model's coverage
+        // (or all land at this resolution), and the atlas must take over —
+        // its charts extend beyond the NEMO domain (e.g. Queen Charlotte
+        // Strait in Vol 4).
+        var liveVectors: [CurrentVector]? = liveField.flatMap { field in
+            let culled = viewportFiltered(field)
+            return culled.isEmpty ? nil : culled
+        }
+
+        // At navigation zooms, upgrade the strided field to the native-
+        // resolution window — the stride drops ~3/4 of the model's wet cells
+        // in constricted water (whole bays vanish). Strided keeps rendering
+        // until the window lands, so the upgrade is seamless.
+        if liveVectors != nil, visibleViewport != nil,
+           let native = await liveData?.nativeCurrents(for: date, viewport: visibleViewport!) {
+            guard generation == loadGeneration else { return }
+            let culled = viewportFiltered(native)
+            if !culled.isEmpty { liveVectors = culled }
+        }
 
         // Find all volumes whose geographic bounds intersect the current viewport.
         // If no viewport yet, include all volumes so any initial chart load works.
@@ -189,9 +250,13 @@ final class MapViewModel {
         var selections: [ChartSelection] = []
         var vectors: [CurrentVector] = []
 
+        // Chart selections are always computed — they drive the flood/ebb phase
+        // indicator regardless of which source renders the vectors. The atlas
+        // DB is only queried when there's no live field to show.
         for (spec, selector) in activeSelectors {
             guard let sel = selector.selection(for: date) else { continue }
             selections.append(sel)
+            guard liveVectors == nil else { continue }
 
             // Use the volume's index for viewport-based region culling when
             // available; fall back to all regions if the index failed to load.
@@ -210,17 +275,53 @@ final class MapViewModel {
                 vectors.append(contentsOf: vecs)
             } catch {
                 // Non-fatal: one volume failing doesn't hide the others
+                Log.map.error("atlas vectors failed (vol \(spec.id), chart \(sel.chart)): \(error, privacy: .public)")
             }
         }
 
+        if let liveVectors {
+            vectors = liveVectors
+        }
+
+        // The live coastline mask, culled like the vectors. Only meaningful
+        // when live vectors render — the atlas has no dry cells to mask with.
+        var landMask: [CurrentVector] = []
+        if liveVectors != nil, let mask = await liveData?.landMask() {
+            landMask = viewportFiltered(mask)
+        }
+
         guard generation == loadGeneration else { return }
+        // Provenance reflects what is actually rendered: liveVectors is nil
+        // (and the atlas populated `vectors`) whenever the cull came up empty.
+        isLiveCurrents = liveVectors != nil
         currentSelections = selections
         // Crosshair readout uses the full-resolution set; only the rendered
         // layer is down-sampled.
-        crosshairSpeed = nearestSpeed(in: vectors, viewport: visibleViewport)
-        currentVectors = thinned(vectors, for: visibleViewport)
+        let crosshairVector = nearestVector(in: vectors, viewport: visibleViewport)
+        crosshairSpeed = crosshairVector?.speedKnots
+        crosshairDirection = crosshairVector?.direction_deg
+        // Arrows get the display-density thinned set; the particle field gets
+        // full-resolution data (the raster does its own averaging — feeding it
+        // the fastest-per-bin thinned picks would bias speeds and starve its
+        // 160-across grid). The mask stays unthinned too: it's a barrier band,
+        // and thinning (arbitrary pick per bin at speed 0) punches holes in it.
+        // Only assign on change — every reassignment re-runs the map update
+        // and a particle field rebuild via Observation.
+        let thinnedVectors = thinned(vectors, for: visibleViewport)
+        if thinnedVectors != currentVectors { currentVectors = thinnedVectors }
+        let fieldVectors = viewportFiltered(vectors)
+        if fieldVectors != currentFieldVectors { currentFieldVectors = fieldVectors }
+        if landMask != currentLandMask { currentLandMask = landMask }
 
         await updateTides(for: date, generation: generation)
+    }
+
+    /// Points within the viewport plus the shared cull margin, so pans don't
+    /// immediately hit empty edges. No viewport yet → everything.
+    private func viewportFiltered(_ points: [CurrentVector]) -> [CurrentVector] {
+        guard let vp = visibleViewport else { return points }
+        let expanded = vp.expanded(byFraction: ChartBounds.cullMarginFraction)
+        return points.filter { expanded.contains(lat: $0.lat, lon: $0.lon) }
     }
 
     // Pick the nearest station to the crosshair and fetch a ±18 h window of
@@ -229,14 +330,14 @@ final class MapViewModel {
     // vector path so a slow fetch can't overwrite a newer scrub/pan's result.
     private func updateTides(for date: Date, generation: Int) async {
         guard let vp = visibleViewport else {
-            tideStation = nil; tideEvents = []
+            tideStation = nil; tideEvents = []; liveTideSeries = nil
             return
         }
         let cLat = (vp.lat_min + vp.lat_max) / 2
         let cLon = (vp.lon_min + vp.lon_max) / 2
         guard let station = await TideDatabase.shared.nearestStation(lat: cLat, lon: cLon) else {
             guard generation == loadGeneration else { return }
-            tideStation = nil; tideEvents = []
+            tideStation = nil; tideEvents = []; liveTideSeries = nil
             return
         }
         // Wide enough to cover the live scrub: the chart centre (displayDate) can
@@ -244,10 +345,14 @@ final class MapViewModel {
         let from = date.addingTimeInterval(-30 * 3600)
         let to = date.addingTimeInterval(30 * 3600)
         let events = (try? await TideDatabase.shared.events(stationID: station.id, from: from, to: to)) ?? []
+        // Live model water levels refine the drawn curve where they cover it;
+        // the bundled hi/lo events still anchor everything outside coverage.
+        let live = await liveData?.liveTideSeries(for: station)
         // A newer load started while we were awaiting — drop these stale results.
         guard generation == loadGeneration else { return }
         tideStation = station
         tideEvents = events
+        liveTideSeries = live
     }
 
     private struct Cell: Hashable { let x: Int; let y: Int }
@@ -264,7 +369,7 @@ final class MapViewModel {
         // Square-ish cells on screen: a degree of longitude is shorter than a
         // degree of latitude by cos(lat), so widen the longitude cell to match.
         let centerLat = (vp.lat_min + vp.lat_max) / 2
-        let cosLat = max(0.1, cos(centerLat * .pi / 180))
+        let cosLat = GeoMath.lonScale(atLat: centerLat)
         let screenSpan = max(latSpan, lonSpan * cosLat)
         let cellLat = screenSpan / thinTargetAcross
         let cellLon = cellLat / cosLat
@@ -288,10 +393,7 @@ final class MapViewModel {
     // to order active volumes; ties keep their original (volume-id) order.
     private func rank(_ spec: VolumeSpec, center: (lat: Double, lon: Double)?) -> Int {
         guard let c = center else { return 0 }
-        let b = spec.bounds
-        let contains = c.lat >= b.lat_min && c.lat <= b.lat_max &&
-                       c.lon >= b.lon_min && c.lon <= b.lon_max
-        return contains ? 0 : 1
+        return spec.bounds.contains(lat: c.lat, lon: c.lon) ? 0 : 1
     }
 
     // Beyond this, the nearest current vector is too far to be "under" the
@@ -299,20 +401,20 @@ final class MapViewModel {
     // (the data has no slack vectors; current exists only where there's flow).
     private let crosshairMaxDistanceDeg = 0.015  // ≈ 1.6 km
 
-    private func nearestSpeed(in vectors: [CurrentVector], viewport: ChartBounds?) -> Double? {
+    private func nearestVector(in vectors: [CurrentVector], viewport: ChartBounds?) -> CurrentVector? {
         guard let vp = viewport else { return nil }
         let cLat = (vp.lat_min + vp.lat_max) / 2
         let cLon = (vp.lon_min + vp.lon_max) / 2
-        // Scale longitude by cos(lat) so distances are true-angular, not skewed.
+        // Hoisted: min(by:) evaluates dist2 ~2× per element over the full-
+        // resolution set on the main actor during scrubs.
         let cosLat = cos(cLat * .pi / 180)
         func dist2(_ v: CurrentVector) -> Double {
-            let dLat = v.lat - cLat
-            let dLon = (v.lon - cLon) * cosLat
-            return dLat * dLat + dLon * dLon
+            GeoMath.distanceSquared(fromLat: cLat, fromLon: cLon,
+                                    toLat: v.lat, toLon: v.lon, cosLat: cosLat)
         }
         guard let nearest = vectors.filter({ $0.isSignificant }).min(by: { dist2($0) < dist2($1) }),
               dist2(nearest) <= crosshairMaxDistanceDeg * crosshairMaxDistanceDeg
         else { return nil }
-        return nearest.speedKnots
+        return nearest
     }
 }

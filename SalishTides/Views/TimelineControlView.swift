@@ -3,8 +3,12 @@ import SwiftUI
 struct TimelineControlView: View {
     @Environment(MapViewModel.self) private var vm
     @Environment(AppSettings.self) private var settings
+    @Environment(\.scenePhase) private var scenePhase
     @State private var offsetHours: Int = 0
     @State private var sessionAnchor: Date = .now
+    // True between the first scrub tick of a drag and its commit — gates
+    // re-anchoring, which must never move the tape's base under a gesture.
+    @State private var isScrubbing = false
 
     // Reflects the live scrub position (displayDate), not just the committed
     // offset, so the dot/pill respond as the user drags.
@@ -38,13 +42,35 @@ struct TimelineControlView: View {
                 offsetHours: $offsetHours,
                 sessionAnchor: sessionAnchor,
                 onScrub: { offset in
+                    isScrubbing = true
                     vm.scrub(to: sessionAnchor.addingTimeInterval(offset * 3600))
                 },
-                onCommit: { applyOffset() }
+                onCommit: {
+                    isScrubbing = false
+                    applyOffset()
+                }
             )
             .frame(height: 36)
         }
         .onAppear { jumpToNow() }
+        // "Now" moves: without re-anchoring, an app left open (or foregrounded
+        // hours later) keeps showing the launch hour with the live dot lit —
+        // stale data presented as current. Poll for the hour rolling over, and
+        // check immediately on foregrounding.
+        .onChange(of: scenePhase) {
+            if scenePhase == .active { reanchorIfHourChanged() }
+        }
+        .task {
+            // try-await so cancellation exits at the sleep — a swallowed
+            // CancellationError would run one reanchor against a torn-down
+            // view before the loop condition could notice.
+            do {
+                while true {
+                    try await Task.sleep(for: .seconds(30))
+                    reanchorIfHourChanged()
+                }
+            } catch {}
+        }
     }
 
     // MARK: - Readout (information only)
@@ -95,6 +121,35 @@ struct TimelineControlView: View {
     private func applyOffset() {
         let date = sessionAnchor.addingTimeInterval(Double(offsetHours) * 3600)
         Task { await vm.setTime(date) }
+    }
+
+    // Keep sessionAnchor tracking the real current hour. Sitting at "now"
+    // follows the clock (data advances to the new hour); scrubbed away, only
+    // the tape's Now marker moves — the user's chosen time stays put by
+    // compensating the offset, so nothing reloads.
+    private func reanchorIfHourChanged() {
+        // Never under an active drag: the gesture's translation is relative
+        // to the current anchor/offset, so moving them mid-gesture teleports
+        // the tape and commits a time unrelated to the finger. The next tick
+        // catches up after the commit.
+        guard !isScrubbing else { return }
+        let top = Self.topOfCurrentHour()
+        guard top != sessionAnchor else { return }
+        // Branch on the committed offset, not displayDate proximity — the
+        // readout's isNow can be transiently true as a scrub passes the tick.
+        if offsetHours == 0 {
+            jumpToNow()
+        } else {
+            let delta = Int((top.timeIntervalSince(sessionAnchor) / 3600).rounded())
+            let shifted = offsetHours - delta
+            // Out of the tape's range (parked at the -48 h edge as hours roll
+            // by): leave everything alone rather than clamp — clamping would
+            // silently change the displayed hour under a reading user, once
+            // per hour. The marker re-syncs on their next interaction.
+            guard abs(shifted) <= TapeSliderView.maxHours else { return }
+            sessionAnchor = top
+            offsetHours = shifted
+        }
     }
 
     // The tape steps in whole hours, so "now" is the top of the current Salish
