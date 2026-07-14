@@ -17,9 +17,12 @@ struct TidalCurrentField: Sendable {
         let uAmp, uPhase, vAmp, vPhase: Double
     }
 
-    /// One grid node: its constituents keyed by name (M2, K1, …).
+    /// One grid node: its constituents keyed by name (M2, K1, …), plus the
+    /// steady (tidally-averaged) residual flow. The means default to 0 so
+    /// purely harmonic callers can omit them.
     struct Node: Sendable {
         let constituents: [String: NodeConstituent]
+        var uMean = 0.0, vMean = 0.0
     }
 
     // Regular lat/lon mesh. `nodes` is row-major: index = row*cols + col,
@@ -45,6 +48,8 @@ struct TidalCurrentField: Sendable {
             u += f * comp.uAmp * cos((arg - comp.uPhase) * .pi / 180)
             v += f * comp.vAmp * cos((arg - comp.vPhase) * .pi / 180)
         }
+        u += node.uMean
+        v += node.vMean
         return (u, v)
     }
 

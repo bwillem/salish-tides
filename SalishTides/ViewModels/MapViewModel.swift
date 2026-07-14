@@ -35,10 +35,14 @@ final class MapViewModel {
     var tideStation: TideStation?
     var tideEvents: [TideEvent] = []
 
-    // Live SalishSeaCast data currently in use (nil / false → bundled data).
-    // The vectors themselves flow through the same currentVectors property;
-    // these only carry provenance for the UI.
-    var isLiveCurrents = false
+    // Which source produced the rendered current field, in fallback order:
+    // live SalishSeaCast → bundled harmonic model → bundled atlas. The vectors
+    // themselves flow through the same currentVectors property; this only
+    // carries provenance for the UI.
+    enum CurrentSource { case live, model, atlas }
+    var currentSource: CurrentSource = .atlas
+    /// Live currents rendering right now — drives the "Online mode" badge.
+    var isLiveCurrents: Bool { currentSource == .live }
     var liveTideSeries: LiveTideSeries?
 
     // Convenience for views that only need one selection (e.g. phase indicator)
@@ -231,6 +235,18 @@ final class MapViewModel {
             if !culled.isEmpty { liveVectors = culled }
         }
 
+        // Middle tier: the bundled harmonic model. Synthesized on device from
+        // packed SalishSeaCast constituents, so anywhere the live field would
+        // render but can't (offline, cold cache, forecast horizon) still gets
+        // full-resolution model water instead of the atlas's sparse arrows.
+        // nil when the viewport is off the model domain → atlas takes over.
+        var modelVectors: [CurrentVector]?
+        if liveVectors == nil {
+            modelVectors = await OfflineCurrentModel.shared.currents(for: date,
+                                                                     viewport: visibleViewport)
+            guard generation == loadGeneration else { return }
+        }
+
         // Find all volumes whose geographic bounds intersect the current viewport.
         // If no viewport yet, include all volumes so any initial chart load works.
         // Rank volumes containing the viewport center first, so currentSelection
@@ -252,11 +268,11 @@ final class MapViewModel {
 
         // Chart selections are always computed — they drive the flood/ebb phase
         // indicator regardless of which source renders the vectors. The atlas
-        // DB is only queried when there's no live field to show.
+        // DB is only queried when there's no live or model field to show.
         for (spec, selector) in activeSelectors {
             guard let sel = selector.selection(for: date) else { continue }
             selections.append(sel)
-            guard liveVectors == nil else { continue }
+            guard liveVectors == nil, modelVectors == nil else { continue }
 
             // Use the volume's index for viewport-based region culling when
             // available; fall back to all regions if the index failed to load.
@@ -281,6 +297,8 @@ final class MapViewModel {
 
         if let liveVectors {
             vectors = liveVectors
+        } else if let modelVectors {
+            vectors = modelVectors
         }
 
         // The live coastline mask, culled like the vectors. Only meaningful
@@ -291,9 +309,9 @@ final class MapViewModel {
         }
 
         guard generation == loadGeneration else { return }
-        // Provenance reflects what is actually rendered: liveVectors is nil
-        // (and the atlas populated `vectors`) whenever the cull came up empty.
-        isLiveCurrents = liveVectors != nil
+        // Provenance reflects what is actually rendered: a tier is nil (and
+        // the next one populated `vectors`) whenever its cull came up empty.
+        currentSource = liveVectors != nil ? .live : modelVectors != nil ? .model : .atlas
         currentSelections = selections
         // Crosshair readout uses the full-resolution set; only the rendered
         // layer is down-sampled.
