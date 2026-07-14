@@ -99,8 +99,25 @@ struct ContentView: View {
                     .padding(.bottom, Spacing.sm)
             }
         }
-        .alert("Setup Error", isPresented: .constant(vm.migrationError != nil)) {
-            Button("OK") {}
+        // The binding must clear the error on dismiss — a `.constant` binding
+        // here re-presents the alert forever. Retry re-runs the idempotent
+        // setup/migration path, so a transient failure (e.g. low disk) is
+        // recoverable without relaunching.
+        .alert("Setup Error", isPresented: Binding(
+            get: { vm.migrationError != nil },
+            set: { if !$0 { vm.migrationError = nil } }
+        )) {
+            Button("Retry") {
+                Task {
+                    // Let the dismissal transition finish before retrying: a
+                    // fast failure (setup throws in ms) would re-set the error
+                    // mid-dismissal, and SwiftUI drops an alert re-presented
+                    // during one — the failure would become invisible.
+                    try? await Task.sleep(for: .milliseconds(600))
+                    await vm.initialize()
+                }
+            }
+            Button("OK", role: .cancel) {}
         } message: {
             Text(vm.migrationError ?? "")
         }

@@ -91,3 +91,32 @@ targets:
         Release:
           SWIFT_OPTIMIZATION_LEVEL: "-O"
           SWIFT_COMPILATION_MODE: wholemodule
+
+  # Unit tests for the pure logic (date parsing, interpolation, grid math,
+  # packing) — no UI tests, no network.
+  SalishTidesTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: SalishTidesTests
+    dependencies:
+      - target: SalishTides
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: "YES"
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
+
+schemes:
+  SalishTides:
+    build:
+      targets:
+        SalishTides: all
+        SalishTidesTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - SalishTidesTests

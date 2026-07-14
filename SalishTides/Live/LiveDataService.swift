@@ -109,8 +109,7 @@ final class LiveDataService {
     private var grid: SalishSeaCastAPI.LiveGrid?
     private var sliceIndex: [Int: Date] = [:]                       // hourKey → fetchedAt
     private var sliceRetryAfter: [Int: Date] = [:]                  // hourKey → don't retry before
-    private var vectorCache: [Int: [CurrentVector]] = [:]
-    private var vectorCacheOrder: [Int] = []                        // LRU, most recent last
+    private var vectorCache = LRUCache<Int, [CurrentVector]>(limit: LiveDataService.vectorCacheLimit)
     private var slicesInFlight: Set<Int> = []
     private var sshSeries: [String: [(t: Int, ssh: Double)]] = [:]  // gauge dataset → series
     private var sshFetchedAt: [String: Date] = [:]                  // gauge dataset → fetchedAt
@@ -123,8 +122,8 @@ final class LiveDataService {
     // viewport). Keys are "hourKey|windowKey".
     private var lastNativeViewport: ChartBounds?
     private var lastNativeWindow: SalishSeaCastAPI.NativeWindow?
-    private var nativeCache: [String: (vectors: [CurrentVector], fetchedAt: Date)] = [:]
-    private var nativeCacheOrder: [String] = []                     // LRU, most recent last
+    private var nativeCache =
+        LRUCache<String, (vectors: [CurrentVector], fetchedAt: Date)>(limit: LiveDataService.nativeCacheLimit)
     private var nativeRetryAfter: [String: Date] = [:]
     private var nativesInFlight: Set<String> = []
 
@@ -195,6 +194,7 @@ final class LiveDataService {
             ready = true
         } catch {
             // Cache unavailable — live data stays off; offline data still works.
+            Log.live.error("live cache setup failed: \(error, privacy: .public)")
         }
     }
 
@@ -307,12 +307,12 @@ final class LiveDataService {
             try await store.saveSlice(hourKey: hourKey, points: points, fetchedAt: Date())
             sliceIndex[hourKey] = Date()
             sliceRetryAfter[hourKey] = nil
-            vectorCache[hourKey] = nil
-            vectorCacheOrder.removeAll { $0 == hourKey }
+            vectorCache.removeValue(for: hourKey)
             if hourKey == displayedHourKey { dataGeneration += 1 }
         } catch {
             // Network hiccup or hour outside the dataset — the map falls back
             // to the atlas and the periodic refresh retries after the delay.
+            Log.live.info("slice fetch failed for \(hourKey): \(error, privacy: .public)")
             sliceRetryAfter[hourKey] = Date().addingTimeInterval(Self.sliceRetryDelay)
         }
     }
@@ -329,8 +329,7 @@ final class LiveDataService {
         guard ready, let grid else { return nil }
 
         let hourKey = Self.hourKey(for: date)
-        if let cached = vectorCache[hourKey] {
-            touchCache(hourKey)
+        if let cached = vectorCache.value(for: hourKey) {
             return cached
         }
 
@@ -338,9 +337,8 @@ final class LiveDataService {
            let points = try? await store.loadSlicePoints(hourKey: hourKey) {
             // Re-check after the suspension: an interleaved call for the same
             // hour (scrub tick vs. data-generation refresh) may have already
-            // cached it — inserting twice would desync the LRU order.
-            if let cached = vectorCache[hourKey] {
-                touchCache(hourKey)
+            // cached it.
+            if let cached = vectorCache.value(for: hourKey) {
                 return cached
             }
             // The ~17k-point trig conversion is pure; keep it off the main
@@ -348,11 +346,7 @@ final class LiveDataService {
             let vectors = await Task.detached(priority: .userInitiated) {
                 Self.vectors(from: points, grid: grid)
             }.value
-            vectorCache[hourKey] = vectors
-            touchCache(hourKey)
-            if vectorCacheOrder.count > Self.vectorCacheLimit {
-                vectorCache[vectorCacheOrder.removeFirst()] = nil
-            }
+            vectorCache.insert(vectors, for: hourKey)
             return vectors
         }
 
@@ -362,12 +356,6 @@ final class LiveDataService {
             Task { await fetchSlice(hourKey: hourKey) }
         }
         return nil
-    }
-
-    /// Mark an hour most-recently-used (LRU order, most recent last).
-    private func touchCache(_ hourKey: Int) {
-        vectorCacheOrder.removeAll { $0 == hourKey }
-        vectorCacheOrder.append(hourKey)
     }
 
     /// Full-resolution current vectors for the hour containing `date` over
@@ -386,14 +374,13 @@ final class LiveDataService {
         await ensureReady()
         guard ready, let grid else { return nil }
 
-        // Window for the viewport + the same 20% margin the view model culls
+        // Window for the viewport + the same margin the view model culls
         // with, memoized per viewport (the derivation scans the strided grid).
         if lastNativeViewport != viewport {
-            let latMargin = (viewport.lat_max - viewport.lat_min) * 0.2
-            let lonMargin = (viewport.lon_max - viewport.lon_min) * 0.2
+            let expanded = viewport.expanded(byFraction: ChartBounds.cullMarginFraction)
             lastNativeWindow = SalishSeaCastAPI.nativeWindow(
-                latMin: viewport.lat_min - latMargin, latMax: viewport.lat_max + latMargin,
-                lonMin: viewport.lon_min - lonMargin, lonMax: viewport.lon_max + lonMargin,
+                latMin: expanded.lat_min, latMax: expanded.lat_max,
+                lonMin: expanded.lon_min, lonMax: expanded.lon_max,
                 grid: grid)
             lastNativeViewport = viewport
         }
@@ -401,8 +388,7 @@ final class LiveDataService {
 
         let hourKey = Self.hourKey(for: date)
         let key = "\(hourKey)|\(window.key)"
-        if let cached = nativeCache[key] {
-            touchNativeCache(key)
+        if let cached = nativeCache.value(for: key) {
             // The staleness check must live on the warm path too: a window
             // kept warm by repeated viewing would otherwise serve a
             // superseded model run for the whole session.
@@ -413,20 +399,15 @@ final class LiveDataService {
         }
 
         if let row = try? await store.loadNativeSlice(hourKey: hourKey, containing: window) {
-            // Re-check after the suspension (same LRU-desync hazard as the
+            // Re-check after the suspension (same double-insert hazard as the
             // strided path).
-            if let cached = nativeCache[key] {
-                touchNativeCache(key)
+            if let cached = nativeCache.value(for: key) {
                 return cached.vectors
             }
             let vectors = await Task.detached(priority: .userInitiated) {
                 Self.vectors(from: row.points, grid: grid)
             }.value
-            nativeCache[key] = (vectors, row.fetchedAt)
-            touchNativeCache(key)
-            if nativeCacheOrder.count > Self.nativeCacheLimit {
-                nativeCache[nativeCacheOrder.removeFirst()] = nil
-            }
+            nativeCache.insert((vectors, row.fetchedAt), for: key)
             // Serve the cached window but refresh it if a newer model run
             // should be available by now.
             if Date().timeIntervalSince(row.fetchedAt) >= Self.sliceMaxAge {
@@ -463,17 +444,12 @@ final class LiveDataService {
             try await store.saveNativeSlice(hourKey: hourKey, window: window,
                                             points: points, fetchedAt: Date())
             nativeRetryAfter[key] = nil
-            nativeCache[key] = nil
-            nativeCacheOrder.removeAll { $0 == key }
+            nativeCache.removeValue(for: key)
             if hourKey == displayedHourKey { dataGeneration += 1 }
         } catch {
+            Log.live.info("native window fetch failed for \(key, privacy: .public): \(error, privacy: .public)")
             nativeRetryAfter[key] = Date().addingTimeInterval(Self.sliceRetryDelay)
         }
-    }
-
-    private func touchNativeCache(_ key: String) {
-        nativeCacheOrder.removeAll { $0 == key }
-        nativeCacheOrder.append(key)
     }
 
     /// Dry (land) model cells adjacent to at least one wet cell — the model's
@@ -563,11 +539,9 @@ final class LiveDataService {
             guard let (lat, lon) = SalishSeaCastAPI.nativeLatLon(y: Int(p.y), x: Int(p.x),
                                                                  grid: grid) else { continue }
             let e = Double(p.east), n = Double(p.north)
-            var dir = atan2(e, n) * 180 / .pi
-            if dir < 0 { dir += 360 }
             out.append(CurrentVector(lat: lat, lon: lon,
                                      speed_ms: (e * e + n * n).squareRoot(),
-                                     direction_deg: dir))
+                                     direction_deg: GeoMath.flowBearing(east: e, north: n)))
         }
         return out
     }
@@ -585,11 +559,9 @@ final class LiveDataService {
             let lat = Double(grid.lat[i]), lon = Double(grid.lon[i])
             guard lat.isFinite, lon.isFinite else { continue }
             let e = Double(p.east), n = Double(p.north)
-            var dir = atan2(e, n) * 180 / .pi
-            if dir < 0 { dir += 360 }
             out.append(CurrentVector(lat: lat, lon: lon,
                                      speed_ms: (e * e + n * n).squareRoot(),
-                                     direction_deg: dir))
+                                     direction_deg: GeoMath.flowBearing(east: e, north: n)))
         }
         return out
     }
@@ -597,9 +569,8 @@ final class LiveDataService {
     private static func nearestGauge(lat: Double, lon: Double) -> SalishSeaCastAPI.Gauge? {
         let cosLat = cos(lat * .pi / 180)
         func dist2(_ g: SalishSeaCastAPI.Gauge) -> Double {
-            let dLat = g.lat - lat
-            let dLon = (g.lon - lon) * cosLat
-            return dLat * dLat + dLon * dLon
+            GeoMath.distanceSquared(fromLat: lat, fromLon: lon,
+                                    toLat: g.lat, toLon: g.lon, cosLat: cosLat)
         }
         guard let gauge = SalishSeaCastAPI.gauges.min(by: { dist2($0) < dist2($1) }),
               dist2(gauge) <= gaugeMaxDistanceDeg * gaugeMaxDistanceDeg else { return nil }

@@ -64,8 +64,6 @@ actor TideDatabase {
         self.pool = p
     }
 
-    var stationCount: Int { stations.count }
-
     func insertStation(_ record: TideStationRecord, events: [TideEventRecord]) throws {
         guard let pool else { return }
         try pool.write { db in
@@ -89,9 +87,10 @@ actor TideDatabase {
     func nearestStation(lat: Double, lon: Double) -> TideStation? {
         let cosLat = cos(lat * .pi / 180)
         return stations.min(by: {
-            let d1 = pow($0.lat - lat, 2) + pow(($0.lon - lon) * cosLat, 2)
-            let d2 = pow($1.lat - lat, 2) + pow(($1.lon - lon) * cosLat, 2)
-            return d1 < d2
+            GeoMath.distanceSquared(fromLat: lat, fromLon: lon,
+                                    toLat: $0.lat, toLon: $0.lon, cosLat: cosLat) <
+            GeoMath.distanceSquared(fromLat: lat, fromLon: lon,
+                                    toLat: $1.lat, toLon: $1.lon, cosLat: cosLat)
         })
     }
 
