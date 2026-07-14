@@ -50,12 +50,19 @@ struct MapLibreView: UIViewRepresentable {
             context.coordinator.lastScheme = colorScheme
             context.coordinator.appliedBasemap = settings.basemap
             context.coordinator.prepareForStyleReload(vm.currentVectors)
+            // The outgoing style's land polygons are stale the moment the URL
+            // changes; drop them so the particle field falls back to the model
+            // mask until the new style renders and the idle re-query lands.
+            context.coordinator.invalidateLandPolygons()
             mapView.styleURL = desiredStyleURL(for: colorScheme)
         }
         // Pushes the vectors to both the arrow source and the particle layer.
-        // Read vm.currentVectors / vm.currentLandMask here so Observation
-        // re-runs updateUIView on change.
-        context.coordinator.updateVectors(vm.currentVectors, mask: vm.currentLandMask, on: mapView)
+        // Read vm.currentVectors / vm.currentFieldVectors / vm.currentLandMask
+        // here so Observation re-runs updateUIView on change (the coordinator
+        // change-detects, so identical passes are cheap).
+        context.coordinator.updateVectors(vm.currentVectors,
+                                          fieldVectors: vm.currentFieldVectors,
+                                          mask: vm.currentLandMask, on: mapView)
         context.coordinator.setParticleDark(colorScheme == .dark)
         // Particles vs arrows, honouring the Reduce-Motion / Low-Power fallback,
         // plus pause-on-background. Read here so Observation re-runs updateUIView
@@ -132,6 +139,18 @@ struct MapLibreView: UIViewRepresentable {
             )
             onViewportChange(viewport)
             onBearingChange(mapView.direction)
+            // Recentre the particle field on the new viewport immediately with
+            // the data already in hand — a camera move alone never re-runs the
+            // SwiftUI update, and waiting for the debounced data reload would
+            // leave freshly panned-to water empty (particles reseed only into
+            // the field's water cells). Full data follows after the reload.
+            let bounds = worldBounds(of: mapView)
+            if bounds != lastBoundsWorld {
+                lastBoundsWorld = bounds
+                lastLandPolygons = landPolygons(from: mapView)
+                particleLayer?.update(vectors: lastFieldVectors, mask: lastMask,
+                                      landPolygons: lastLandPolygons, boundsWorld: bounds)
+            }
         }
 
         // Live updates while the user rotates, so the compass tracks smoothly.
@@ -139,28 +158,74 @@ struct MapLibreView: UIViewRepresentable {
             onBearingChange(mapView.direction)
         }
 
-        // Latest vectors + live land mask + drawn-land rings + viewport, all
-        // retained so they can be re-pushed (as the particle field inputs) to
-        // a freshly created layer after a style reload.
+        // Latest arrows vectors + particle-field inputs (full-res vectors,
+        // land mask, drawn-land polygons, viewport), retained both for change
+        // detection and so they can be re-pushed to a freshly created layer
+        // after a style reload.
         nonisolated(unsafe) private var lastVectors: [CurrentVector] = []
+        nonisolated(unsafe) private var lastFieldVectors: [CurrentVector] = []
         nonisolated(unsafe) private var lastMask: [CurrentVector] = []
-        nonisolated(unsafe) private var lastLandRings: [[SIMD2<Float>]] = []
+        nonisolated(unsafe) private var lastLandPolygons: [CurrentParticleLayer.LandPolygon] = []
         nonisolated(unsafe) private var lastBoundsWorld: (minX: Float, minY: Float, maxX: Float, maxY: Float) = (0, 0, 0, 0)
+        // False while the current polygon snapshot is untrustworthy (style
+        // mid-reload, tiles still rendering) — re-queried on viewport change
+        // and on mapViewDidBecomeIdle.
+        nonisolated(unsafe) private var landPolygonsValid = false
 
-        func updateVectors(_ vectors: [CurrentVector], mask: [CurrentVector], on mapView: MLNMapView) {
-            // The same (thinned) vectors drive the arrows and feed the particle
-            // layer's field raster; the masks/rings only feed the particles.
+        func updateVectors(_ vectors: [CurrentVector], fieldVectors: [CurrentVector],
+                           mask: [CurrentVector], on mapView: MLNMapView) {
+            // Change detection: updateUIView re-runs on every observed change
+            // (scene phase, colour scheme, style mode...), and everything below
+            // — the feature query, the arrow shape rebuild, the field raster
+            // rebuild — is far too expensive to run for identical inputs.
+            let bounds = worldBounds(of: mapView)
+            let dataChanged = vectors != lastVectors || fieldVectors != lastFieldVectors
+                || mask != lastMask
+            let boundsChanged = bounds != lastBoundsWorld
+            guard dataChanged || boundsChanged || !landPolygonsValid else { return }
+
             lastVectors = vectors
+            lastFieldVectors = fieldVectors
             lastMask = mask
-            lastLandRings = landRings(from: mapView)
-            lastBoundsWorld = worldBounds(of: mapView)
-            particleLayer?.update(vectors: vectors, mask: mask,
-                                  landRings: lastLandRings, boundsWorld: lastBoundsWorld)
+            lastBoundsWorld = bounds
+            if boundsChanged || !landPolygonsValid {
+                lastLandPolygons = landPolygons(from: mapView)
+                // Best-effort snapshot: tiles may still be rendering; the
+                // mapViewDidBecomeIdle re-query below corrects it once the
+                // map settles.
+                landPolygonsValid = mapView.style != nil
+            }
+            particleLayer?.update(vectors: fieldVectors, mask: mask,
+                                  landPolygons: lastLandPolygons, boundsWorld: bounds)
             guard let style = mapView.style else {
                 pendingVectors = vectors
                 return
             }
-            applyVectors(vectors, style: style)
+            if dataChanged { applyVectors(vectors, style: style) }
+        }
+
+        /// Rendering settled (tiles loaded, camera at rest): re-capture the
+        /// land polygons and rebuild the field if they changed. This is what
+        /// keeps the land mask honest after pans into previously unrendered
+        /// areas and after style reloads — a snapshot taken mid-load misses
+        /// land whose tiles hadn't arrived yet.
+        func mapViewDidBecomeIdle(_ mapView: MLNMapView) {
+            let fresh = landPolygons(from: mapView)
+            landPolygonsValid = true
+            guard fresh != lastLandPolygons else { return }
+            lastLandPolygons = fresh
+            lastBoundsWorld = worldBounds(of: mapView)
+            particleLayer?.update(vectors: lastFieldVectors, mask: lastMask,
+                                  landPolygons: fresh, boundsWorld: lastBoundsWorld)
+        }
+
+        /// Called when a style reload starts: the outgoing style's polygons
+        /// no longer describe what will be drawn. Empty polygons make the
+        /// particle layer fall back to the model mask until the new style
+        /// renders and the idle re-query lands.
+        func invalidateLandPolygons() {
+            lastLandPolygons = []
+            landPolygonsValid = false
         }
 
         /// The visible viewport as world-Mercator min/max (the particle field's
@@ -180,14 +245,14 @@ struct MapLibreView: UIViewRepresentable {
         /// (NEMO widens them), so only the basemap knows where the user sees a
         /// beach. Styles without an "earth" layer (Ocean/Satellite, the flat
         /// fallback) return no rings and keep the model-mask behavior.
-        private func landRings(from mapView: MLNMapView) -> [[SIMD2<Float>]] {
+        private func landPolygons(from mapView: MLNMapView) -> [CurrentParticleLayer.LandPolygon] {
             // MLN delegate callbacks are main-thread (see the class comment);
             // visibleFeatures is @MainActor-annotated, so assert rather than
-            // hop, and convert to Sendable rings before leaving the closure.
+            // hop, and convert to Sendable polygons before leaving the closure.
             MainActor.assumeIsolated {
                 let features = mapView.visibleFeatures(in: mapView.bounds,
                                                        styleLayerIdentifiers: ["earth"])
-                var rings: [[SIMD2<Float>]] = []
+                var polygons: [CurrentParticleLayer.LandPolygon] = []
                 func add(_ polygon: MLNPolygon) {
                     func ring(_ shape: MLNMultiPoint) -> [SIMD2<Float>] {
                         let coords = UnsafeBufferPointer(start: shape.coordinates,
@@ -197,8 +262,11 @@ struct MapLibreView: UIViewRepresentable {
                             return SIMD2(Float(w.x), Float(w.y))
                         }
                     }
-                    rings.append(ring(polygon))
-                    for hole in polygon.interiorPolygons ?? [] { rings.append(ring(hole)) }
+                    // Exterior + holes stay grouped: the rasterizer unions
+                    // polygons, so tile-duplicated copies can't cancel out.
+                    polygons.append(CurrentParticleLayer.LandPolygon(
+                        exterior: ring(polygon),
+                        holes: (polygon.interiorPolygons ?? []).map(ring)))
                 }
                 for feature in features {
                     if let polygon = feature as? MLNPolygon {
@@ -207,7 +275,7 @@ struct MapLibreView: UIViewRepresentable {
                         multi.polygons.forEach(add)
                     }
                 }
-                return rings
+                return polygons
             }
         }
 
@@ -286,6 +354,14 @@ struct MapLibreView: UIViewRepresentable {
             // fallback) keep the old draw-on-top behavior.
             let particleLayer = CurrentParticleLayer(identifier: particleLayerID)
             if let earth = style.layer(withIdentifier: "earth") {
+                // Inserting below "earth" only clips correctly if the style
+                // keeps its ocean fill BELOW the land fills (see the reordered
+                // standard-{light,dark}.json); nothing else enforces that
+                // hand-maintained invariant, so trap regressions in debug.
+                let ids = style.layers.map(\.identifier)
+                if let w = ids.firstIndex(of: "water"), let e = ids.firstIndex(of: "earth"), w > e {
+                    assertionFailure("style orders 'water' above 'earth' — the ocean fill will paint over the particle layer; restore the standard-*.json layer order")
+                }
                 style.insertLayer(particleLayer, below: earth)
             } else {
                 style.addLayer(particleLayer)
@@ -293,8 +369,11 @@ struct MapLibreView: UIViewRepresentable {
             self.particleLayer = particleLayer
             // Re-seed the freshly created layer with the field + style/scheme from
             // before the reload, so particles don't blank out on a Day/Night flip.
-            particleLayer.update(vectors: lastVectors, mask: lastMask,
-                                 landRings: lastLandRings, boundsWorld: lastBoundsWorld)
+            // Land polygons were invalidated when the reload started (a
+            // stale style's coastline is worse than the model-mask fallback);
+            // the idle re-query upgrades them once the new style renders.
+            particleLayer.update(vectors: lastFieldVectors, mask: lastMask,
+                                 landPolygons: lastLandPolygons, boundsWorld: lastBoundsWorld)
             particleLayer.setDark(lastDark)
             particleLayer.setActive(lastStyleMode != .arrows)
         }

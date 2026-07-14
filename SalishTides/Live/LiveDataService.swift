@@ -123,7 +123,7 @@ final class LiveDataService {
     // viewport). Keys are "hourKey|windowKey".
     private var lastNativeViewport: ChartBounds?
     private var lastNativeWindow: SalishSeaCastAPI.NativeWindow?
-    private var nativeCache: [String: [CurrentVector]] = [:]
+    private var nativeCache: [String: (vectors: [CurrentVector], fetchedAt: Date)] = [:]
     private var nativeCacheOrder: [String] = []                     // LRU, most recent last
     private var nativeRetryAfter: [String: Date] = [:]
     private var nativesInFlight: Set<String> = []
@@ -403,7 +403,13 @@ final class LiveDataService {
         let key = "\(hourKey)|\(window.key)"
         if let cached = nativeCache[key] {
             touchNativeCache(key)
-            return cached
+            // The staleness check must live on the warm path too: a window
+            // kept warm by repeated viewing would otherwise serve a
+            // superseded model run for the whole session.
+            if Date().timeIntervalSince(cached.fetchedAt) >= Self.sliceMaxAge {
+                kickNativeFetch(hourKey: hourKey, window: window, key: key)
+            }
+            return cached.vectors
         }
 
         if let row = try? await store.loadNativeSlice(hourKey: hourKey, containing: window) {
@@ -411,12 +417,12 @@ final class LiveDataService {
             // strided path).
             if let cached = nativeCache[key] {
                 touchNativeCache(key)
-                return cached
+                return cached.vectors
             }
             let vectors = await Task.detached(priority: .userInitiated) {
                 Self.vectors(from: row.points, grid: grid)
             }.value
-            nativeCache[key] = vectors
+            nativeCache[key] = (vectors, row.fetchedAt)
             touchNativeCache(key)
             if nativeCacheOrder.count > Self.nativeCacheLimit {
                 nativeCache[nativeCacheOrder.removeFirst()] = nil

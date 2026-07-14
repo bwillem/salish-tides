@@ -11,9 +11,14 @@ final class MapViewModel {
     // The map does NOT observe this, so per-frame updates stay cheap.
     var displayDate: Date = .now
     var currentVectors: [CurrentVector] = []
+    // Full-resolution (viewport-culled, unthinned) vectors for the particle
+    // field raster — currentVectors is display-thinned for the arrows and
+    // would starve/bias the field.
+    var currentFieldVectors: [CurrentVector] = []
     // Zero-speed "dry land" points bounding the live model's coastline,
-    // culled/thinned like currentVectors. Empty when the atlas renders (it has
-    // no land mask) — the particle layer treats an empty mask as all-water.
+    // culled (not thinned — it's a contiguous barrier band) like the vectors.
+    // Empty when the atlas renders (it has no land mask) — the particle layer
+    // treats an empty mask as all-water.
     var currentLandMask: [CurrentVector] = []
     var currentSelections: [ChartSelection] = []
     var isMigrating = false
@@ -288,8 +293,18 @@ final class MapViewModel {
         let crosshairVector = nearestVector(in: vectors, viewport: visibleViewport)
         crosshairSpeed = crosshairVector?.speedKnots
         crosshairDirection = crosshairVector?.direction_deg
-        currentVectors = thinned(vectors, for: visibleViewport)
-        currentLandMask = thinned(landMask, for: visibleViewport)
+        // Arrows get the display-density thinned set; the particle field gets
+        // full-resolution data (the raster does its own averaging — feeding it
+        // the fastest-per-bin thinned picks would bias speeds and starve its
+        // 160-across grid). The mask stays unthinned too: it's a barrier band,
+        // and thinning (arbitrary pick per bin at speed 0) punches holes in it.
+        // Only assign on change — every reassignment re-runs the map update
+        // and a particle field rebuild via Observation.
+        let thinnedVectors = thinned(vectors, for: visibleViewport)
+        if thinnedVectors != currentVectors { currentVectors = thinnedVectors }
+        let fieldVectors = viewportFiltered(vectors)
+        if fieldVectors != currentFieldVectors { currentFieldVectors = fieldVectors }
+        if landMask != currentLandMask { currentLandMask = landMask }
 
         await updateTides(for: date, generation: generation)
     }

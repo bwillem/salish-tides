@@ -105,9 +105,11 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
     private var waterCellBuffer: MTLBuffer?
     private var appliedField: Field?
     // Inputs stashed for rebuilds (style reloads, late device arrival) and the
-    // async build generation guard (only the newest build result applies).
+    // async build coalescing (at most one build in flight, at most one queued).
     private var lastInputs: Inputs?
-    private var buildGeneration = 0
+    private var appliedInputs: Inputs?
+    private var building = false
+    private var pendingBuild: Inputs?
 
     private var isDark = true
     private var styleActive = true
@@ -117,12 +119,27 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
 
     // MARK: - Field raster
 
+    /// One basemap land feature: exterior ring + holes, in world Mercator.
+    /// Kept grouped (not flattened) so overlapping tile-clipped copies of the
+    /// same landmass union correctly — a flat even-odd test across independent
+    /// rings classifies double-covered overlap strips as water.
+    struct LandPolygon: Sendable, Equatable {
+        let exterior: [SIMD2<Float>]
+        let holes: [[SIMD2<Float>]]
+    }
+
     /// Everything an update pushes in, kept so the field can be rebuilt.
-    private struct Inputs: Sendable {
+    /// Equatable so identical pushes (scene-phase flips, content-identical
+    /// reloads) skip the rebuild entirely.
+    private struct Inputs: Sendable, Equatable {
         let vectors: [CurrentVector]
         let mask: [CurrentVector]
-        let landRings: [[SIMD2<Float>]]
-        let boundsWorld: (minX: Float, minY: Float, maxX: Float, maxY: Float)
+        let landPolygons: [LandPolygon]
+        let boundsWorld: Bounds
+
+        struct Bounds: Sendable, Equatable {
+            let minX: Float, minY: Float, maxX: Float, maxY: Float
+        }
     }
 
     /// The CPU-built raster: interleaved RGBA per cell (east, north, water,
@@ -197,31 +214,51 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
         syncDisplayLink()
     }
 
-    /// Pushes the data vectors plus land knowledge (basemap rings; model dry
-    /// cells as fallback for styles without land polygons) and the viewport in
-    /// world coords. Rebuilds the field raster off-main and swaps it in when
-    /// done — cheap and infrequent (hourly / viewport settle / scrub).
+    /// Pushes the data vectors plus land knowledge (basemap polygons; model
+    /// dry cells as fallback for styles without land polygons) and the
+    /// viewport in world coords. Rebuilds the field raster off-main and swaps
+    /// it in when done — cheap and infrequent (hourly / viewport settle /
+    /// scrub). Identical pushes are ignored; while a build runs, only the
+    /// newest superseding input is kept (never a queue of stale builds).
     func update(vectors: [CurrentVector], mask: [CurrentVector],
-                landRings: [[SIMD2<Float>]],
+                landPolygons: [LandPolygon],
                 boundsWorld: (minX: Float, minY: Float, maxX: Float, maxY: Float)) {
-        let inputs = Inputs(vectors: vectors, mask: mask, landRings: landRings,
-                            boundsWorld: boundsWorld)
+        let inputs = Inputs(vectors: vectors, mask: mask, landPolygons: landPolygons,
+                            boundsWorld: .init(minX: boundsWorld.minX, minY: boundsWorld.minY,
+                                               maxX: boundsWorld.maxX, maxY: boundsWorld.maxY))
         lastInputs = inputs
         guard device != nil else { return }
         rebuildField(from: inputs)
     }
 
     private func rebuildField(from inputs: Inputs) {
-        buildGeneration += 1
-        let generation = buildGeneration
+        guard inputs != appliedInputs else { return }
+        if building {
+            pendingBuild = inputs
+            return
+        }
+        building = true
+        startBuild(inputs)
+    }
+
+    private func startBuild(_ inputs: Inputs) {
         let cellsAcross = fieldCellsAcross
         Task.detached(priority: .userInitiated) { [weak self] in
             let field = Self.buildField(inputs: inputs, cellsAcross: cellsAcross)
             // Re-capture weakly so the strong ref never crosses the actor hop
             // (Swift 6 region isolation); the layer is main-thread-only anyway.
             await MainActor.run { [weak self] in
-                guard let self, generation == self.buildGeneration else { return }
+                guard let self else { return }
                 self.applyField(field)
+                self.appliedInputs = inputs
+                if let next = self.pendingBuild {
+                    self.pendingBuild = nil
+                    if next != inputs {
+                        self.startBuild(next)
+                        return
+                    }
+                }
+                self.building = false
             }
         }
     }
@@ -283,54 +320,60 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
         }
 
         // ── Land mask ────────────────────────────────────────────────────
-        // Basemap polygons when available (exact drawn coastline); otherwise
-        // the model's dry cells, splatted + dilated one cell.
+        // Basemap polygons when available (exact drawn coastline, scanline-
+        // rasterized per feature and unioned so overlapping tile-clipped
+        // copies can't cancel out); otherwise the model's dry cells, splatted
+        // and dilated to their own grid spacing so the band stays contiguous
+        // at any raster resolution.
         var land = [Bool](repeating: false, count: cells)
-        if !inputs.landRings.isEmpty {
-            let rings = inputs.landRings
-            let boxes: [(lo: SIMD2<Float>, hi: SIMD2<Float>)] = rings.map { ring in
-                var lo = SIMD2<Float>(.greatestFiniteMagnitude, .greatestFiniteMagnitude)
-                var hi = -lo
-                for v in ring { lo = simd_min(lo, v); hi = simd_max(hi, v) }
-                return (lo, hi)
+        var landCount = 0
+        if !inputs.landPolygons.isEmpty {
+            for polygon in inputs.landPolygons {
+                rasterize(polygon, into: &land,
+                          minX: minX, minY: minY, cellW: cellW, cellH: cellH,
+                          cols: cols, rows: rows)
             }
-            for cy in 0..<rows {
-                let y = minY + (Float(cy) + 0.5) * cellH
-                for cx in 0..<cols {
-                    let x = minX + (Float(cx) + 0.5) * cellW
-                    if insideLand(SIMD2(x, y), rings: rings, boxes: boxes) {
-                        land[cy * cols + cx] = true
-                    }
-                }
-            }
+            landCount = land.reduce(0) { $0 + ($1 ? 1 : 0) }
         } else if !inputs.mask.isEmpty {
-            var seed = [Bool](repeating: false, count: cells)
+            // Estimate the mask's own spacing (in raster cells) from its
+            // bounding-box density, and dilate each point by half of it: the
+            // band stays closed whether a raster cell is 15 m or 900 m.
+            var lo = SIMD2<Float>(.greatestFiniteMagnitude, .greatestFiniteMagnitude)
+            var hi = -lo
+            var maskCells: [Int] = []
+            maskCells.reserveCapacity(inputs.mask.count)
             for m in inputs.mask {
                 let w = lonLatToWorld(lon: m.lon, lat: m.lat)
-                if let i = cellIndex(Float(w.x), Float(w.y)) { seed[i] = true }
+                let p = SIMD2(Float(w.x), Float(w.y))
+                lo = simd_min(lo, p); hi = simd_max(hi, p)
+                if let i = cellIndex(p.x, p.y) { maskCells.append(i) }
             }
-            for cy in 0..<rows {
-                for cx in 0..<cols where seed[cy * cols + cx] {
-                    for dy in -1...1 {
-                        for dx in -1...1 {
-                            let ny = cy + dy, nx = cx + dx
-                            if ny >= 0, ny < rows, nx >= 0, nx < cols {
-                                land[ny * cols + nx] = true
-                            }
-                        }
+            let area = max(0, (hi.x - lo.x)) * max(0, (hi.y - lo.y))
+            let spacingWorld = (area / Float(max(1, inputs.mask.count))).squareRoot()
+            let radius = min(24, max(1, Int((spacingWorld / min(cellW, cellH) / 2).rounded(.up))))
+            for i in maskCells {
+                let cy = i / cols, cx = i % cols
+                for dy in -radius...radius {
+                    for dx in -radius...radius {
+                        let ny = cy + dy, nx = cx + dx
+                        guard ny >= 0, ny < rows, nx >= 0, nx < cols else { continue }
+                        let n = ny * cols + nx
+                        if !land[n] { land[n] = true; landCount += 1 }
                     }
                 }
             }
         }
 
         // ── Splat data ───────────────────────────────────────────────────
+        // No land guard here: whether a data sample on a "land" cell should
+        // win is decided below, once the data spacing is known.
         var sumU = [Float](repeating: 0, count: cells)
         var sumV = [Float](repeating: 0, count: cells)
         var count = [Float](repeating: 0, count: cells)
         var dataCells = 0
         for v in inputs.vectors {
             let w = lonLatToWorld(lon: v.lon, lat: v.lat)
-            guard let i = cellIndex(Float(w.x), Float(w.y)), !land[i] else { continue }
+            guard let i = cellIndex(Float(w.x), Float(w.y)) else { continue }
             let theta = Float(v.direction_deg) * .pi / 180
             let speed = Float(v.speed_ms)
             if count[i] == 0 { dataCells += 1 }
@@ -343,6 +386,36 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
                                                 spanX: spanX, spanY: spanY,
                                                 rgba: [Float](repeating: 0, count: cells * 4),
                                                 waterCells: []) }
+
+        let waterCellCountEstimate = max(1, cells - landCount)
+        let spacingCells = (Float(waterCellCountEstimate) / Float(dataCells)).squareRoot()
+
+        // ── Reconcile data with the land mask ────────────────────────────
+        // Coarse-raster regime (cells comparable to the data spacing): a land
+        // cell that contains a current sample is almost certainly a channel
+        // narrower than one cell (Dodd Narrows at planning zooms) — force it
+        // water so the strongest passes keep their flow; the under-land
+        // render clip still bounds it to the drawn channel pixels.
+        // Fine-raster regime (cells ≪ data spacing): a sample on land is the
+        // model's displaced coastline (widened passes) — land wins, drop it.
+        if spacingCells <= 3 {
+            for i in 0..<cells where count[i] > 0 && land[i] {
+                land[i] = false
+                landCount -= 1
+            }
+        } else {
+            for i in 0..<cells where count[i] > 0 && land[i] {
+                count[i] = 0
+                sumU[i] = 0
+                sumV[i] = 0
+                dataCells -= 1
+            }
+            guard dataCells > 0 else { return Field(cols: cols, rows: rows,
+                                                    originX: minX, originY: minY,
+                                                    spanX: spanX, spanY: spanY,
+                                                    rgba: [Float](repeating: 0, count: cells * 4),
+                                                    waterCells: []) }
+        }
 
         var velU = [Float](repeating: 0, count: cells)
         var velV = [Float](repeating: 0, count: cells)
@@ -361,8 +434,6 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
         // between samples and reach the drawn shoreline, not enough to invent
         // current well beyond real coverage (off the model domain, unsampled
         // bays stay empty → no particles there, which is the honest render).
-        let waterCellCountEstimate = max(1, cells - land.lazy.filter { $0 }.count)
-        let spacingCells = (Float(waterCellCountEstimate) / Float(dataCells)).squareRoot()
         let reach = min(28, max(2, Int((spacingCells * 0.8).rounded(.up))))
 
         var head = 0
@@ -436,27 +507,74 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
                      spanX: spanX, spanY: spanY, rgba: rgba, waterCells: waterCells)
     }
 
-    /// Even-odd crossing test over all rings (bbox-pruned).
-    private static func insideLand(_ p: SIMD2<Float>, rings: [[SIMD2<Float>]],
-                                   boxes: [(lo: SIMD2<Float>, hi: SIMD2<Float>)]) -> Bool {
-        var inside = false
-        for (r, ring) in rings.enumerated() {
-            let box = boxes[r]
-            guard p.x >= box.lo.x, p.x <= box.hi.x,
-                  p.y >= box.lo.y, p.y <= box.hi.y else { continue }
-            let n = ring.count
-            guard n >= 3 else { continue }
-            var j = n - 1
-            for i in 0..<n {
-                let a = ring[i], b = ring[j]
-                if (a.y > p.y) != (b.y > p.y),
-                   p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x {
-                    inside.toggle()
+    /// Scanline-rasterizes one land polygon (exterior minus its holes) into
+    /// the mask, OR-ing with whatever is already set — so tile-duplicated
+    /// copies of the same landmass union instead of cancelling (the failure
+    /// mode of a flat even-odd test across independent rings). O(vertices ×
+    /// rows-per-edge + covered cells), vs O(cells × vertices) for per-cell
+    /// point-in-polygon.
+    private static func rasterize(_ polygon: LandPolygon, into land: inout [Bool],
+                                  minX: Float, minY: Float, cellW: Float, cellH: Float,
+                                  cols: Int, rows: Int) {
+        // Row-bucketed edge crossings at each row's cell-center y. Even-odd
+        // within one simple ring is exact; the union of disjoint holes is
+        // likewise exact with their crossings merged.
+        func crossings(_ rings: [[SIMD2<Float>]]) -> [[Float]] {
+            var rowXs = [[Float]](repeating: [], count: rows)
+            for ring in rings {
+                let n = ring.count
+                guard n >= 3 else { continue }
+                var j = n - 1
+                for i in 0..<n {
+                    let a = ring[j], b = ring[i]
+                    j = i
+                    let yLo = min(a.y, b.y), yHi = max(a.y, b.y)
+                    guard yHi > yLo else { continue }   // horizontal edge: no crossings
+                    // Rows whose center y lies in the half-open [yLo, yHi) —
+                    // half-open so a shared vertex isn't counted twice.
+                    var cy = Int(((yLo - minY) / cellH - 0.5).rounded(.up))
+                    let cyEnd = Int(((yHi - minY) / cellH - 0.5).rounded(.up))
+                    cy = max(0, cy)
+                    while cy < min(rows, cyEnd) {
+                        let y = minY + (Float(cy) + 0.5) * cellH
+                        if y >= yLo, y < yHi {
+                            rowXs[cy].append(a.x + (y - a.y) * (b.x - a.x) / (b.y - a.y))
+                        }
+                        cy += 1
+                    }
                 }
-                j = i
+            }
+            for cy in 0..<rows where !rowXs[cy].isEmpty { rowXs[cy].sort() }
+            return rowXs
+        }
+
+        let ext = crossings([polygon.exterior])
+        let holes = polygon.holes.isEmpty ? nil : crossings(polygon.holes)
+
+        for cy in 0..<rows {
+            let xs = ext[cy]
+            guard !xs.isEmpty else { continue }
+            let holeXs = holes?[cy] ?? []
+            var k = 0
+            while k + 1 < xs.count {
+                let x0 = xs[k], x1 = xs[k + 1]
+                k += 2
+                var cx = max(0, Int(((x0 - minX) / cellW - 0.5).rounded(.up)))
+                let cxEnd = min(cols - 1, Int(((x1 - minX) / cellW - 0.5).rounded(.down)))
+                while cx <= cxEnd {
+                    let x = minX + (Float(cx) + 0.5) * cellW
+                    // Inside a hole? (crossings to the left of x, even-odd)
+                    var inHole = false
+                    if !holeXs.isEmpty {
+                        var crossingsLeft = 0
+                        for hx in holeXs where hx <= x { crossingsLeft += 1 }
+                        inHole = crossingsLeft % 2 == 1
+                    }
+                    if !inHole { land[cy * cols + cx] = true }
+                    cx += 1
+                }
             }
         }
-        return inside
     }
 
     // MARK: - Draw
