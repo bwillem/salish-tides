@@ -275,6 +275,7 @@ final class MapViewModel {
                 vectors.append(contentsOf: vecs)
             } catch {
                 // Non-fatal: one volume failing doesn't hide the others
+                Log.map.error("atlas vectors failed (vol \(spec.id), chart \(sel.chart)): \(error, privacy: .public)")
             }
         }
 

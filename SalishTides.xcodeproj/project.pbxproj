@@ -49,6 +49,7 @@
 		DEEA37D4F253B7A4E151C3EB /* AtlasLookupTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33F90FC333D8D0174AF1A089 /* AtlasLookupTable.swift */; };
 		E1217A140CE89A8A73B3C4A6 /* TimelineControlView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B460FF242F858B027A672B40 /* TimelineControlView.swift */; };
 		E6FE100509920528EC7D2D3D /* CurrentSpeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF9286BF11F407E9F9851157 /* CurrentSpeedView.swift */; };
+		E9B56C52BC626C480787BD58 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B718AE48715B4E7020D1029 /* Log.swift */; };
 		F743BEB1EA6645CE4C8D41E9 /* atlas_index.json in Resources */ = {isa = PBXBuildFile; fileRef = F4B415D45980FEC40DFF87CB /* atlas_index.json */; };
 		FB3737835F764AD3A85B61BE /* SalishTidesApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F8AC975A9DE6B660C38E780 /* SalishTidesApp.swift */; };
 /* End PBXBuildFile section */
@@ -64,6 +65,7 @@
 		2DB51EF67918D47D54D0733D /* atlas_lookup_vol4_2026.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = atlas_lookup_vol4_2026.json; sourceTree = "<group>"; };
 		33F90FC333D8D0174AF1A089 /* AtlasLookupTable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtlasLookupTable.swift; sourceTree = "<group>"; };
 		34E23098B238D68AE7C4E0CA /* AtlasVolume.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtlasVolume.swift; sourceTree = "<group>"; };
+		3B718AE48715B4E7020D1029 /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
 		3DDA2FAF2D0189860F478A7C /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		4FA576D80059DF72E4354E26 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		529E7D505F4A804C9AC32942 /* standard-dark.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "standard-dark.json"; sourceTree = "<group>"; };
@@ -205,6 +207,7 @@
 				33F90FC333D8D0174AF1A089 /* AtlasLookupTable.swift */,
 				34E23098B238D68AE7C4E0CA /* AtlasVolume.swift */,
 				B534466B629735C3AFD88226 /* CurrentVector.swift */,
+				3B718AE48715B4E7020D1029 /* Log.swift */,
 				D191057D343E390CB41EAF3B /* NetworkMonitor.swift */,
 				6EE458C039CC8A1CCE1AD9D9 /* TideStation.swift */,
 			);
@@ -394,6 +397,7 @@
 				B3E0A98667446BD785E78FBB /* DesignTokens.swift in Sources */,
 				9B86D4529C65AFD7B8D03B88 /* LiveDataService.swift in Sources */,
 				2F421A2B2CBF0CAB8F0B8A52 /* LiveDataStore.swift in Sources */,
+				E9B56C52BC626C480787BD58 /* Log.swift in Sources */,
 				79DB6E5EBB8738AF5B7CECFE /* MapController.swift in Sources */,
 				674193FB48B28EB47DDE9EF9 /* MapLibreView.swift in Sources */,
 				08E5BFDB78B9E55E1DA9E61D /* MapStyleLoader.swift in Sources */,

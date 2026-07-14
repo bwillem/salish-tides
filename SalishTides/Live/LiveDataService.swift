@@ -195,6 +195,7 @@ final class LiveDataService {
             ready = true
         } catch {
             // Cache unavailable — live data stays off; offline data still works.
+            Log.live.error("live cache setup failed: \(error, privacy: .public)")
         }
     }
 
@@ -313,6 +314,7 @@ final class LiveDataService {
         } catch {
             // Network hiccup or hour outside the dataset — the map falls back
             // to the atlas and the periodic refresh retries after the delay.
+            Log.live.info("slice fetch failed for \(hourKey): \(error, privacy: .public)")
             sliceRetryAfter[hourKey] = Date().addingTimeInterval(Self.sliceRetryDelay)
         }
     }
@@ -467,6 +469,7 @@ final class LiveDataService {
             nativeCacheOrder.removeAll { $0 == key }
             if hourKey == displayedHourKey { dataGeneration += 1 }
         } catch {
+            Log.live.info("native window fetch failed for \(key, privacy: .public): \(error, privacy: .public)")
             nativeRetryAfter[key] = Date().addingTimeInterval(Self.sliceRetryDelay)
         }
     }

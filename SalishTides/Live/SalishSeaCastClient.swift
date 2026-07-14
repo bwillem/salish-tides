@@ -6,7 +6,14 @@ struct SalishSeaCastClient: Sendable {
 
     enum FetchError: Error {
         case badStatus(Int)
+        case responseTooLarge
     }
+
+    // Expected responses top out around 400 KB (a full native window); server
+    // data is untrusted, so cap what we'll buffer — the JSONSerialization
+    // object graph inflates several× over the byte size, and an unbounded
+    // body is a memory-pressure kill.
+    private static let maxResponseBytes = 8 * 1024 * 1024
 
     private let session: URLSession
 
@@ -49,11 +56,25 @@ struct SalishSeaCastClient: Sendable {
     }
 
     private func get(_ url: URL) async throws -> Data {
-        let (data, response) = try await session.data(from: url)
+        let (bytes, response) = try await session.bytes(from: url)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             // ERDDAP reports out-of-range/unpublished requests as errors —
             // treated upstream as "no live data for that hour", not a failure.
             throw FetchError.badStatus((response as? HTTPURLResponse)?.statusCode ?? -1)
+        }
+        guard http.expectedContentLength <= Self.maxResponseBytes else {
+            throw FetchError.responseTooLarge
+        }
+        // Accumulate with a hard cap rather than trusting Content-Length —
+        // a chunked/lying server could otherwise stream unbounded data.
+        var data = Data()
+        data.reserveCapacity(http.expectedContentLength > 0
+                             ? Int(http.expectedContentLength) : 1 << 16)
+        for try await byte in bytes {
+            data.append(byte)
+            guard data.count <= Self.maxResponseBytes else {
+                throw FetchError.responseTooLarge
+            }
         }
         return data
     }

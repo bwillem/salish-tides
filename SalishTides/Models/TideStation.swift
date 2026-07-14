@@ -82,13 +82,19 @@ struct TideBundleEvent: Decodable {
         isHigh = try c.decode(String.self) == "H"
     }
 
-    // Parse a fixed "YYYY-MM-DDThh:mm:ssZ" UTC string to Unix epoch seconds.
+    // Parse a "YYYY-MM-DDThh:mm:ss[.fff]Z" UTC string to Unix epoch seconds.
     // Pure/Sendable and far cheaper than a Foundation formatter over ~200k events.
+    // Also used on server responses, so every field is range-checked: an
+    // unbounded year would overflow (trap) in daysFromCivil, and this parser
+    // must never crash on hostile input. Fractional seconds are truncated —
+    // "." is a separator, so ".500" becomes a trailing part that's ignored.
     static func epochUTC(from s: String) -> Int? {
-        let parts = s.split(whereSeparator: { "-T:Z".contains($0) })
+        let parts = s.split(whereSeparator: { "-T:Z.".contains($0) })
         guard parts.count >= 6,
               let y = Int(parts[0]), let mo = Int(parts[1]), let d = Int(parts[2]),
-              let h = Int(parts[3]), let mi = Int(parts[4]), let se = Int(parts[5])
+              let h = Int(parts[3]), let mi = Int(parts[4]), let se = Int(parts[5]),
+              (1...9999).contains(y), (1...12).contains(mo), (1...31).contains(d),
+              (0...23).contains(h), (0...59).contains(mi), (0...60).contains(se)
         else { return nil }
         return daysFromCivil(y, mo, d) * 86_400 + h * 3_600 + mi * 60 + se
     }
