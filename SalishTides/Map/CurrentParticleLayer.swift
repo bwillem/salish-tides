@@ -401,7 +401,6 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
         if spacingCells <= 3 {
             for i in 0..<cells where count[i] > 0 && land[i] {
                 land[i] = false
-                landCount -= 1
             }
         } else {
             for i in 0..<cells where count[i] > 0 && land[i] {
@@ -567,6 +566,11 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
         for cy in 0..<rows {
             let xs = ext[cy]
             guard !xs.isEmpty else { continue }
+            // A well-formed closed ring crosses any scanline an even number of
+            // times; an odd count means degenerate third-party geometry and
+            // would shift the span pairing for the whole row — skip the row
+            // (adjacent rows and overlapping tile copies cover the gap).
+            guard xs.count % 2 == 0 else { continue }
             let holeXs = holes?[cy] ?? []
             var k = 0
             while k + 1 < xs.count {
