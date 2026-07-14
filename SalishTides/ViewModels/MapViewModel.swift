@@ -143,7 +143,13 @@ final class MapViewModel {
     func scrub(to date: Date) {
         displayDate = date
         let snapped = Self.snapToHour(date)
-        guard snapped != currentDate else { return }
+        guard snapped != currentDate else {
+            // Already on this hour — but a trailing load scheduled for an older
+            // target may still be pending; cancel it or it fires 90 ms from now
+            // and drags currentDate back to that stale hour mid-drag.
+            scrubLoadTask?.cancel()
+            return
+        }
 
         if Date().timeIntervalSince(lastScrubLoadAt) >= scrubThrottle {
             // Supersede any pending trailing load — otherwise an older hour could

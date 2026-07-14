@@ -3,6 +3,7 @@ import SwiftUI
 struct TimelineControlView: View {
     @Environment(MapViewModel.self) private var vm
     @Environment(AppSettings.self) private var settings
+    @Environment(\.scenePhase) private var scenePhase
     @State private var offsetHours: Int = 0
     @State private var sessionAnchor: Date = .now
 
@@ -45,6 +46,19 @@ struct TimelineControlView: View {
             .frame(height: 36)
         }
         .onAppear { jumpToNow() }
+        // "Now" moves: without re-anchoring, an app left open (or foregrounded
+        // hours later) keeps showing the launch hour with the live dot lit —
+        // stale data presented as current. Poll for the hour rolling over, and
+        // check immediately on foregrounding.
+        .onChange(of: scenePhase) {
+            if scenePhase == .active { reanchorIfHourChanged() }
+        }
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(30))
+                reanchorIfHourChanged()
+            }
+        }
     }
 
     // MARK: - Readout (information only)
@@ -95,6 +109,26 @@ struct TimelineControlView: View {
     private func applyOffset() {
         let date = sessionAnchor.addingTimeInterval(Double(offsetHours) * 3600)
         Task { await vm.setTime(date) }
+    }
+
+    // Keep sessionAnchor tracking the real current hour. Sitting at "now"
+    // follows the clock (data advances to the new hour); scrubbed away, only
+    // the tape's Now marker moves — the user's chosen time stays put by
+    // compensating the offset, so nothing reloads unless the offset had to be
+    // clamped back into the tape's range.
+    private func reanchorIfHourChanged() {
+        let top = Self.topOfCurrentHour()
+        guard top != sessionAnchor else { return }
+        if isNow {
+            jumpToNow()
+        } else {
+            let delta = Int((top.timeIntervalSince(sessionAnchor) / 3600).rounded())
+            let shifted = offsetHours - delta
+            let clamped = max(-TapeSliderView.maxHours, min(TapeSliderView.maxHours, shifted))
+            sessionAnchor = top
+            offsetHours = clamped
+            if clamped != shifted { applyOffset() }
+        }
     }
 
     // The tape steps in whole hours, so "now" is the top of the current Salish

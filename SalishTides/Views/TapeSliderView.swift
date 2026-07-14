@@ -16,7 +16,10 @@ struct TapeSliderView: View {
     @State private var dragTranslation: CGFloat = 0
 
     private let pixelsPerHour: CGFloat = 27
-    private let maxHours: Int = 48
+    // Static so the bound TimelineControlView can clamp to the same range
+    // when re-anchoring "now".
+    static let maxHours: Int = 48
+    private var maxHours: Int { Self.maxHours }
 
     // Continuous display offset — drives all Canvas drawing
     private var displayedOffset: Double {
