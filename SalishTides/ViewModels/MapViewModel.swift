@@ -316,16 +316,12 @@ final class MapViewModel {
         await updateTides(for: date, generation: generation)
     }
 
-    /// Points within the viewport plus a 20% margin, so pans don't immediately
-    /// hit empty edges. No viewport yet → everything.
+    /// Points within the viewport plus the shared cull margin, so pans don't
+    /// immediately hit empty edges. No viewport yet → everything.
     private func viewportFiltered(_ points: [CurrentVector]) -> [CurrentVector] {
         guard let vp = visibleViewport else { return points }
-        let latMargin = (vp.lat_max - vp.lat_min) * 0.2
-        let lonMargin = (vp.lon_max - vp.lon_min) * 0.2
-        return points.filter {
-            $0.lat >= vp.lat_min - latMargin && $0.lat <= vp.lat_max + latMargin &&
-            $0.lon >= vp.lon_min - lonMargin && $0.lon <= vp.lon_max + lonMargin
-        }
+        let expanded = vp.expanded(byFraction: ChartBounds.cullMarginFraction)
+        return points.filter { expanded.contains(lat: $0.lat, lon: $0.lon) }
     }
 
     // Pick the nearest station to the crosshair and fetch a ±18 h window of
@@ -412,12 +408,8 @@ final class MapViewModel {
         guard let vp = viewport else { return nil }
         let cLat = (vp.lat_min + vp.lat_max) / 2
         let cLon = (vp.lon_min + vp.lon_max) / 2
-        // Scale longitude by cos(lat) so distances are true-angular, not skewed.
-        let cosLat = cos(cLat * .pi / 180)
         func dist2(_ v: CurrentVector) -> Double {
-            let dLat = v.lat - cLat
-            let dLon = (v.lon - cLon) * cosLat
-            return dLat * dLat + dLon * dLon
+            GeoMath.distanceSquared(fromLat: cLat, fromLon: cLon, toLat: v.lat, toLon: v.lon)
         }
         guard let nearest = vectors.filter({ $0.isSignificant }).min(by: { dist2($0) < dist2($1) }),
               dist2(nearest) <= crosshairMaxDistanceDeg * crosshairMaxDistanceDeg

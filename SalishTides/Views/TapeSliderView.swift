@@ -46,7 +46,7 @@ struct TapeSliderView: View {
 
     var body: some View {
         Canvas { ctx, size in
-            draw(ctx: ctx, size: size, use24Hour: settings.clockFormat.is24Hour)
+            draw(ctx: ctx, size: size)
         }
         .contentShape(Rectangle())
         .gesture(
@@ -91,7 +91,7 @@ struct TapeSliderView: View {
 
     // MARK: - Canvas drawing
 
-    private func draw(ctx: GraphicsContext, size: CGSize, use24Hour: Bool) {
+    private func draw(ctx: GraphicsContext, size: CGSize) {
         let cx       = size.width / 2
         let totalH   = size.height
         let offset   = displayedOffset
@@ -152,11 +152,8 @@ struct TapeSliderView: View {
             } else if tick % 3 == 0 && hour != 23 && hour != 1 {
                 // (23:00 / 01:00 sit one hour from a midnight date marker — skip
                 // them so the date label doesn't collide.)
-                let label = use24Hour
-                    ? String(format: "%02d:00", hour)
-                    : "\(hour % 12 == 0 ? 12 : hour % 12) \(hour < 12 ? "AM" : "PM")"
                 ctx.draw(
-                    Text(label)
+                    Text(settings.hourTickLabel(hour: hour))
                         .font(.system(size: 9, design: .monospaced))
                         .foregroundStyle(.primary.opacity(0.40)),
                     at: CGPoint(x: x, y: totalH - 2),
