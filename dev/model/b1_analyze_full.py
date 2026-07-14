@@ -15,7 +15,7 @@ prints aggregate reconstruction skill.
 
 Usage: python3 dev/model/b1_analyze_full.py [stride]   # stride>1 = subsample cells
 """
-import sys, os, glob, json, time, io, csv, urllib.request
+import sys, os, glob, json, time, io, csv, math, cmath, urllib.request
 sys.path.insert(0, "dev/model")
 import numpy as np, xarray as xr
 import utide
@@ -174,10 +174,71 @@ def main():
           f"V {np.nanmedian(sk[sig,1]):.3f}")
     if spot:
         print(f"our-predictor vs utide tidal RMS (m/s): {[round(s,5) for s in spot]}")
+
+    rotate_to_geographic(grid, geo)
+
     json.dump({"domain": [0, GY_MAX, 0, GX_MAX], "stride": STRIDE_TILE,
-               "year": YEAR, "constituents": NAMES, "nodes": grid}, open(OUT, "w"))
+               "year": YEAR, "constituents": NAMES, "frame": "geographic",
+               "nodes": grid}, open(OUT, "w"))
     print(f"wrote {OUT}  ({os.path.getsize(OUT)/1e6:.2f} MB, {len(grid)} nodes, "
           f"{len(parts)}/{ntiles} tiles)")
+
+
+# --- grid frame → geographic east/north ---------------------------------------
+# The GridFields datasets are NEMO grid-ALIGNED (ERDDAP standard_name
+# sea_water_x_velocity), and the SalishSeaCast grid is rotated ~29° CCW from
+# east — packing the raw components as east/north skewed every direction by
+# that angle (measured −30.2° median vs the Dewey atlas before this step).
+# Rotation is linear and time-invariant, so it commutes with the harmonic fit:
+# rotating the fitted phasors here equals fitting rotated series. The grid-x
+# direction is derived per node from the bathymetry georeference; grid-y is
+# +90° from grid-x. (Known residual: u/v live on staggered points ~¼ cell from
+# the T-point — unrecoverable post-fit, and well under the packer's 1.2 km
+# nearest-assign tolerance.)
+def rotate_to_geographic(grid, geo):
+    def axis_angle(a, b, quarter_turns):
+        pa, pb = geo.get(a), geo.get(b)
+        if not pa or not pb:
+            return None
+        lat_mid = (pa[1] + pb[1]) / 2
+        dE = (pb[0] - pa[0]) * math.cos(math.radians(lat_mid))
+        dN = pb[1] - pa[1]
+        return math.atan2(dN, dE) - quarter_turns * math.pi / 2
+
+    def grid_x_angle(GY, GX):
+        s = STRIDE_TILE
+        for a, b, q in (((GY, GX-s), (GY, GX+s), 0),   # central diff on grid-x
+                        ((GY, GX),   (GY, GX+s), 0),   # one-sided
+                        ((GY, GX-s), (GY, GX),   0),
+                        ((GY-s, GX), (GY+s, GX), 1),   # fall back to grid-y
+                        ((GY, GX),   (GY+s, GX), 1),
+                        ((GY-s, GX), (GY, GX),   1)):
+            th = axis_angle(a, b, q)
+            if th is not None:
+                return th
+        return None
+
+    thetas = [grid_x_angle(n["gridY"], n["gridX"]) for n in grid]
+    known = [t for t in thetas if t is not None]
+    med = float(np.median(known))
+    for n, th in zip(grid, thetas):
+        if th is None:
+            th = med
+        ct, st = math.cos(th), math.sin(th)
+        um, vm = n["uMean"], n["vMean"]
+        n["uMean"], n["vMean"] = um*ct - vm*st, um*st + vm*ct
+        for cc in n["c"].values():
+            # A·cos(arg − g) as the phasor A·e^{−ig}: east/north are linear
+            # combinations of the U/V phasors, then back to (amp, phase).
+            U = cc["uAmp"] * cmath.exp(-1j * math.radians(cc["uPhase"]))
+            V = cc["vAmp"] * cmath.exp(-1j * math.radians(cc["vPhase"]))
+            E, N = U*ct - V*st, U*st + V*ct
+            cc["uAmp"], cc["uPhase"] = abs(E), math.degrees(-cmath.phase(E)) % 360
+            cc["vAmp"], cc["vPhase"] = abs(N), math.degrees(-cmath.phase(N)) % 360
+    print(f"rotated grid→geographic: {len(grid)} nodes, grid-x angle "
+          f"median {math.degrees(med):+.1f}° "
+          f"(range {math.degrees(min(known)):+.1f}°..{math.degrees(max(known)):+.1f}°), "
+          f"{len(grid)-len(known)} nodes used the median")
 
 if __name__ == "__main__":
     main()

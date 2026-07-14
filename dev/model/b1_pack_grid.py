@@ -23,11 +23,30 @@ sys.path.insert(0, "dev/model")
 from tidepredict import CONSTITUENTS
 
 SRC = "dev/model/b1_grid_full.json"
-OUT = "dev/model/current_model.b1"
+# The shipped asset lives with the app's other bundled resources, NOT under
+# dev/ — dev/model is scratch tooling with gitignored siblings, and a
+# load-bearing asset there fails only at runtime (decode falls through to the
+# atlas silently). Meta stays here beside the pipeline.
+OUT = "SalishTides/Resources/current_model.b1"
+META = "dev/model/current_model.b1.meta.json"
 K = list(CONSTITUENTS)                       # constituent order in the file
 
 g = json.load(open(SRC))
+# The app renders the packed components as geographic east/north; packing a
+# grid-frame (unrotated) solve skews every direction ~29°. b1_analyze_full's
+# merge step rotates and tags the frame — refuse anything else.
+assert g.get("frame") == "geographic", (
+    "b1_grid_full.json is not in the geographic frame — re-run "
+    "dev/model/b1_analyze_full.py (its merge step rotates grid-frame u/v).")
 nodes = g["nodes"]
+
+# The Swift decoder drops non-finite nodes defensively, but a NaN coefficient
+# here means the fit went degenerate — fail the pack, don't ship it.
+for n in nodes:
+    vals = [n["uMean"], n["vMean"]] + [x for cc in n["c"].values()
+                                       for x in (cc["uAmp"], cc["uPhase"],
+                                                 cc["vAmp"], cc["vPhase"])]
+    assert np.isfinite(vals).all(), f"non-finite coefficient at node {n['gridY']},{n['gridX']}"
 lat = np.array([n["lat"] for n in nodes])
 lon = np.array([n["lon"] for n in nodes])
 print(f"source: {len(nodes)} curvilinear water nodes")
@@ -93,20 +112,41 @@ with open(OUT, "wb") as f:
 sz = os.path.getsize(OUT)
 print(f"wrote {OUT}  ({sz/1e6:.2f} MB, {npres} nodes, {len(K)} constituents)")
 
-# --- validation: packed values must exactly copy the assigned source node ---
+# --- validation: independently re-read the WRITTEN FILE and compare ---------
+# A writer bug (bit order, node order, field order) must fail here, not ship —
+# so this parses current_model.b1 from disk, not the in-memory values.
+buf = open(OUT, "rb").read()
+assert buf[:5] == b"SCTF1"
+rrows, rcols = struct.unpack_from("<HH", buf, 5)
+o = 5 + 4 + 32
+(rn,) = struct.unpack_from("<B", buf, o); o += 1
+rnames = []
+for _ in range(rn):
+    (ln,) = struct.unpack_from("<B", buf, o); o += 1
+    rnames.append(buf[o:o+ln].decode()); o += ln
+assert (rrows, rcols, rnames) == (rows, cols, K), "header mismatch on re-read"
+bitmap_off = o
+o += (rows * cols + 7) // 8
+rec = 4 * (2 + 4 * len(K))
+# node ordinal = number of set presence bits before this cell
+ordinal = np.cumsum(flat >= 0) - 1
 import random
 random.seed(0)
 present_cells = [(r, c) for r in range(rows) for c in range(cols) if src_idx[r, c] >= 0]
-sample = random.sample(present_cells, 200)
-# re-read the packed body for those cells and compare a couple of fields
-# (trusting the writer; do a lightweight self-check on amplitudes)
 maxerr = 0.0
-for r, c in sample:
+for r, c in random.sample(present_cells, 200):
+    i = r * cols + c
+    assert buf[bitmap_off + (i >> 3)] >> (i & 7) & 1 == 1, "presence bit mismatch"
+    vals = struct.unpack_from(f"<{2 + 4*len(K)}f", buf, o + int(ordinal[i]) * rec)
     n = nodes[src_idx[r, c]]
-    packed_uamp = struct.unpack("<f", f32(n["c"]["M2"]["uAmp"]))[0]
-    maxerr = max(maxerr, abs(packed_uamp - n["c"]["M2"]["uAmp"]))
-print(f"self-check: M2 uAmp float32 round-trip max err {maxerr:.2e} m/s over 200 cells")
+    want = [n["uMean"], n["vMean"]] + [x for nm in K for x in
+            (n["c"][nm]["uAmp"], n["c"][nm]["uPhase"],
+             n["c"][nm]["vAmp"], n["c"][nm]["vPhase"])]
+    maxerr = max(maxerr, max(abs(a - b) for a, b in zip(vals, want)))
+assert maxerr < 1e-3, f"re-read mismatch: {maxerr}"
+print(f"self-check: re-read 200 cells from {OUT}, all fields match "
+      f"(max float32 err {maxerr:.2e})")
 json.dump({"rows": rows, "cols": cols, "lat0": lat0, "lon0": lon0,
            "dLat": DLAT, "dLon": DLON, "constituents": K, "nodes": npres,
-           "bytes": sz}, open(OUT + ".meta.json", "w"), indent=2)
-print(f"meta -> {OUT}.meta.json")
+           "frame": "geographic", "bytes": sz}, open(META, "w"), indent=2)
+print(f"meta -> {META}")

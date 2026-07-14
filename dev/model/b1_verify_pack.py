@@ -18,7 +18,7 @@ from datetime import datetime, timezone, timedelta
 sys.path.insert(0, "dev/model")
 from tidepredict import astro, node_factors, equilibrium, CONSTITUENTS
 
-BIN = "dev/model/current_model.b1"
+BIN = "SalishTides/Resources/current_model.b1"
 SRC = "dev/model/b1_grid_full.json"
 
 # --- A. parse the binary (from-scratch reader = the format spec) ------------
