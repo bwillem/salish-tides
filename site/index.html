@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Salish Tides</title>
+  <meta name="description" content="Real-time offline current map for the Salish Sea.">
+
+  <!-- Social preview -->
+  <meta property="og:title" content="Salish Tides">
+  <meta property="og:description" content="Real-time offline current map for the Salish Sea.">
+  <meta property="og:type" content="website">
+
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg:   #ffffff;
+      --fg:   #111111;
+      --muted:#6b6b6b;
+      --rule: #e2e2e2;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg:   #0f1c28;  /* app night-water */
+        --fg:   #eef2f5;
+        --muted:#8ea0ad;
+        --rule: #22323f;
+      }
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body { height: 100%; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100dvh;
+      padding: 2rem 1.25rem;
+      gap: 2rem;
+    }
+
+    main {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 1.75rem;
+    }
+
+    /* Logo — hand-drawn mark, black strokes on transparent. */
+    .logo {
+      width: 300px;
+      max-width: 78vw;
+      height: auto;
+      display: block;
+    }
+
+    /* Hand-drawn App Store button (download CTA). */
+    .appstore {
+      display: block;
+      line-height: 0;
+      transition: opacity 0.15s ease;
+    }
+    .appstore:hover,
+    .appstore:focus-visible { opacity: 0.7; }
+    .appstore img {
+      width: 105px;
+      max-width: 31vw;
+      height: auto;
+    }
+
+    /* Strokes are near-black ink; invert to light on the dark background. */
+    @media (prefers-color-scheme: dark) {
+      .logo,
+      .appstore img { filter: invert(1); }
+    }
+
+    .tagline {
+      margin: 0;
+      max-width: 34ch;
+      font-size: 1rem;
+      line-height: 1.6;
+      letter-spacing: 0.01em;
+      color: var(--fg);
+    }
+
+    nav {
+      display: flex;
+      align-items: center;
+      gap: 2rem;
+      font-size: 0.8125rem;
+      letter-spacing: 0.02em;
+    }
+
+    nav a {
+      color: var(--muted);
+      text-decoration: none;
+      transition: color 0.15s ease;
+    }
+    nav a:hover,
+    nav a:focus-visible { color: var(--fg); }
+
+    /* nav "about" is a button so it can open the dialog — style it like the links */
+    nav button {
+      font: inherit;
+      color: var(--muted);
+      background: none;
+      border: 0;
+      padding: 0;
+      cursor: pointer;
+      letter-spacing: inherit;
+      transition: color 0.15s ease;
+    }
+    nav button:hover,
+    nav button:focus-visible { color: var(--fg); }
+
+    /* About modal */
+    dialog {
+      max-width: 42ch;
+      margin: auto;                 /* centers in the viewport */
+      padding: 1.75rem;
+      border: 1px solid var(--rule);
+      border-radius: 10px;
+      background: var(--bg);
+      color: var(--fg);
+      font-size: 0.9375rem;
+      line-height: 1.65;
+    }
+    dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
+    dialog p { margin: 0 0 1rem; }
+    dialog p:last-of-type { margin-bottom: 1.5rem; }
+    dialog .close {
+      display: block;
+      margin-left: auto;
+      font: inherit;
+      color: var(--muted);
+      background: none;
+      border: 0;
+      padding: 0;
+      cursor: pointer;
+    }
+    dialog .close:hover,
+    dialog .close:focus-visible { color: var(--fg); }
+
+    /* Fixed to the bottom on tall viewports; flows naturally on short ones. */
+    @media (min-height: 560px) {
+      body { justify-content: space-between; }
+      body::before { content: ""; }   /* top spacer to keep main centered */
+      main { flex: 1; justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <img class="logo" src="logo.png" alt="Salish Tides">
+    <p class="tagline">real-time offline current map for the Salish Sea</p>
+    <a class="appstore" href="#" aria-label="Download on the App Store">
+      <img src="app-store-btn.png" alt="Download on the App Store">
+    </a>
+  </main>
+
+  <nav>
+    <a href="#">download</a>
+    <button type="button" onclick="document.getElementById('about').showModal()">about</button>
+    <a href="privacy.html">privacy</a>
+  </nav>
+
+  <dialog id="about">
+    <p>Salish Tides is an offline-first map of tidal currents and tide heights for
+       the Salish Sea. When you're online it shows real-time surface-current
+       forecasts from the SalishSeaCast ocean model; when you're not, it falls back
+       to harmonic predictions computed on your device — so it keeps working with
+       no signal, out on the water.</p>
+    <p>It's a planning aid for paddlers, boaters, and anyone who works around the
+       tide. It is <strong>not</strong> an official source for navigation — always
+       consult official charts and current tables.</p>
+    <button type="button" class="close" onclick="this.closest('dialog').close()">close</button>
+  </dialog>
+</body>
+</html>
