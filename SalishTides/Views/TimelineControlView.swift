@@ -36,6 +36,7 @@ struct TimelineControlView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityHint("Opens a date picker to jump to any date")
+                .popover(isPresented: $showingDatePicker) { datePickerPopover }
                 HStack {
                     Spacer()
                     if !isNow {
@@ -63,7 +64,6 @@ struct TimelineControlView: View {
             )
             .frame(height: 36)
         }
-        .sheet(isPresented: $showingDatePicker) { datePickerSheet }
         .onAppear { jumpToNow() }
         // "Now" moves: without re-anchoring, an app left open (or foregrounded
         // hours later) keeps showing the launch hour with the live dot lit —
@@ -129,32 +129,25 @@ struct TimelineControlView: View {
 
     // MARK: - Date picker
 
-    // Graphical (calendar) picker — the modern iOS date selector. Date only;
-    // the tape still owns the hour within the chosen day.
-    private var datePickerSheet: some View {
-        NavigationStack {
-            DatePicker(
-                "Date",
-                selection: $pickerDate,
-                displayedComponents: [.date]
-            )
-            .datePickerStyle(.graphical)
-            .padding()
-            .navigationTitle("Jump to Date")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { showingDatePicker = false }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        jumpToDate(pickerDate)
-                        showingDatePicker = false
-                    }
-                }
-            }
+    // Graphical (calendar) picker in a popover anchored to the date readout —
+    // the standard iOS pattern for a compact date selector. On iPad it appears
+    // beside the readout; on iPhone SwiftUI adapts it to a sheet. Date only; the
+    // tape still owns the hour within the chosen day. Picking a day applies it
+    // and dismisses (tapping outside dismisses without changing the date), so no
+    // Cancel/Done chrome is needed — matching Calendar/Reminders.
+    private var datePickerPopover: some View {
+        DatePicker(
+            "Date",
+            selection: $pickerDate,
+            displayedComponents: [.date]
+        )
+        .datePickerStyle(.graphical)
+        .frame(width: 320)
+        .padding(Spacing.sm)
+        .onChange(of: pickerDate) {
+            jumpToDate(pickerDate)
+            showingDatePicker = false
         }
-        .presentationDetents([.medium, .large])
     }
 
     private func presentDatePicker() {
