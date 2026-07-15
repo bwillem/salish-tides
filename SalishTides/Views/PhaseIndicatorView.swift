@@ -22,7 +22,7 @@ struct PhaseIndicatorView: View {
                 // (no colour); datum and the "Live" flag are omitted (jargon /
                 // ambiguous — the chart's a11y label and the Online-mode badge in
                 // ContentView cover them).
-                VStack(alignment: .leading, spacing: 1) {
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
                     if let station = vm.tideStation {
                         Text(station.name.stationDisplayName)
                     }
@@ -30,8 +30,11 @@ struct PhaseIndicatorView: View {
                 }
                 .font(.stCaption)
                 .foregroundStyle(Color.inkSecondary)
+                // Both lines stay at caption size (no per-line minimumScaleFactor,
+                // which would shrink a long station name out of step with the
+                // short phase line); an over-long name truncates instead.
                 .lineLimit(1)
-                .minimumScaleFactor(0.8)
+                .truncationMode(.tail)
                 .padding(.leading, TideChartView.plotLeftInset)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityElement(children: .ignore)
@@ -57,9 +60,10 @@ struct PhaseIndicatorView: View {
         return String(format: "Tide %.1f %@ at %@, above %@.", height, unit, station.name.stationDisplayName, datum)
     }
 
+    // Just the phase — the station name is already announced by the chart's
+    // own a11y label (tideChartLabel), so repeating it here would double up.
     private func phaseAccessibilityLabel(_ sel: ChartSelection) -> String {
-        guard let station = vm.tideStation else { return "\(phaseText(sel)) tide." }
-        return "\(station.name.stationDisplayName), \(phaseText(sel)) tide."
+        "\(phaseText(sel)) tide."
     }
 
     /// Display name for the tide phase, e.g. "Small Flood".
@@ -76,15 +80,18 @@ private extension String {
     /// 2. Case: sources arrive inconsistently, so Title-Case the ALL-CAPS ones;
     ///    names that already contain a lowercase letter are assumed correct and
     ///    left untouched (so `.capitalized` doesn't mangle "McNeill"/"Fisher's").
+    ///    Short (≤2-letter) tokens keep their caps, so directionals/abbreviations
+    ///    survive — "NW ROCK" → "NW Rock", not "Nw Rock".
     var stationDisplayName: String {
         let first = split(separator: ",", maxSplits: 1).first.map(String.init) ?? self
         let trimmed = first.trimmingCharacters(in: .whitespaces)
         guard !trimmed.contains(where: \.isLowercase) else { return trimmed }
-        return trimmed.lowercased()
+        return trimmed
             .split(separator: " ", omittingEmptySubsequences: false)
             .map { word in
-                guard let f = word.first else { return String(word) }
-                return f.uppercased() + word.dropFirst()
+                guard word.filter(\.isLetter).count > 2 else { return String(word) }
+                let lower = word.lowercased()
+                return lower.prefix(1).uppercased() + lower.dropFirst()
             }
             .joined(separator: " ")
     }
@@ -111,6 +118,6 @@ private extension String {
 
     return PhaseIndicatorView()
         .environment(vm)
-        .environment(AppSettings(defaults: UserDefaults(suiteName: "preview.phasecard")!))
+        .environment(AppSettings(defaults: UserDefaults(suiteName: "preview.phasecard") ?? .standard))
         .padding(40)
 }
