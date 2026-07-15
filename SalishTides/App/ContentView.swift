@@ -97,13 +97,14 @@ struct ContentView: View {
                     .padding(.top, Spacing.sm)
                 }
                 Spacer()
-                // Live-data badge — its own small glass pill, bottom-right, above
-                // the timeline. Only while the rendered current field is live
-                // SalishSeaCast data. (Full attribution: Settings → Data Sources.)
-                if vm.isLiveCurrents {
+                // Currents-source badge — its own small glass pill, bottom-right,
+                // above the timeline. "Online mode" for live SalishSeaCast data,
+                // "Offline model" for the harmonic model tier; the sparse atlas
+                // gets no badge. (Full attribution: Settings → Data Sources.)
+                if let badge = SourceBadge.Content(vm.currentSource) {
                     HStack {
                         Spacer()
-                        OnlineModeBadge()
+                        SourceBadge(content: badge)
                     }
                     .padding(.horizontal, Spacing.lg)
                     .padding(.bottom, Spacing.sm)
@@ -215,15 +216,42 @@ private struct LocateButton: View {
     }
 }
 
-/// Live-data status pill — a dot + "Online mode" in its own small glass
-/// container, shown bottom-right while live SalishSeaCast currents are rendered.
-private struct OnlineModeBadge: View {
+/// Currents-source status pill — a coloured dot + label in its own small glass
+/// container, shown bottom-right to say which tier the rendered current field is
+/// drawn from. "Online mode" (live SalishSeaCast) uses the brand accent; the
+/// "Offline model" harmonic tier uses a muted dot. The sparse atlas tier shows
+/// nothing — charted arrows read as themselves.
+private struct SourceBadge: View {
+    let content: Content
+
+    /// The presentable states of `MapViewModel.CurrentSource`. `.atlas` maps to
+    /// nil (no badge), so the call site can `if let` it away entirely.
+    enum Content {
+        case online, model
+
+        init?(_ source: MapViewModel.CurrentSource) {
+            switch source {
+            case .live:  self = .online
+            case .model: self = .model
+            case .atlas: return nil
+            }
+        }
+
+        var label: String { self == .online ? "Online mode" : "Offline model" }
+        var dot: Color { self == .online ? Color.brandAccent : Color.inkSecondary.opacity(0.6) }
+        var a11y: String {
+            self == .online
+                ? "Online mode: showing live SalishSeaCast current forecast."
+                : "Offline model: showing tide-predicted currents without weather effects."
+        }
+    }
+
     var body: some View {
         HStack(spacing: Spacing.xs) {
             Circle()
-                .fill(Color.brandAccent)
+                .fill(content.dot)
                 .frame(width: 5, height: 5)
-            Text("Online mode")
+            Text(content.label)
                 .font(.stCaption)
                 .foregroundStyle(Color.inkSecondary)
         }
@@ -231,7 +259,7 @@ private struct OnlineModeBadge: View {
         .padding(.vertical, Spacing.xs)
         .floatingCard(cornerRadius: Radius.pill)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Online mode: showing live SalishSeaCast current forecast.")
+        .accessibilityLabel(content.a11y)
     }
 }
 

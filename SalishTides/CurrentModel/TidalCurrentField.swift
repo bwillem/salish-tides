@@ -1,0 +1,61 @@
+import Foundation
+
+/// A bundled grid of tidal-current harmonic constituents (one set per water
+/// node) plus the per-node synthesizer that turns them into an east/north
+/// velocity at any instant. This is the "Model" current source that fills the
+/// bays the print atlas doesn't chart; the grid is produced offline from
+/// SalishSeaCast (dev/model pipeline) and packed onto a regular lat/lon mesh.
+///
+/// Storage is flat structure-of-arrays: one `Int32` per mesh cell mapping to a
+/// water-node ordinal, and one contiguous coefficient array — ~4 MB resident
+/// for the 2.86 MB asset with zero per-node allocations. (The obvious
+/// per-node `[String: Constituent]` dictionaries cost ~18 MB and a string
+/// hash per constituent per node per synthesis.)
+///
+/// Synthesis reuses the NOAA-validated `TidalHarmonics` engine, applied to the
+/// east (U) and north (V) components.
+struct TidalCurrentField: Sendable {
+
+    // Regular lat/lon mesh; row-major cell index = row*cols + col,
+    // lat = lat0 + row*dLat, lon = lon0 + col*dLon.
+    let lat0, lon0, dLat, dLon: Double
+    let rows, cols: Int
+
+    /// Water-node ordinal per mesh cell; -1 = land / no data.
+    let nodeIndex: [Int32]
+    let nodeCount: Int
+
+    /// `nodeCount × coeffStride` doubles per node: uMean, vMean, then per
+    /// constituent in `TidalHarmonics.constituents` order:
+    /// uAmp, uPhase°, vAmp, vPhase°.
+    let coeffs: [Double]
+
+    /// Nodes dropped at decode for non-finite coefficients — 0 for a healthy
+    /// asset; anything else is a packing bug worth a log line.
+    let droppedNodes: Int
+
+    static var coeffStride: Int { 2 + 4 * TidalHarmonics.constituents.count }
+
+    /// Geographic bounding box of the mesh (used to keep atlas coverage alive
+    /// outside the model domain).
+    var coverage: ChartBounds {
+        ChartBounds(lat_min: lat0, lat_max: lat0 + Double(rows - 1) * dLat,
+                    lon_min: lon0, lon_max: lon0 + Double(cols - 1) * dLon)
+    }
+
+    /// East/north velocity (m/s) of one water node at the instant captured by
+    /// `terms`. Callers hoist `TidalHarmonics.synthesisTerms(at:)` ONCE per
+    /// pass — the astronomy is date-only, and recomputing it per node is ~20×
+    /// the per-node cost of these 16 cosines.
+    func velocity(ofNode node: Int, terms: [TidalHarmonics.SynthesisTerm]) -> (u: Double, v: Double) {
+        let base = node * Self.coeffStride
+        var u = coeffs[base], v = coeffs[base + 1]   // steady residual flow
+        var o = base + 2
+        for t in terms {
+            u += t.f * coeffs[o]     * cos((t.arg - coeffs[o + 1]) * .pi / 180)
+            v += t.f * coeffs[o + 2] * cos((t.arg - coeffs[o + 3]) * .pi / 180)
+            o += 4
+        }
+        return (u, v)
+    }
+}

@@ -41,6 +41,9 @@ struct PhaseIndicatorView: View {
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("\(phaseText(sel)) tide.")
+                // Currents-source provenance (Online mode / Offline model) lives
+                // in its own bottom-right glass pill now — see SourceBadge in
+                // ContentView — so it isn't crowded into this card.
             }
             .padding(Spacing.md)
             .frame(width: 248)
