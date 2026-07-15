@@ -60,6 +60,7 @@
 		E6FE100509920528EC7D2D3D /* CurrentSpeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF9286BF11F407E9F9851157 /* CurrentSpeedView.swift */; };
 		E9B56C52BC626C480787BD58 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B718AE48715B4E7020D1029 /* Log.swift */; };
 		EE84FEF09DED69A2EA490686 /* current_model.b1 in Resources */ = {isa = PBXBuildFile; fileRef = 89BC3EF0433987C4491BE1F2 /* current_model.b1 */; };
+		F3E5D213CEF07F5E60967213 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E86394BD809E58805BD80D76 /* Assets.xcassets */; };
 		F54CE6A9CA91DD3F433A69F2 /* ChartSelectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6F5E873682C9E4992BD4487 /* ChartSelectorTests.swift */; };
 		F743BEB1EA6645CE4C8D41E9 /* atlas_index.json in Resources */ = {isa = PBXBuildFile; fileRef = F4B415D45980FEC40DFF87CB /* atlas_index.json */; };
 		FB3737835F764AD3A85B61BE /* SalishTidesApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F8AC975A9DE6B660C38E780 /* SalishTidesApp.swift */; };
@@ -127,6 +128,7 @@
 		D674FD1F00E257735CAA9F7D /* TidalCurrentField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TidalCurrentField.swift; sourceTree = "<group>"; };
 		E02E5CB168CDB0660201216E /* TideChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TideChartView.swift; sourceTree = "<group>"; };
 		E7B240886F13A107F45EA941 /* HelperTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperTests.swift; sourceTree = "<group>"; };
+		E86394BD809E58805BD80D76 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		EA075EE14D6DD086954E95E5 /* atlas_index_vol2.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = atlas_index_vol2.json; sourceTree = "<group>"; };
 		EAF782A61DF2A6526A1F9E0C /* SalishTidesTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SalishTidesTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F4B415D45980FEC40DFF87CB /* atlas_index.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = atlas_index.json; sourceTree = "<group>"; };
@@ -200,6 +202,7 @@
 		567AE6C212DBB6EB37BD5C84 /* SalishTides */ = {
 			isa = PBXGroup;
 			children = (
+				E86394BD809E58805BD80D76 /* Assets.xcassets */,
 				4FA576D80059DF72E4354E26 /* Info.plist */,
 				2BB7C4074365FDAFA91601A1 /* PrivacyInfo.xcprivacy */,
 				3CC21B606D8F40553D4E2E75 /* App */,
@@ -423,6 +426,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F3E5D213CEF07F5E60967213 /* Assets.xcassets in Resources */,
 				7E0271059E302369E9B87F7B /* PrivacyInfo.xcprivacy in Resources */,
 				F743BEB1EA6645CE4C8D41E9 /* atlas_index.json in Resources */,
 				41162347ABE1FEA0F4DD421B /* atlas_index_vol2.json in Resources */,

@@ -162,7 +162,7 @@ private struct DataSourcesView: View {
             }
 
             Section("Basemap") {
-                Text("Map rendering by MapLibre.")
+                Text("Map rendering by MapLibre. Offline map data © OpenStreetMap contributors (ODbL). Online Ocean and Satellite styles © MapTiler and their data providers.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
