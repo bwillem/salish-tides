@@ -400,6 +400,12 @@ struct MapLibreView: UIViewRepresentable {
             for v in vectors where v.isSignificant {
                 let θ = v.direction_deg * .pi / 180
 
+                // East–west offsets must be stretched by 1/lonScale — otherwise
+                // arrows skew toward N–S (≈12° at 49°N on diagonals) and E–W
+                // arrows draw ~⅓ shorter than N–S ones of the same speed.
+                // Mercator is conformal, so ground-true is also screen-true.
+                let cosLat = GeoMath.lonScale(atLat: v.lat)
+
                 // Tail length encodes speed: faster current → longer arrow, slower
                 // → shorter stub. Capped at 1.6× so the fastest don't overrun their
                 // neighbours (reached ~3.7 kn); the 0.5 base keeps the slowest
@@ -407,7 +413,7 @@ struct MapLibreView: UIViewRepresentable {
                 let lengthScale = min(0.5 + v.speedKnots * 0.30, 1.6)
                 let halfDeg = baseHalfDeg * lengthScale
                 let dLat = cos(θ) * halfDeg
-                let dLon = sin(θ) * halfDeg
+                let dLon = sin(θ) * halfDeg / cosLat
 
                 // Arrowhead is the constant 0.70× of the reference half-length so
                 // it stays a fixed size as the tail grows — but never longer than
@@ -431,7 +437,7 @@ struct MapLibreView: UIViewRepresentable {
                         tip,
                         CLLocationCoordinate2D(
                             latitude:  tip.latitude  + cos(βθ) * barbLen,
-                            longitude: tip.longitude + sin(βθ) * barbLen
+                            longitude: tip.longitude + sin(βθ) * barbLen / cosLat
                         )
                     ]
                     let barbFeature = MLNPolylineFeature(coordinates: &barb, count: 2)

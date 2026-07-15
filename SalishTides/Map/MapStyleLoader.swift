@@ -85,6 +85,8 @@ enum MapStyleLoader {
             try json.write(to: dest, atomically: true, encoding: .utf8)
             return dest
         } catch {
+            // Caller falls back to the bundled/flat style.
+            Log.map.error("style write failed for \(resource, privacy: .public): \(error, privacy: .public)")
             return nil
         }
     }

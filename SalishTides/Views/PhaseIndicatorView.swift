@@ -42,12 +42,16 @@ struct PhaseIndicatorView: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("\(phaseText(sel)) tide.")
 
-                // Currents provenance: shown only while the rendered current
-                // field is live SalishSeaCast data (the tide curve's own
-                // provenance is the "· Live" suffix on the station caption
-                // above — the two can differ, e.g. no gauge near the station).
-                // Full attribution lives in Settings → Data Sources.
-                if vm.isLiveCurrents {
+                // Currents provenance (the tide curve's own provenance is the
+                // "· Live" suffix on the station caption above — the two can
+                // differ, e.g. no gauge near the station). The model tier
+                // renders a dense field visually identical to live, so it
+                // needs its own label: these are tide-only harmonic
+                // predictions with no weather/river forcing. The atlas keeps
+                // no badge — sparse charted arrows read as themselves. Full
+                // attribution lives in Settings → Data Sources.
+                switch vm.currentSource {
+                case .live:
                     HStack(spacing: Spacing.xs) {
                         Circle()
                             .fill(Color.brandAccent)
@@ -59,6 +63,20 @@ struct PhaseIndicatorView: View {
                     .frame(maxWidth: .infinity, alignment: .trailing)
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("Online mode: showing live SalishSeaCast current forecast.")
+                case .model:
+                    HStack(spacing: Spacing.xs) {
+                        Circle()
+                            .fill(Color.inkSecondary.opacity(0.6))
+                            .frame(width: 5, height: 5)
+                        Text("Offline model")
+                            .font(.stCaption)
+                            .foregroundStyle(Color.inkSecondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Offline model: showing tide-predicted currents without weather effects.")
+                case .atlas:
+                    EmptyView()
                 }
             }
             .padding(Spacing.md)

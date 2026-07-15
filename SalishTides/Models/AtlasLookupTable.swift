@@ -55,13 +55,4 @@ final class ChartSelector: Sendable {
         }
         return ChartSelection(volume: volume, chart: c, phase: "unknown", tendency: .flood)
     }
-
-    static func load(for spec: VolumeSpec) throws -> ChartSelector {
-        guard let url = Bundle.main.url(forResource: spec.lookupResource, withExtension: "json") else {
-            throw CocoaError(.fileNoSuchFile)
-        }
-        let data = try Data(contentsOf: url)
-        let table = try JSONDecoder().decode(AtlasLookupTable.self, from: data)
-        return ChartSelector(volume: spec.id, table: table)
-    }
 }

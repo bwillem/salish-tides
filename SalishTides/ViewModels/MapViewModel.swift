@@ -35,10 +35,14 @@ final class MapViewModel {
     var tideStation: TideStation?
     var tideEvents: [TideEvent] = []
 
-    // Live SalishSeaCast data currently in use (nil / false → bundled data).
-    // The vectors themselves flow through the same currentVectors property;
-    // these only carry provenance for the UI.
-    var isLiveCurrents = false
+    // Which source produced the rendered current field, in fallback order:
+    // live SalishSeaCast → bundled harmonic model → bundled atlas. The vectors
+    // themselves flow through the same currentVectors property; this only
+    // carries provenance for the UI.
+    enum CurrentSource { case live, model, atlas }
+    var currentSource: CurrentSource = .atlas
+    /// Live currents rendering right now — drives the "Online mode" badge.
+    var isLiveCurrents: Bool { currentSource == .live }
     var liveTideSeries: LiveTideSeries?
 
     // Convenience for views that only need one selection (e.g. phase indicator)
@@ -143,7 +147,13 @@ final class MapViewModel {
     func scrub(to date: Date) {
         displayDate = date
         let snapped = Self.snapToHour(date)
-        guard snapped != currentDate else { return }
+        guard snapped != currentDate else {
+            // Already on this hour — but a trailing load scheduled for an older
+            // target may still be pending; cancel it or it fires 90 ms from now
+            // and drags currentDate back to that stale hour mid-drag.
+            scrubLoadTask?.cancel()
+            return
+        }
 
         if Date().timeIntervalSince(lastScrubLoadAt) >= scrubThrottle {
             // Supersede any pending trailing load — otherwise an older hour could
@@ -225,6 +235,27 @@ final class MapViewModel {
             if !culled.isEmpty { liveVectors = culled }
         }
 
+        // Middle tier: the bundled harmonic model. Synthesized on device from
+        // packed SalishSeaCast constituents, so anywhere the live field would
+        // render but can't (offline, cold cache, forecast horizon) still gets
+        // full-resolution model water instead of the atlas's sparse arrows.
+        // nil when the viewport is off the model domain → atlas takes over.
+        var modelVectors: [CurrentVector]?
+        var modelCoverage: ChartBounds?
+        if liveVectors == nil {
+            modelVectors = await OfflineCurrentModel.shared.currents(for: date,
+                                                                     viewport: visibleViewport)
+            guard generation == loadGeneration else { return }
+            if modelVectors != nil {
+                // The atlas charts water beyond the model domain (Queen
+                // Charlotte Strait in Vol 4): a straddling viewport keeps its
+                // atlas arrows outside this box, model water inside —
+                // otherwise the out-of-domain half goes blank offline.
+                modelCoverage = await OfflineCurrentModel.shared.coverage()
+                guard generation == loadGeneration else { return }
+            }
+        }
+
         // Find all volumes whose geographic bounds intersect the current viewport.
         // If no viewport yet, include all volumes so any initial chart load works.
         // Rank volumes containing the viewport center first, so currentSelection
@@ -246,11 +277,14 @@ final class MapViewModel {
 
         // Chart selections are always computed — they drive the flood/ebb phase
         // indicator regardless of which source renders the vectors. The atlas
-        // DB is only queried when there's no live field to show.
+        // DB is only queried when there's no live or model field to show.
         for (spec, selector) in activeSelectors {
             guard let sel = selector.selection(for: date) else { continue }
             selections.append(sel)
             guard liveVectors == nil else { continue }
+            // With the model rendering, only volumes extending beyond the
+            // model domain still contribute (their out-of-domain arrows).
+            if modelVectors != nil, let cov = modelCoverage, cov.contains(spec.bounds) { continue }
 
             // Use the volume's index for viewport-based region culling when
             // available; fall back to all regions if the index failed to load.
@@ -263,30 +297,44 @@ final class MapViewModel {
             guard !regions.isEmpty else { continue }
 
             do {
-                let vecs = try await VectorDatabase.shared.vectors(volume: spec.id, chart: sel.chart, regions: regions)
+                var vecs = try await VectorDatabase.shared.vectors(volume: spec.id, chart: sel.chart, regions: regions)
                 // A newer load started while we were awaiting — drop these stale results.
                 guard generation == loadGeneration else { return }
+                if modelVectors != nil, let cov = modelCoverage {
+                    // Model water renders inside the domain; keep only the
+                    // arrows the model can't cover.
+                    vecs.removeAll { cov.contains(lat: $0.lat, lon: $0.lon) }
+                }
                 vectors.append(contentsOf: vecs)
             } catch {
                 // Non-fatal: one volume failing doesn't hide the others
+                Log.map.error("atlas vectors failed (vol \(spec.id), chart \(sel.chart)): \(error, privacy: .public)")
             }
         }
 
         if let liveVectors {
             vectors = liveVectors
+        } else if let modelVectors {
+            // Any atlas arrows outside the model domain are already in
+            // `vectors`; the model fills everything inside.
+            vectors.append(contentsOf: modelVectors)
         }
 
-        // The live coastline mask, culled like the vectors. Only meaningful
-        // when live vectors render — the atlas has no dry cells to mask with.
+        // The coastline mask, culled like the vectors. Both NEMO-derived
+        // tiers provide one (live from cached wet cells, model from its own
+        // mesh) so particles clip at the shoreline; the atlas has no dry
+        // cells to mask with.
         var landMask: [CurrentVector] = []
         if liveVectors != nil, let mask = await liveData?.landMask() {
+            landMask = viewportFiltered(mask)
+        } else if modelVectors != nil, let mask = await OfflineCurrentModel.shared.landMask() {
             landMask = viewportFiltered(mask)
         }
 
         guard generation == loadGeneration else { return }
-        // Provenance reflects what is actually rendered: liveVectors is nil
-        // (and the atlas populated `vectors`) whenever the cull came up empty.
-        isLiveCurrents = liveVectors != nil
+        // Provenance reflects what is actually rendered: a tier is nil (and
+        // the next one populated `vectors`) whenever its cull came up empty.
+        currentSource = liveVectors != nil ? .live : modelVectors != nil ? .model : .atlas
         currentSelections = selections
         // Crosshair readout uses the full-resolution set; only the rendered
         // layer is down-sampled.
@@ -309,16 +357,12 @@ final class MapViewModel {
         await updateTides(for: date, generation: generation)
     }
 
-    /// Points within the viewport plus a 20% margin, so pans don't immediately
-    /// hit empty edges. No viewport yet → everything.
+    /// Points within the viewport plus the shared cull margin, so pans don't
+    /// immediately hit empty edges. No viewport yet → everything.
     private func viewportFiltered(_ points: [CurrentVector]) -> [CurrentVector] {
         guard let vp = visibleViewport else { return points }
-        let latMargin = (vp.lat_max - vp.lat_min) * 0.2
-        let lonMargin = (vp.lon_max - vp.lon_min) * 0.2
-        return points.filter {
-            $0.lat >= vp.lat_min - latMargin && $0.lat <= vp.lat_max + latMargin &&
-            $0.lon >= vp.lon_min - lonMargin && $0.lon <= vp.lon_max + lonMargin
-        }
+        let expanded = vp.expanded(byFraction: ChartBounds.cullMarginFraction)
+        return points.filter { expanded.contains(lat: $0.lat, lon: $0.lon) }
     }
 
     // Pick the nearest station to the crosshair and fetch a ±18 h window of
@@ -366,7 +410,7 @@ final class MapViewModel {
         // Square-ish cells on screen: a degree of longitude is shorter than a
         // degree of latitude by cos(lat), so widen the longitude cell to match.
         let centerLat = (vp.lat_min + vp.lat_max) / 2
-        let cosLat = max(0.1, cos(centerLat * .pi / 180))
+        let cosLat = GeoMath.lonScale(atLat: centerLat)
         let screenSpan = max(latSpan, lonSpan * cosLat)
         let cellLat = screenSpan / thinTargetAcross
         let cellLon = cellLat / cosLat
@@ -390,10 +434,7 @@ final class MapViewModel {
     // to order active volumes; ties keep their original (volume-id) order.
     private func rank(_ spec: VolumeSpec, center: (lat: Double, lon: Double)?) -> Int {
         guard let c = center else { return 0 }
-        let b = spec.bounds
-        let contains = c.lat >= b.lat_min && c.lat <= b.lat_max &&
-                       c.lon >= b.lon_min && c.lon <= b.lon_max
-        return contains ? 0 : 1
+        return spec.bounds.contains(lat: c.lat, lon: c.lon) ? 0 : 1
     }
 
     // Beyond this, the nearest current vector is too far to be "under" the
@@ -405,12 +446,12 @@ final class MapViewModel {
         guard let vp = viewport else { return nil }
         let cLat = (vp.lat_min + vp.lat_max) / 2
         let cLon = (vp.lon_min + vp.lon_max) / 2
-        // Scale longitude by cos(lat) so distances are true-angular, not skewed.
+        // Hoisted: min(by:) evaluates dist2 ~2× per element over the full-
+        // resolution set on the main actor during scrubs.
         let cosLat = cos(cLat * .pi / 180)
         func dist2(_ v: CurrentVector) -> Double {
-            let dLat = v.lat - cLat
-            let dLon = (v.lon - cLon) * cosLat
-            return dLat * dLat + dLon * dLon
+            GeoMath.distanceSquared(fromLat: cLat, fromLon: cLon,
+                                    toLat: v.lat, toLon: v.lon, cosLat: cosLat)
         }
         guard let nearest = vectors.filter({ $0.isSignificant }).min(by: { dist2($0) < dist2($1) }),
               dist2(nearest) <= crosshairMaxDistanceDeg * crosshairMaxDistanceDeg

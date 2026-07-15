@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		0428DEAC804FB2FCD2285E6E /* ocean-light.json in Resources */ = {isa = PBXBuildFile; fileRef = 2A78F6D08450A43684299A05 /* ocean-light.json */; };
+		053B19B40E8654F9155B864F /* TidalHarmonics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 174AD48AFB6611FDE9777B62 /* TidalHarmonics.swift */; };
 		063221F80851C1FDC5A9257C /* atlas_lookup_vol2_2026.json in Resources */ = {isa = PBXBuildFile; fileRef = FD04BD2129588FF977B70226 /* atlas_lookup_vol2_2026.json */; };
 		086279564982225F48B141F0 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 190464A173F749BB0A3B786E /* SettingsView.swift */; };
 		08E5BFDB78B9E55E1DA9E61D /* MapStyleLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA074DF096B9F67F83B4959E /* MapStyleLoader.swift */; };
@@ -16,12 +17,15 @@
 		1F1918795868670251164A0C /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC4BE54595E9CB5FA8F715B3 /* ContentView.swift */; };
 		23763E8BE56345AE4D3C891E /* atlas_index_vol4.json in Resources */ = {isa = PBXBuildFile; fileRef = 83BD3EE7B3E3404AA899666B /* atlas_index_vol4.json */; };
 		2661E10F8D3818C0463D0501 /* standard-dark.json in Resources */ = {isa = PBXBuildFile; fileRef = 529E7D505F4A804C9AC32942 /* standard-dark.json */; };
+		282F6B976E8F3E57BACC0CF9 /* GeoMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93190E060F93A0A5D06991E7 /* GeoMath.swift */; };
 		2872EC1D5D05AB899A667652 /* AtlasVolume.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34E23098B238D68AE7C4E0CA /* AtlasVolume.swift */; };
 		28CEED760DB3C36FC29C60ED /* PhaseIndicatorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF78D89E101E6B88EB6D487E /* PhaseIndicatorView.swift */; };
 		2C6DCF8F97E181783A106DBC /* VectorDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = A89FE39742D2A11DF361182D /* VectorDatabase.swift */; };
 		2F421A2B2CBF0CAB8F0B8A52 /* LiveDataStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB7F5692AE18799CAFFCA75E /* LiveDataStore.swift */; };
 		3002DAB5B09EDAE4506050FB /* atlas_lookup_2026.json in Resources */ = {isa = PBXBuildFile; fileRef = 1E2E5511446438A2D163BF38 /* atlas_lookup_2026.json */; };
 		41162347ABE1FEA0F4DD421B /* atlas_index_vol2.json in Resources */ = {isa = PBXBuildFile; fileRef = EA075EE14D6DD086954E95E5 /* atlas_index_vol2.json */; };
+		43B3B2114729025A2887B1A7 /* LRUCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = B430D515B3053CB1308FC171 /* LRUCache.swift */; };
+		49E216D8D042D5603CFDA76D /* HelperTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7B240886F13A107F45EA941 /* HelperTests.swift */; };
 		5447EAD323169BC3E88B2FF6 /* DatabaseMigrator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F7E80F4511F77B96813E4D3 /* DatabaseMigrator.swift */; };
 		5634D37C27B06326BEB8F192 /* AtlasIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89B5A3FF117EF3148984AFA7 /* AtlasIndex.swift */; };
 		570A422AFA165A8582E8CC3E /* CurrentVector.swift in Sources */ = {isa = PBXBuildFile; fileRef = B534466B629735C3AFD88226 /* CurrentVector.swift */; };
@@ -30,13 +34,18 @@
 		674193FB48B28EB47DDE9EF9 /* MapLibreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 705E9152F8BEA1FA75608D3F /* MapLibreView.swift */; };
 		79DB6E5EBB8738AF5B7CECFE /* MapController.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC0C2E94595CF5DDCD144C35 /* MapController.swift */; };
 		7E0271059E302369E9B87F7B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 2BB7C4074365FDAFA91601A1 /* PrivacyInfo.xcprivacy */; };
+		8045C849BD33CF92358F1076 /* TideInterpolationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97D8B5FD71DD4180933BD278 /* TideInterpolationTests.swift */; };
+		84693D541382721300BD8677 /* OfflineCurrentModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B151297D28F1A4591936554 /* OfflineCurrentModel.swift */; };
 		8892B94C18ABFFDE44949FD5 /* atlas_index_vol3.json in Resources */ = {isa = PBXBuildFile; fileRef = 1F71279AD0BA5885E48ABD65 /* atlas_index_vol3.json */; };
 		8A09E69E3A83AA62722D3822 /* ocean-dark.json in Resources */ = {isa = PBXBuildFile; fileRef = 29431B00732877DA2E615BF3 /* ocean-dark.json */; };
+		913ECCC1C28E4590C0F6C1F2 /* SalishSeaCastAPITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0F9A23CCE026670B01978ED /* SalishSeaCastAPITests.swift */; };
+		983B4B36E574FAE3AA740712 /* TidalCurrentField.swift in Sources */ = {isa = PBXBuildFile; fileRef = D674FD1F00E257735CAA9F7D /* TidalCurrentField.swift */; };
 		9B86D4529C65AFD7B8D03B88 /* LiveDataService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B98F7598EF156FEBB14254C0 /* LiveDataService.swift */; };
 		9CEBBFBDEB99CD300FC775BF /* TideDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = D25E37F6E08BDAD0D7CB5885 /* TideDatabase.swift */; };
 		A14E261EEF019763C5C3ED1C /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 4C2D431933E482A18FCC18F9 /* GRDB */; };
 		A5343BB0E832A96634DF63E2 /* satellite.json in Resources */ = {isa = PBXBuildFile; fileRef = 632144FBBD0ECA8853896747 /* satellite.json */; };
 		A5373274BBC15D93DDE7A47B /* Basemap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E351A5A0241F5F0CB272A0D /* Basemap.swift */; };
+		A8762D5675981B3B04E5896F /* OfflineCurrentModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59FDAF7820C92D47A610A686 /* OfflineCurrentModelTests.swift */; };
 		B3E0A98667446BD785E78FBB /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 808EEF6FA5FE567E488AA3D5 /* DesignTokens.swift */; };
 		C768CFA66D7E07064485173C /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D191057D343E390CB41EAF3B /* NetworkMonitor.swift */; };
 		CC1DE4A9F7C994DD5459CB22 /* TapeSliderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28E631FED305377F6178516B /* TapeSliderView.swift */; };
@@ -49,11 +58,26 @@
 		DEEA37D4F253B7A4E151C3EB /* AtlasLookupTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33F90FC333D8D0174AF1A089 /* AtlasLookupTable.swift */; };
 		E1217A140CE89A8A73B3C4A6 /* TimelineControlView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B460FF242F858B027A672B40 /* TimelineControlView.swift */; };
 		E6FE100509920528EC7D2D3D /* CurrentSpeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF9286BF11F407E9F9851157 /* CurrentSpeedView.swift */; };
+		E9B56C52BC626C480787BD58 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B718AE48715B4E7020D1029 /* Log.swift */; };
+		EE84FEF09DED69A2EA490686 /* current_model.b1 in Resources */ = {isa = PBXBuildFile; fileRef = 89BC3EF0433987C4491BE1F2 /* current_model.b1 */; };
+		F54CE6A9CA91DD3F433A69F2 /* ChartSelectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6F5E873682C9E4992BD4487 /* ChartSelectorTests.swift */; };
 		F743BEB1EA6645CE4C8D41E9 /* atlas_index.json in Resources */ = {isa = PBXBuildFile; fileRef = F4B415D45980FEC40DFF87CB /* atlas_index.json */; };
 		FB3737835F764AD3A85B61BE /* SalishTidesApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F8AC975A9DE6B660C38E780 /* SalishTidesApp.swift */; };
+		FF28886D72C0D9078739DC3D /* EpochUTCTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4725F47676631EBF5824A138 /* EpochUTCTests.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		1C89769B320B98E159150BD4 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = F4959EB4292F86D3213CE493 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B6FEA7A93754ADA91290175B;
+			remoteInfo = SalishTides;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
+		174AD48AFB6611FDE9777B62 /* TidalHarmonics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TidalHarmonics.swift; sourceTree = "<group>"; };
 		190464A173F749BB0A3B786E /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		1E2E5511446438A2D163BF38 /* atlas_lookup_2026.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = atlas_lookup_2026.json; sourceTree = "<group>"; };
 		1F71279AD0BA5885E48ABD65 /* atlas_index_vol3.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = atlas_index_vol3.json; sourceTree = "<group>"; };
@@ -64,10 +88,14 @@
 		2DB51EF67918D47D54D0733D /* atlas_lookup_vol4_2026.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = atlas_lookup_vol4_2026.json; sourceTree = "<group>"; };
 		33F90FC333D8D0174AF1A089 /* AtlasLookupTable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtlasLookupTable.swift; sourceTree = "<group>"; };
 		34E23098B238D68AE7C4E0CA /* AtlasVolume.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtlasVolume.swift; sourceTree = "<group>"; };
+		3B718AE48715B4E7020D1029 /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
 		3DDA2FAF2D0189860F478A7C /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
+		4725F47676631EBF5824A138 /* EpochUTCTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EpochUTCTests.swift; sourceTree = "<group>"; };
 		4FA576D80059DF72E4354E26 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		529E7D505F4A804C9AC32942 /* standard-dark.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "standard-dark.json"; sourceTree = "<group>"; };
 		57507473C7B77D54DECBB9A0 /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
+		59FDAF7820C92D47A610A686 /* OfflineCurrentModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineCurrentModelTests.swift; sourceTree = "<group>"; };
+		5B151297D28F1A4591936554 /* OfflineCurrentModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineCurrentModel.swift; sourceTree = "<group>"; };
 		632144FBBD0ECA8853896747 /* satellite.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = satellite.json; sourceTree = "<group>"; };
 		6E351A5A0241F5F0CB272A0D /* Basemap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Basemap.swift; sourceTree = "<group>"; };
 		6EE458C039CC8A1CCE1AD9D9 /* TideStation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TideStation.swift; sourceTree = "<group>"; };
@@ -78,23 +106,32 @@
 		808EEF6FA5FE567E488AA3D5 /* DesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
 		83BD3EE7B3E3404AA899666B /* atlas_index_vol4.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = atlas_index_vol4.json; sourceTree = "<group>"; };
 		89B5A3FF117EF3148984AFA7 /* AtlasIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtlasIndex.swift; sourceTree = "<group>"; };
+		89BC3EF0433987C4491BE1F2 /* current_model.b1 */ = {isa = PBXFileReference; path = current_model.b1; sourceTree = "<group>"; };
+		93190E060F93A0A5D06991E7 /* GeoMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeoMath.swift; sourceTree = "<group>"; };
+		97D8B5FD71DD4180933BD278 /* TideInterpolationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TideInterpolationTests.swift; sourceTree = "<group>"; };
 		9F6AC464A41AEC5AA01D5BB8 /* MapViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapViewModel.swift; sourceTree = "<group>"; };
 		9F7E80F4511F77B96813E4D3 /* DatabaseMigrator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseMigrator.swift; sourceTree = "<group>"; };
 		A81CE1B298B64CEDF727ACF4 /* SalishSeaCastClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SalishSeaCastClient.swift; sourceTree = "<group>"; };
 		A89FE39742D2A11DF361182D /* VectorDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VectorDatabase.swift; sourceTree = "<group>"; };
 		AA074DF096B9F67F83B4959E /* MapStyleLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapStyleLoader.swift; sourceTree = "<group>"; };
 		AB02102BE8D3A61DEB2FB722 /* CurrentParticleLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrentParticleLayer.swift; sourceTree = "<group>"; };
+		B430D515B3053CB1308FC171 /* LRUCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LRUCache.swift; sourceTree = "<group>"; };
 		B460FF242F858B027A672B40 /* TimelineControlView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineControlView.swift; sourceTree = "<group>"; };
 		B534466B629735C3AFD88226 /* CurrentVector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrentVector.swift; sourceTree = "<group>"; };
 		B98F7598EF156FEBB14254C0 /* LiveDataService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveDataService.swift; sourceTree = "<group>"; };
 		BC0C2E94595CF5DDCD144C35 /* MapController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapController.swift; sourceTree = "<group>"; };
 		BF78D89E101E6B88EB6D487E /* PhaseIndicatorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhaseIndicatorView.swift; sourceTree = "<group>"; };
+		C0F9A23CCE026670B01978ED /* SalishSeaCastAPITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SalishSeaCastAPITests.swift; sourceTree = "<group>"; };
 		D191057D343E390CB41EAF3B /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
 		D25E37F6E08BDAD0D7CB5885 /* TideDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TideDatabase.swift; sourceTree = "<group>"; };
+		D674FD1F00E257735CAA9F7D /* TidalCurrentField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TidalCurrentField.swift; sourceTree = "<group>"; };
 		E02E5CB168CDB0660201216E /* TideChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TideChartView.swift; sourceTree = "<group>"; };
+		E7B240886F13A107F45EA941 /* HelperTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperTests.swift; sourceTree = "<group>"; };
 		EA075EE14D6DD086954E95E5 /* atlas_index_vol2.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = atlas_index_vol2.json; sourceTree = "<group>"; };
+		EAF782A61DF2A6526A1F9E0C /* SalishTidesTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SalishTidesTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F4B415D45980FEC40DFF87CB /* atlas_index.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = atlas_index.json; sourceTree = "<group>"; };
 		F59E3A1C7E73F800052D2EB1 /* SalishSeaCastAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SalishSeaCastAPI.swift; sourceTree = "<group>"; };
+		F6F5E873682C9E4992BD4487 /* ChartSelectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChartSelectorTests.swift; sourceTree = "<group>"; };
 		FB7F5692AE18799CAFFCA75E /* LiveDataStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveDataStore.swift; sourceTree = "<group>"; };
 		FC4BE54595E9CB5FA8F715B3 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		FD04BD2129588FF977B70226 /* atlas_lookup_vol2_2026.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = atlas_lookup_vol2_2026.json; sourceTree = "<group>"; };
@@ -135,6 +172,7 @@
 			isa = PBXGroup;
 			children = (
 				7DFE8DC52452666E434AA9D7 /* SalishTides.app */,
+				EAF782A61DF2A6526A1F9E0C /* SalishTidesTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -165,6 +203,7 @@
 				4FA576D80059DF72E4354E26 /* Info.plist */,
 				2BB7C4074365FDAFA91601A1 /* PrivacyInfo.xcprivacy */,
 				3CC21B606D8F40553D4E2E75 /* App */,
+				9B971C945C0B8A7AE924BA9A /* CurrentModel */,
 				55010ED328A3C0DF7CF2AFA3 /* Data */,
 				16C9E634679F3B0C6D0C972E /* Design */,
 				6028F1022317C345369B928B /* Live */,
@@ -193,6 +232,7 @@
 			children = (
 				E2308F46423DFC35F3FF6F86 /* Config */,
 				567AE6C212DBB6EB37BD5C84 /* SalishTides */,
+				FFEA14C427ED1D3FF71AC516 /* SalishTidesTests */,
 				489D3086E0E1A69D40C4993B /* Products */,
 			);
 			sourceTree = "<group>";
@@ -205,6 +245,9 @@
 				33F90FC333D8D0174AF1A089 /* AtlasLookupTable.swift */,
 				34E23098B238D68AE7C4E0CA /* AtlasVolume.swift */,
 				B534466B629735C3AFD88226 /* CurrentVector.swift */,
+				93190E060F93A0A5D06991E7 /* GeoMath.swift */,
+				3B718AE48715B4E7020D1029 /* Log.swift */,
+				B430D515B3053CB1308FC171 /* LRUCache.swift */,
 				D191057D343E390CB41EAF3B /* NetworkMonitor.swift */,
 				6EE458C039CC8A1CCE1AD9D9 /* TideStation.swift */,
 			);
@@ -221,6 +264,7 @@
 				1E2E5511446438A2D163BF38 /* atlas_lookup_2026.json */,
 				FD04BD2129588FF977B70226 /* atlas_lookup_vol2_2026.json */,
 				2DB51EF67918D47D54D0733D /* atlas_lookup_vol4_2026.json */,
+				89BC3EF0433987C4491BE1F2 /* current_model.b1 */,
 				529E7D505F4A804C9AC32942 /* standard-dark.json */,
 				727BC113893557DFF4A9C2AF /* standard-light.json */,
 				496B88DF779A28478CDB2D85 /* styles */,
@@ -239,6 +283,16 @@
 				B460FF242F858B027A672B40 /* TimelineControlView.swift */,
 			);
 			path = Views;
+			sourceTree = "<group>";
+		};
+		9B971C945C0B8A7AE924BA9A /* CurrentModel */ = {
+			isa = PBXGroup;
+			children = (
+				5B151297D28F1A4591936554 /* OfflineCurrentModel.swift */,
+				D674FD1F00E257735CAA9F7D /* TidalCurrentField.swift */,
+				174AD48AFB6611FDE9777B62 /* TidalHarmonics.swift */,
+			);
+			path = CurrentModel;
 			sourceTree = "<group>";
 		};
 		C76E68BB3E5E5D16F68A50C0 /* ViewModels */ = {
@@ -269,6 +323,19 @@
 			path = Config;
 			sourceTree = "<group>";
 		};
+		FFEA14C427ED1D3FF71AC516 /* SalishTidesTests */ = {
+			isa = PBXGroup;
+			children = (
+				F6F5E873682C9E4992BD4487 /* ChartSelectorTests.swift */,
+				4725F47676631EBF5824A138 /* EpochUTCTests.swift */,
+				E7B240886F13A107F45EA941 /* HelperTests.swift */,
+				59FDAF7820C92D47A610A686 /* OfflineCurrentModelTests.swift */,
+				C0F9A23CCE026670B01978ED /* SalishSeaCastAPITests.swift */,
+				97D8B5FD71DD4180933BD278 /* TideInterpolationTests.swift */,
+			);
+			path = SalishTidesTests;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -293,6 +360,24 @@
 			productName = SalishTides;
 			productReference = 7DFE8DC52452666E434AA9D7 /* SalishTides.app */;
 			productType = "com.apple.product-type.application";
+		};
+		F7C68C84690B7D77209EBED7 /* SalishTidesTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9FCAFBF253FFFAE8EAA92E01 /* Build configuration list for PBXNativeTarget "SalishTidesTests" */;
+			buildPhases = (
+				77BC8C79BFC662C120478BB5 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D162A5CA4B9DB859F0E51069 /* PBXTargetDependency */,
+			);
+			name = SalishTidesTests;
+			packageProductDependencies = (
+			);
+			productName = SalishTidesTests;
+			productReference = EAF782A61DF2A6526A1F9E0C /* SalishTidesTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
 
@@ -328,6 +413,7 @@
 			projectRoot = "";
 			targets = (
 				B6FEA7A93754ADA91290175B /* SalishTides */,
+				F7C68C84690B7D77209EBED7 /* SalishTidesTests */,
 			);
 		};
 /* End PBXProject section */
@@ -345,6 +431,7 @@
 				3002DAB5B09EDAE4506050FB /* atlas_lookup_2026.json in Resources */,
 				063221F80851C1FDC5A9257C /* atlas_lookup_vol2_2026.json in Resources */,
 				D14AD78CBA4B0066C42F056B /* atlas_lookup_vol4_2026.json in Resources */,
+				EE84FEF09DED69A2EA490686 /* current_model.b1 in Resources */,
 				8A09E69E3A83AA62722D3822 /* ocean-dark.json in Resources */,
 				0428DEAC804FB2FCD2285E6E /* ocean-light.json in Resources */,
 				A5343BB0E832A96634DF63E2 /* satellite.json in Resources */,
@@ -377,6 +464,19 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		77BC8C79BFC662C120478BB5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F54CE6A9CA91DD3F433A69F2 /* ChartSelectorTests.swift in Sources */,
+				FF28886D72C0D9078739DC3D /* EpochUTCTests.swift in Sources */,
+				49E216D8D042D5603CFDA76D /* HelperTests.swift in Sources */,
+				A8762D5675981B3B04E5896F /* OfflineCurrentModelTests.swift in Sources */,
+				913ECCC1C28E4590C0F6C1F2 /* SalishSeaCastAPITests.swift in Sources */,
+				8045C849BD33CF92358F1076 /* TideInterpolationTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		9BDD1F1214470AF2D4482414 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -392,19 +492,25 @@
 				570A422AFA165A8582E8CC3E /* CurrentVector.swift in Sources */,
 				5447EAD323169BC3E88B2FF6 /* DatabaseMigrator.swift in Sources */,
 				B3E0A98667446BD785E78FBB /* DesignTokens.swift in Sources */,
+				282F6B976E8F3E57BACC0CF9 /* GeoMath.swift in Sources */,
+				43B3B2114729025A2887B1A7 /* LRUCache.swift in Sources */,
 				9B86D4529C65AFD7B8D03B88 /* LiveDataService.swift in Sources */,
 				2F421A2B2CBF0CAB8F0B8A52 /* LiveDataStore.swift in Sources */,
+				E9B56C52BC626C480787BD58 /* Log.swift in Sources */,
 				79DB6E5EBB8738AF5B7CECFE /* MapController.swift in Sources */,
 				674193FB48B28EB47DDE9EF9 /* MapLibreView.swift in Sources */,
 				08E5BFDB78B9E55E1DA9E61D /* MapStyleLoader.swift in Sources */,
 				1D5038B1FFB6DE1A54FE8E25 /* MapViewModel.swift in Sources */,
 				C768CFA66D7E07064485173C /* NetworkMonitor.swift in Sources */,
+				84693D541382721300BD8677 /* OfflineCurrentModel.swift in Sources */,
 				28CEED760DB3C36FC29C60ED /* PhaseIndicatorView.swift in Sources */,
 				0A31E6B0ABD55CE03955FA4F /* SalishSeaCastAPI.swift in Sources */,
 				D7B586A7ED13970C8F267F1A /* SalishSeaCastClient.swift in Sources */,
 				FB3737835F764AD3A85B61BE /* SalishTidesApp.swift in Sources */,
 				086279564982225F48B141F0 /* SettingsView.swift in Sources */,
 				CC1DE4A9F7C994DD5459CB22 /* TapeSliderView.swift in Sources */,
+				983B4B36E574FAE3AA740712 /* TidalCurrentField.swift in Sources */,
+				053B19B40E8654F9155B864F /* TidalHarmonics.swift in Sources */,
 				5DB2319BABC9FB829D843F6A /* TideChartView.swift in Sources */,
 				9CEBBFBDEB99CD300FC775BF /* TideDatabase.swift in Sources */,
 				CD10BDF599A8B4DC91FC583E /* TideStation.swift in Sources */,
@@ -414,6 +520,14 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		D162A5CA4B9DB859F0E51069 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B6FEA7A93754ADA91290175B /* SalishTides */;
+			targetProxy = 1C89769B320B98E159150BD4 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		157BC6C0832647AF17CBD2E7 /* Release */ = {
@@ -438,6 +552,46 @@
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
+		};
+		242ED408D2DB505F497ACBBA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.bguenther.SalishTidesTests;
+				SDKROOT = iphoneos;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SalishTides.app/SalishTides";
+			};
+			name = Release;
+		};
+		3FB9B5683B20B0B93758D2B8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.bguenther.SalishTidesTests;
+				SDKROOT = iphoneos;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SalishTides.app/SalishTides";
+			};
+			name = Debug;
 		};
 		DDF2BFEA0F0AE17E9D09D654 /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -597,6 +751,15 @@
 			buildConfigurations = (
 				DDF2BFEA0F0AE17E9D09D654 /* Debug */,
 				157BC6C0832647AF17CBD2E7 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		9FCAFBF253FFFAE8EAA92E01 /* Build configuration list for PBXNativeTarget "SalishTidesTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3FB9B5683B20B0B93758D2B8 /* Debug */,
+				242ED408D2DB505F497ACBBA /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
