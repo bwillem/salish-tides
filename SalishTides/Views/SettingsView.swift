@@ -76,7 +76,7 @@ struct SettingsView: View {
                 Section {
                     Toggle("Disable live data", isOn: $settings.offlineOnly)
                 } footer: {
-                    Text("Salish Tides will fetch real-time current data from the SalishSeaCast model when it can. It works offline by using predictive harmonic analysis from historical data.")
+                    Text("Salish Tides fetches real-time data from the SalishSeaCast model when it can. It works offline by using predictive harmonic analysis from historical data.")
                 }
 
                 // ── About ────────────────────────────────────────────────
@@ -111,7 +111,10 @@ struct SettingsView: View {
                     Image(systemName: "checkmark")
                         .foregroundStyle(.tint)
                 } else if !selectable {
-                    Text("Online only")
+                    // "Online only" when it's the connection that's missing;
+                    // "Unavailable" when the build has no MapTiler key at all
+                    // (so it can never stream, online or not).
+                    Text(MapConfig.hasMaptilerKey ? "Online only" : "Unavailable")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

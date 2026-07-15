@@ -25,7 +25,10 @@ struct TideChartView: View {
     private let stepMinutes: Int = 12
 
     // Layout constants
-    private let leftPad:   CGFloat = 26   // y-axis label width
+    // Shared so the phase card can inset its labels to the plot's left edge —
+    // see PhaseIndicatorView.
+    static let plotLeftInset: CGFloat = 26   // y-axis label width
+    private var leftPad: CGFloat { Self.plotLeftInset }
     private let bottomPad: CGFloat = 18   // x-axis label height
     private let topPad:    CGFloat = 8
 
@@ -137,37 +140,52 @@ struct TideChartView: View {
             // Station provenance (name + datum) is rendered as a caption below
             // the chart in PhaseIndicatorView, so it never overlaps the curve.
 
-            // ── X-axis: time labels every 3h aligned to clock hours ─────────
+            // ── X-axis: a steady half-hour tick ruler, labelled every 3h ────
+            // Ticks live on the absolute clock grid (…:00, :30) so they glide
+            // with the curve as you scrub rather than blinking. Labels sit on
+            // the 3-hour marks and fade in/out only at the plot edges — never
+            // mid-plot — so a time value stays readable right under the cursor.
             let cal = Calendar.salish
-
             let startDate = currentDate.addingTimeInterval(-windowHalfHours * 3600)
             let endDate   = currentDate.addingTimeInterval(windowHalfHours * 3600)
+
+            // First :00/:30 slot at or after the window's left edge.
             var comps = cal.dateComponents([.year, .month, .day, .hour], from: startDate)
-            comps.hour   = (((comps.hour ?? 0) / 3) + 1) * 3
             comps.minute = 0
             comps.second = 0
             var tick = cal.date(from: comps) ?? startDate
+            while tick < startDate { tick = tick.addingTimeInterval(30 * 60) }
 
+            var ruler = Path()
             while tick <= endDate {
                 let tx = xOf(tick)
-                if tx >= chartLeft + 4 && tx <= chartRight - 22 {
-                    if abs(tx - cx) > 22 {
-                        let hr = cal.component(.hour, from: tick)
-                        ctx.draw(
-                            Text(settings.hourTickLabel(hour: hr))
-                                .font(.system(size: 9, design: .monospaced))
-                                .foregroundStyle(.primary.opacity(0.45)),
-                            at: CGPoint(x: tx, y: size.height - 3),
-                            anchor: .bottom
-                        )
+                if tx >= chartLeft && tx <= chartRight {
+                    let c = cal.dateComponents([.hour, .minute], from: tick)
+                    let onHour   = (c.minute ?? 0) == 0
+                    let labelled = onHour && (c.hour ?? 0) % 3 == 0
+
+                    let tickLen: CGFloat = labelled ? 4 : (onHour ? 3 : 2)
+                    ruler.move(to:    CGPoint(x: tx, y: chartBot))
+                    ruler.addLine(to: CGPoint(x: tx, y: chartBot + tickLen))
+
+                    if labelled {
+                        // Ramp 0→full over the last 16px so labels slide in and
+                        // out at the edges instead of popping.
+                        let edgeFade = max(0, min(1, min(tx - chartLeft, chartRight - tx) / 16))
+                        if edgeFade > 0 {
+                            ctx.draw(
+                                Text(settings.hourTickLabel(hour: c.hour ?? 0))
+                                    .font(.system(size: 9, design: .monospaced))
+                                    .foregroundStyle(.primary.opacity(0.45 * edgeFade)),
+                                at: CGPoint(x: tx, y: size.height - 3),
+                                anchor: .bottom
+                            )
+                        }
                     }
-                    var tickPath = Path()
-                    tickPath.move(to:    CGPoint(x: tx, y: chartBot))
-                    tickPath.addLine(to: CGPoint(x: tx, y: chartBot + 3))
-                    ctx.stroke(tickPath, with: .color(.primary.opacity(0.25)), lineWidth: 0.5)
                 }
-                tick = tick.addingTimeInterval(3 * 3600)
+                tick = tick.addingTimeInterval(30 * 60)
             }
+            ctx.stroke(ruler, with: .color(.primary.opacity(0.22)), lineWidth: 0.5)
 
             // ── Y-axis: height labels ───────────────────────────────────────
             let axisDecimals = gridStep < 1 ? 1 : 0

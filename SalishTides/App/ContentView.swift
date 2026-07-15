@@ -37,6 +37,14 @@ struct ContentView: View {
         }
     }
 
+    /// True while the user's basemap streams its tiles (Satellite) but there's
+    /// no connection — the cue for the "Offline" pill. Standard is bundled
+    /// offline, so it never flags. The map itself keeps rendering the selected
+    /// basemap from cache; this only drives the hint, never a style swap.
+    private var streamingImageryOffline: Bool {
+        settings.basemap.requiresNetwork && !network.isOnline
+    }
+
     private var mapView: some View {
         ZStack(alignment: .bottom) {
             MapLibreView()
@@ -75,19 +83,38 @@ struct ContentView: View {
                     .padding(.top, Spacing.sm)
                 }
                 Spacer()
-                // Currents-source badge — its own small glass pill, bottom-right,
-                // above the timeline. "Online mode" for live SalishSeaCast data,
-                // "Offline model" for the harmonic model tier; the sparse atlas
-                // gets no badge. (Full attribution: Settings → Data Sources.)
-                if let badge = SourceBadge.Content(vm.currentSource) {
-                    HStack {
-                        Spacer()
-                        SourceBadge(content: badge)
+                // Status pills above the timeline, on one baseline: connectivity
+                // on the left — an "Offline" pill shown only while a streaming
+                // basemap (Satellite) is selected and the network is unreachable,
+                // noting that *new* imagery can't load (cached tiles keep showing;
+                // it clears itself once back online) — and the currents-source
+                // tier on the right ("Online mode" / "Offline model"; the sparse
+                // atlas gets none). Full attribution: Settings → Data Sources.
+                //
+                // The animation lives on the always-present Group, not on the
+                // conditional row: when the Offline pill is the *only* pill,
+                // reconnecting collapses the `if`, and an animation modifier
+                // inside it would be torn down before the fade could run — the
+                // pill would pop. On the stable Group it fades out cleanly.
+                Group {
+                    let badge = SourceBadge.Content(vm.currentSource)
+                    if streamingImageryOffline || badge != nil {
+                        HStack(alignment: .bottom) {
+                            if streamingImageryOffline {
+                                OfflineBadge()
+                                    .transition(.opacity)
+                            }
+                            Spacer(minLength: 0)
+                            if let badge {
+                                SourceBadge(content: badge)
+                                    .transition(.opacity)
+                            }
+                        }
+                        .padding(.horizontal, Spacing.lg)
+                        .padding(.bottom, Spacing.sm)
                     }
-                    .padding(.horizontal, Spacing.lg)
-                    .padding(.bottom, Spacing.sm)
-                    .transition(.opacity)
                 }
+                .animation(.snappy, value: streamingImageryOffline)
                 TimelineControlView()
                     .padding(.horizontal, Spacing.lg)
                     .padding(.vertical, Spacing.md)
@@ -233,6 +260,28 @@ private struct SourceBadge: View {
         .floatingCard(cornerRadius: Radius.pill)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(content.a11y)
+    }
+}
+
+/// Connectivity pill — a red dot + "Offline", bottom-left above the timeline.
+/// Shown only while a streaming basemap (Satellite) is selected and the network
+/// is down: cached tiles keep rendering, so this just tells the user why new
+/// imagery isn't filling in. It fades away on its own once back online.
+private struct OfflineBadge: View {
+    var body: some View {
+        HStack(spacing: Spacing.xs) {
+            Circle()
+                .fill(.red)
+                .frame(width: 5, height: 5)
+            Text("Offline")
+                .font(.stCaption)
+                .foregroundStyle(Color.inkSecondary)
+        }
+        .padding(.horizontal, Spacing.sm)
+        .padding(.vertical, Spacing.xs)
+        .floatingCard(cornerRadius: Radius.pill)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Offline. Showing cached satellite imagery; new areas will fill in once you reconnect.")
     }
 }
 
