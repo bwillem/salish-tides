@@ -67,14 +67,14 @@ struct ContentView: View {
         ZStack(alignment: .bottom) {
             MapLibreView()
                 .ignoresSafeArea()
-            // Navionics-style: hidden at rest, fades in while panning/zooming or
-            // scrubbing, fades out a couple seconds after release. Quick in,
-            // gentle out.
+            // Navionics-style: always on-screen but faint at rest, ramping to
+            // full contrast while panning/zooming or scrubbing, then easing back
+            // a couple seconds after release. Quick up, gentle down.
             CrosshairView()
-                .opacity(crosshair.isVisible ? 1 : 0)
-                .animation(crosshair.isVisible ? .easeOut(duration: 0.18)
-                                               : .easeOut(duration: 0.5),
-                           value: crosshair.isVisible)
+                .opacity(crosshair.isEmphasized ? 1 : 0.5)
+                .animation(crosshair.isEmphasized ? .easeOut(duration: 0.18)
+                                                  : .easeOut(duration: 0.5),
+                           value: crosshair.isEmphasized)
             VStack(spacing: 0) {
                 HStack(alignment: .top) {
                     // Top-left control cluster: settings, compass (only when
