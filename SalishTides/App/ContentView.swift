@@ -69,7 +69,7 @@ struct ContentView: View {
             CrosshairView()
                 .opacity(crosshair.isVisible ? 1 : 0)
                 .animation(crosshair.isVisible ? .easeOut(duration: 0.18)
-                                               : .easeIn(duration: 0.5),
+                                               : .easeOut(duration: 0.5),
                            value: crosshair.isVisible)
             VStack(spacing: 0) {
                 HStack(alignment: .top) {

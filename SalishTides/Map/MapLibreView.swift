@@ -130,7 +130,7 @@ struct MapLibreView: UIViewRepresentable {
         // on-demand crosshair.
         private static let gestureMask: MLNCameraChangeReason =
             [.gesturePan, .gesturePinch, .gestureRotate, .gestureZoomIn,
-             .gestureZoomOut, .gestureOneFingerZoom]
+             .gestureZoomOut, .gestureOneFingerZoom, .gestureTilt]
 
         // Reason-based region callbacks. Implementing these SUPPRESSES the plain
         // -regionWillChangeAnimated: / -regionDidChangeAnimated: variants (see
