@@ -176,6 +176,19 @@ struct MapLibreView: UIViewRepresentable {
             )
             onViewportChange(viewport)
             onBearingChange(mapView.direction)
+            // Rescale the arrows when the zoom changes: a pure zoom-in-place
+            // keeps the same vectors, so the viewport-driven data reload may
+            // not rebuild the shapes — re-apply here so the arrows track the
+            // new zoom even when the data is unchanged. Cheap and arrows-only.
+            let zoom = mapView.zoomLevel
+            if zoom != lastZoom {
+                let rescaled = Self.arrowScale(forZoom: zoom) != Self.arrowScale(forZoom: lastZoom)
+                lastZoom = zoom
+                if rescaled, lastStyleMode == .arrows, !lastVectors.isEmpty,
+                   let style = mapView.style {
+                    applyVectors(lastVectors, style: style)
+                }
+            }
             // Recentre the particle field on the new viewport immediately with
             // the data already in hand — a camera move alone never re-runs the
             // SwiftUI update, and waiting for the debounced data reload would
@@ -219,6 +232,7 @@ struct MapLibreView: UIViewRepresentable {
             let dataChanged = vectors != lastVectors || fieldVectors != lastFieldVectors
                 || mask != lastMask
             let boundsChanged = bounds != lastBoundsWorld
+            lastZoom = mapView.zoomLevel
             guard dataChanged || boundsChanged || !landPolygonsValid else { return }
 
             lastVectors = vectors
@@ -321,6 +335,26 @@ struct MapLibreView: UIViewRepresentable {
         nonisolated(unsafe) private var lastDark = true
         nonisolated(unsafe) private var lastStyleMode: CurrentStyle = .particles
 
+        // Latest camera zoom, so the arrow geometry (built in geographic
+        // degrees) can be scaled to hold a roughly constant on-screen size at
+        // tight zoom — see arrowScale(forZoom:).
+        nonisolated(unsafe) private var lastZoom: Double = 9.5
+
+        // Arrows are geographic polylines with a fixed ground length, so they
+        // hold ground size and balloon on screen as you zoom in: at tight zoom
+        // one arrow overruns several grid cells and the field reads as
+        // overlapping spaghetti. Beyond this reference zoom the arrows hold a
+        // constant on-screen size — the size they naturally have *at* this
+        // zoom — by shrinking their ground length 2× per zoom level; at/below
+        // it they render full size (and get smaller on screen as you zoom out,
+        // which reads fine). It's set near the default opening zoom (9.5),
+        // where the arrows look right, so every tighter view holds roughly that
+        // comfortable size instead of ballooning into overlap.
+        private static let arrowRefZoom = 10.0
+        static func arrowScale(forZoom zoom: Double) -> Double {
+            min(1, pow(2, arrowRefZoom - zoom))
+        }
+
         func setParticleDark(_ dark: Bool) {
             lastDark = dark
             particleLayer?.setDark(dark)
@@ -417,10 +451,11 @@ struct MapLibreView: UIViewRepresentable {
 
         private func applyVectors(_ vectors: [CurrentVector], style: MLNStyle) {
             guard let source = style.source(withIdentifier: sourceID) as? MLNShapeSource else { return }
-            source.shape = MLNShapeCollectionFeature(shapes: buildFeatures(from: vectors))
+            let scale = Self.arrowScale(forZoom: lastZoom)
+            source.shape = MLNShapeCollectionFeature(shapes: buildFeatures(from: vectors, zoomScale: scale))
         }
 
-        private func buildFeatures(from vectors: [CurrentVector]) -> [MLNShape] {
+        private func buildFeatures(from vectors: [CurrentVector], zoomScale: Double) -> [MLNShape] {
             var features: [MLNShape] = []
             features.reserveCapacity(vectors.count * 3)
 
@@ -432,7 +467,9 @@ struct MapLibreView: UIViewRepresentable {
                 features.append(pt)
             }
 
-            let baseHalfDeg = 0.005   // ~500 m; the half-length of a ~1 kn arrow
+            // ~500 m half-length for a ~1 kn arrow, shrunk at tight zoom so the
+            // arrows don't balloon on screen and overlap (see arrowScale).
+            let baseHalfDeg = 0.005 * zoomScale
 
             for v in vectors where v.isSignificant {
                 let θ = v.direction_deg * .pi / 180
