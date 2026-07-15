@@ -223,9 +223,11 @@ final class AppSettings {
     // MARK: Basemap availability
 
     /// Whether `basemap` can be selected right now: the bundled standard style
-    /// always; network styles only when online.
+    /// always; network styles only when online *and* the build actually carries
+    /// a MapTiler key (without one they can't stream and would silently fall
+    /// back to Standard — see MapStyleLoader).
     func isSelectable(_ basemap: Basemap, online: Bool) -> Bool {
-        !basemap.requiresNetwork || online
+        !basemap.requiresNetwork || (online && MapConfig.hasMaptilerKey)
     }
 
     // MARK: Formatting helpers

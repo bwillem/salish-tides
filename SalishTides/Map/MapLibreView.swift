@@ -13,6 +13,14 @@ struct MapLibreView: UIViewRepresentable {
     // Resolved style for the selected basemap + current appearance. Placeholders
     // (MapTiler key, local-tiles URL) are injected by MapStyleLoader, which falls
     // back to the bundled-offline Standard style on any failure.
+    //
+    // The map deliberately does NOT swap basemaps when connectivity changes:
+    // Satellite stays selected, MapLibre's ambient cache keeps serving the tiles
+    // it already holds, and the rest just streams back in once online — so
+    // moving between offline and online is seamless, with no full-style reload
+    // that would rebuild every layer and discard cached imagery. The "Offline"
+    // pill in ContentView is the only signal; it simply notes new imagery is
+    // paused.
     private func desiredStyleURL(for scheme: ColorScheme) -> URL? {
         MapStyleLoader.styleURL(for: settings.basemap, dark: scheme == .dark)
     }

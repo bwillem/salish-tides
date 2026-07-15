@@ -8,6 +8,12 @@ enum MapConfig {
         (Bundle.main.object(forInfoDictionaryKey: "MAPTILER_KEY") as? String)?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
+
+    /// Whether online (MapTiler-backed) styles can be produced at all. Builds
+    /// without a key (a checkout missing `Config/Secrets.xcconfig`) can never
+    /// stream them, so the picker greys them out instead of silently falling
+    /// back to Standard when tapped.
+    static var hasMaptilerKey: Bool { !maptilerKey.isEmpty }
 }
 
 /// The chart's base map style.
