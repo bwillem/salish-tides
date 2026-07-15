@@ -132,27 +132,42 @@ struct TimelineControlView: View {
     // Graphical (calendar) picker in a popover anchored to the date readout —
     // the standard iOS pattern for a compact date selector. On iPad it appears
     // beside the readout; on iPhone SwiftUI adapts it to a sheet. Date only; the
-    // tape still owns the hour within the chosen day. Picking a day applies it
-    // and dismisses (tapping outside dismisses without changing the date), so no
-    // Cancel/Done chrome is needed — matching Calendar/Reminders.
+    // tape still owns the hour within the chosen day. A Done button applies the
+    // selection (tapping outside dismisses without changing anything). We commit
+    // on Done rather than on `.onChange(of: pickerDate)`, because a value-change
+    // hook can't dismiss when the user re-taps the already-selected day (no
+    // change fires) and would re-apply on any incidental selection.
     private var datePickerPopover: some View {
-        DatePicker(
-            "Date",
-            selection: $pickerDate,
-            displayedComponents: [.date]
-        )
-        .datePickerStyle(.graphical)
-        .frame(width: 320)
-        .padding(Spacing.sm)
-        .onChange(of: pickerDate) {
-            jumpToDate(pickerDate)
-            showingDatePicker = false
+        VStack(spacing: Spacing.md) {
+            DatePicker(
+                "Date",
+                selection: $pickerDate,
+                displayedComponents: [.date]
+            )
+            .datePickerStyle(.graphical)
+            .labelsHidden()
+
+            Button("Done", action: commitDatePicker)
+                .buttonStyle(.borderedProminent)
+                .frame(maxWidth: .infinity)
         }
+        .frame(width: 320)
+        .padding(Spacing.md)
     }
 
     private func presentDatePicker() {
         pickerDate = vm.displayDate
         showingDatePicker = true
+    }
+
+    // Apply the chosen day and dismiss. Skip the re-anchor when the day is
+    // unchanged, so confirming the current day doesn't needlessly reset the
+    // scrub offset or re-issue setTime.
+    private func commitDatePicker() {
+        if !Calendar.salish.isDate(pickerDate, inSameDayAs: vm.displayDate) {
+            jumpToDate(pickerDate)
+        }
+        showingDatePicker = false
     }
 
     // MARK: - Actions
