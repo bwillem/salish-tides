@@ -19,12 +19,13 @@ struct PhaseIndicatorView: View {
                         .accessibilityElement()
                         .accessibilityLabel(tideChartLabel)
 
-                    // Provenance: which station the tide curve is from, plus a
-                    // "Live" flag when the drawn curve is live model data. The
-                    // datum (e.g. "CD"/"MLLW") is omitted — jargon that means
-                    // nothing to a user; the a11y label states it in words.
+                    // Provenance: which station the tide curve is from. The datum
+                    // (e.g. "CD"/"MLLW") is omitted — jargon that means nothing to
+                    // a user; the a11y label below still states it in words. The
+                    // "Live" flag is dropped too: "live what?" reads as ambiguous,
+                    // and the bottom-right Online-mode badge already signals it.
                     if let station = vm.tideStation {
-                        Text("\(station.name.titleCasedStation)\(isLiveTide ? " · Live" : "")")
+                        Text(station.name.titleCasedStation)
                             .font(.stCaption)
                             .foregroundStyle(Color.inkSecondary)
                             .lineLimit(1)
@@ -79,11 +80,6 @@ struct PhaseIndicatorView: View {
 
     private func tendencyColor(_ tendency: Tendency) -> Color {
         tendency == .flood ? .tideFlood : .tideEbb
-    }
-
-    /// Whether the drawn tide curve is live model data at the cursor.
-    private var isLiveTide: Bool {
-        vm.liveTideSeries?.covers(vm.displayDate) == true
     }
 }
 
