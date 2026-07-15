@@ -159,9 +159,6 @@ final class AppSettings {
     var heightUnit: HeightUnit {
         didSet { defaults.set(heightUnit.rawValue, forKey: Keys.heightUnit) }
     }
-    var showCrosshair: Bool {
-        didSet { defaults.set(showCrosshair, forKey: Keys.showCrosshair) }
-    }
     var appearance: AppearanceMode {
         didSet { defaults.set(appearance.rawValue, forKey: Keys.appearance) }
     }
@@ -215,8 +212,6 @@ final class AppSettings {
         self.basemap    = defaults.string(forKey: Keys.basemap).flatMap(Basemap.init) ?? .standard
         self.offlineOnly = defaults.object(forKey: Keys.offlineOnly) as? Bool ?? false
         self.offlineReadyStyles = Set(defaults.stringArray(forKey: Keys.offlineReadyStyles) ?? [])
-        // Bool keys default to `true` (feature visible) when never set.
-        self.showCrosshair = defaults.object(forKey: Keys.showCrosshair) as? Bool ?? true
 
         observeAccessibilityAndPower()
     }
@@ -272,11 +267,11 @@ final class AppSettings {
         return "\(h) \(hour < 12 ? "AM" : "PM")"
     }
 
-    /// Timeline readout, e.g. "Jun 24 at 17:00" / "Jun 24 at 5:00 PM".
+    /// Timeline readout, e.g. "Jun 24, 17:00" / "Jun 24, 5:00 PM".
     func formatTimelineDate(_ date: Date) -> String {
         var dayStyle = Date.FormatStyle.dateTime.month(.abbreviated).day()
         dayStyle.timeZone = .salish
-        return "\(date.formatted(dayStyle)) at \(formatClock(date))"
+        return "\(date.formatted(dayStyle)), \(formatClock(date))"
     }
 
     /// Time-of-day only: "17:00" / "5:00 PM".
@@ -294,7 +289,6 @@ final class AppSettings {
     private enum Keys {
         static let speedUnit     = "settings.speedUnit"
         static let heightUnit    = "settings.heightUnit"
-        static let showCrosshair = "settings.showCrosshair"
         static let appearance    = "settings.appearance"
         static let clockFormat   = "settings.clockFormat"
         static let currentStyle  = "settings.currentStyle"

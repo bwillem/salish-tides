@@ -42,7 +42,6 @@ struct SettingsView: View {
                         }
                     }
                     .pickerStyle(.segmented)
-                    Toggle("Crosshair", isOn: $settings.showCrosshair)
                 } header: {
                     Text("Map & Display")
                 } footer: {
@@ -80,7 +79,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Live Data")
                 } footer: {
-                    Text("When online, real-time current and water-level forecasts from the SalishSeaCast model (UBC) are downloaded in the background and shown for the next ~36 hours. Without them — offline, or beyond the forecast — currents come from a bundled tidal model of the same waters (marked “Offline model”): astronomical tide only, no weather or river effects. Turn on Offline Only to use bundled data exclusively.")
+                    Text("Salish Tides will fetch real-time current data from the SalishSeaCast model when it can. It works offline by using predictive harmonic analysis from historical data.")
                 }
 
                 // ── About ────────────────────────────────────────────────
