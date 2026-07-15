@@ -90,22 +90,31 @@ struct ContentView: View {
                 // it clears itself once back online) — and the currents-source
                 // tier on the right ("Online mode" / "Offline model"; the sparse
                 // atlas gets none). Full attribution: Settings → Data Sources.
-                if streamingImageryOffline || SourceBadge.Content(vm.currentSource) != nil {
-                    HStack(alignment: .bottom) {
-                        if streamingImageryOffline {
-                            OfflineBadge()
-                                .transition(.opacity)
+                //
+                // The animation lives on the always-present Group, not on the
+                // conditional row: when the Offline pill is the *only* pill,
+                // reconnecting collapses the `if`, and an animation modifier
+                // inside it would be torn down before the fade could run — the
+                // pill would pop. On the stable Group it fades out cleanly.
+                Group {
+                    let badge = SourceBadge.Content(vm.currentSource)
+                    if streamingImageryOffline || badge != nil {
+                        HStack(alignment: .bottom) {
+                            if streamingImageryOffline {
+                                OfflineBadge()
+                                    .transition(.opacity)
+                            }
+                            Spacer(minLength: 0)
+                            if let badge {
+                                SourceBadge(content: badge)
+                                    .transition(.opacity)
+                            }
                         }
-                        Spacer(minLength: 0)
-                        if let badge = SourceBadge.Content(vm.currentSource) {
-                            SourceBadge(content: badge)
-                                .transition(.opacity)
-                        }
+                        .padding(.horizontal, Spacing.lg)
+                        .padding(.bottom, Spacing.sm)
                     }
-                    .padding(.horizontal, Spacing.lg)
-                    .padding(.bottom, Spacing.sm)
-                    .animation(.snappy, value: streamingImageryOffline)
                 }
+                .animation(.snappy, value: streamingImageryOffline)
                 TimelineControlView()
                     .padding(.horizontal, Spacing.lg)
                     .padding(.vertical, Spacing.md)
