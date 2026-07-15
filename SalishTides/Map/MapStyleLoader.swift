@@ -73,6 +73,21 @@ enum MapStyleLoader {
             json = json.replacingOccurrences(of: tilesPlaceholder, with: tiles)
         }
 
+        if json.contains(glyphsPlaceholder) {
+            if let glyphs = localGlyphsURL() {
+                json = json.replacingOccurrences(of: glyphsPlaceholder, with: glyphs)
+            } else if let stripped = strippingLabelLayers(from: json) {
+                // Glyphs missing from the bundle (a build that never ran
+                // dev/basemap/fetch-glyphs.sh). Labels are an enhancement:
+                // drop the symbol layers rather than failing the style —
+                // Standard is the universal offline fallback, and failing it
+                // over a fonts directory would blank the whole basemap.
+                json = stripped
+            } else {
+                return nil
+            }
+        }
+
         // Rewrite on every call: the injected local-tiles path is an absolute
         // bundle URL that changes between installs, so a cached temp file could go
         // stale. The cost is a ~20 KB write on a (rare) style/theme switch.
@@ -86,6 +101,21 @@ enum MapStyleLoader {
             Log.map.error("style write failed for \(resource, privacy: .public): \(error, privacy: .public)")
             return nil
         }
+    }
+
+    /// The style with its `glyphs` template and every symbol layer removed —
+    /// a text-free but otherwise complete style for when the glyph PBFs are
+    /// absent. `nil` if the JSON can't be parsed (caller falls back).
+    private static func strippingLabelLayers(from json: String) -> String? {
+        guard let data = json.data(using: .utf8),
+              var obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let layers = obj["layers"] as? [[String: Any]] else {
+            return nil
+        }
+        obj["glyphs"] = nil
+        obj["layers"] = layers.filter { ($0["type"] as? String) != "symbol" }
+        guard let out = try? JSONSerialization.data(withJSONObject: obj) else { return nil }
+        return String(data: out, encoding: .utf8)
     }
 
     /// A `pmtiles://`/`mbtiles://` URL for a basemap's bundled archive (in the
@@ -104,6 +134,22 @@ enum MapStyleLoader {
         }
     }
 
-    private static let keyPlaceholder   = "{{MAPTILER_KEY}}"
-    private static let tilesPlaceholder = "{{LOCAL_TILES}}"
+    /// A `file://` URL prefix for the bundled glyph PBFs (basemap/glyphs/…),
+    /// or `nil` if they aren't present. The style appends
+    /// `/{fontstack}/{range}.pbf` itself (MapLibre template).
+    private static func localGlyphsURL() -> String? {
+        guard let base = Bundle.main.resourceURL?
+                .appendingPathComponent("basemap/glyphs", isDirectory: true),
+              FileManager.default.fileExists(atPath: base.path) else {
+            return nil
+        }
+        // Trim the trailing "/" so the template reads {{LOCAL_GLYPHS}}/{fontstack}/…
+        return base.absoluteString.hasSuffix("/")
+            ? String(base.absoluteString.dropLast())
+            : base.absoluteString
+    }
+
+    private static let keyPlaceholder    = "{{MAPTILER_KEY}}"
+    private static let tilesPlaceholder  = "{{LOCAL_TILES}}"
+    private static let glyphsPlaceholder = "{{LOCAL_GLYPHS}}"
 }

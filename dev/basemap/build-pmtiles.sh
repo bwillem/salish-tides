@@ -71,8 +71,18 @@ pmtiles extract "$SRC" "$RAW" --bbox="$BBOX" --maxzoom="$MAXZOOM"
 #    layers). -L excludes a layer.
 exclude_args=()
 for layer in "${EXCLUDE_LAYERS[@]}"; do exclude_args+=(-L "$layer"); done
-tile-join -f -pk -o "$OUT" "${exclude_args[@]}" "$RAW"
+JOINED="$TMP_DIR/joined.pmtiles"
+tile-join -f -pk -o "$JOINED" "${exclude_args[@]}" "$RAW"
+
+# 3. Rewrite `earth` as the exact complement of the ocean polygons. The app's
+#    styles draw land ABOVE the ocean fill (the current-particle layer sits
+#    between them), which is only correct when earth ≡ ¬ocean; the upstream
+#    generalized earth fills whole channels at z8–10 when drawn on top. See
+#    derive-earth.py for the full story and its python deps.
+python3 -c "import pmtiles, mapbox_vector_tile, shapely" 2>/dev/null || {
+  echo "error: python deps missing — 'pip3 install pmtiles mapbox-vector-tile shapely'" >&2; exit 1; }
+python3 "$(dirname "$0")/derive-earth.py" "$JOINED" "$OUT"
 
 echo
-echo "Done. $(du -h "$OUT" | cut -f1) → $OUT  (dropped: ${EXCLUDE_LAYERS[*]})"
+echo "Done. $(du -h "$OUT" | cut -f1) → $OUT  (dropped: ${EXCLUDE_LAYERS[*]}; earth = ¬ocean)"
 pmtiles show "$OUT" | grep -E "tile type|min zoom|max zoom"

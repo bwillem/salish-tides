@@ -2,7 +2,7 @@
   "version": 8,
   "name": "Salish Standard \u2014 Day",
   "metadata": {
-    "comment": "Offline vector basemap. Source tiles are the bundled Protomaps/OSM (ODbL) PMTiles, injected at load time via the {{LOCAL_TILES}} placeholder. Geometry only \u2014 no symbol layers, so no glyphs are required and the style renders with zero network. Add place labels later by bundling a glyph PBF set and a `glyphs` URL."
+    "comment": "Offline vector basemap. Source tiles are the bundled Protomaps/OSM (ODbL) PMTiles, injected at load time via the {{LOCAL_TILES}} placeholder. Renders with zero network: tiles and the glyph PBFs for the label layers (towns from `places`, island names from `earth` points) are both bundled; `glyphs` resolves through the {{LOCAL_GLYPHS}} placeholder."
   },
   "sources": {
     "protomaps": {
@@ -25,7 +25,14 @@
       "source-layer": "water",
       "paint": {
         "fill-color": "#cfdce6"
-      }
+      },
+      "filter": [
+        "==",
+        [
+          "geometry-type"
+        ],
+        "Polygon"
+      ]
     },
     {
       "id": "earth",
@@ -34,7 +41,14 @@
       "source-layer": "earth",
       "paint": {
         "fill-color": "#f4f1ea"
-      }
+      },
+      "filter": [
+        "==",
+        [
+          "geometry-type"
+        ],
+        "Polygon"
+      ]
     },
     {
       "id": "landcover",
@@ -103,12 +117,22 @@
         "fill-color": "#cfdce6"
       },
       "filter": [
-        "!=",
+        "all",
         [
-          "get",
-          "kind"
+          "==",
+          [
+            "geometry-type"
+          ],
+          "Polygon"
         ],
-        "ocean"
+        [
+          "!=",
+          [
+            "get",
+            "kind"
+          ],
+          "ocean"
+        ]
       ]
     },
     {
@@ -138,6 +162,133 @@
         "line-width": 0.8,
         "line-opacity": 0.7
       }
+    },
+    {
+      "id": "island-labels",
+      "type": "symbol",
+      "source": "protomaps",
+      "source-layer": "earth",
+      "minzoom": 7,
+      "filter": [
+        "all",
+        [
+          "==",
+          [
+            "geometry-type"
+          ],
+          "Point"
+        ],
+        [
+          "==",
+          [
+            "get",
+            "kind"
+          ],
+          "island"
+        ]
+      ],
+      "layout": {
+        "text-field": [
+          "get",
+          "name"
+        ],
+        "text-font": [
+          "Noto Sans Regular"
+        ],
+        "text-size": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          7,
+          10,
+          12,
+          13
+        ],
+        "text-letter-spacing": 0.08,
+        "text-max-width": 7,
+        "text-padding": 4
+      },
+      "paint": {
+        "text-color": "#8d8874",
+        "text-halo-color": "#f4f1ea",
+        "text-halo-width": 1.2
+      }
+    },
+    {
+      "id": "place-labels",
+      "type": "symbol",
+      "source": "protomaps",
+      "source-layer": "places",
+      "minzoom": 6,
+      "filter": [
+        "all",
+        [
+          "==",
+          [
+            "geometry-type"
+          ],
+          "Point"
+        ],
+        [
+          "==",
+          [
+            "get",
+            "kind"
+          ],
+          "locality"
+        ],
+        [
+          "match",
+          [
+            "get",
+            "kind_detail"
+          ],
+          [
+            "city",
+            "town",
+            "village",
+            "hamlet",
+            "locality"
+          ],
+          true,
+          false
+        ]
+      ],
+      "layout": {
+        "text-field": [
+          "get",
+          "name"
+        ],
+        "text-font": [
+          "Noto Sans Regular"
+        ],
+        "text-size": [
+          "match",
+          [
+            "get",
+            "kind_detail"
+          ],
+          "city",
+          14,
+          "town",
+          12.5,
+          "village",
+          11.5,
+          10.5
+        ],
+        "text-max-width": 8,
+        "text-padding": 4
+      },
+      "paint": {
+        "text-color": "#3f4640",
+        "text-halo-color": "#f7f4ed",
+        "text-halo-width": 1.3
+      }
     }
-  ]
+  ],
+  "glyphs": "{{LOCAL_GLYPHS}}/{fontstack}/{range}.pbf"
 }
