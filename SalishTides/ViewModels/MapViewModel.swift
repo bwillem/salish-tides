@@ -75,6 +75,12 @@ final class MapViewModel {
     // stays roughly constant as the user zooms instead of collapsing into mush.
     private let thinTargetAcross = 70.0
 
+    // Fixed reference latitude for the thinning grid's cell shape. Using the
+    // live viewport centre reshaped the grid on every north/south pan; a
+    // constant keeps cells stable across the region — the squareness error over
+    // the Salish Sea's latitude range (~48–50°N) is negligible.
+    private static let thinRefLat = 48.7
+
     init(liveData: LiveDataService? = nil) {
         self.liveData = liveData
         // Build one selector per unique lookup resource — Vol 1 and Vol 3 share a file,
@@ -409,10 +415,21 @@ final class MapViewModel {
 
         // Square-ish cells on screen: a degree of longitude is shorter than a
         // degree of latitude by cos(lat), so widen the longitude cell to match.
-        let centerLat = (vp.lat_min + vp.lat_max) / 2
-        let cosLat = GeoMath.lonScale(atLat: centerLat)
-        let screenSpan = max(latSpan, lonSpan * cosLat)
-        let cellLat = screenSpan / thinTargetAcross
+        // Use a FIXED reference latitude, not the viewport centre, so panning
+        // north/south doesn't reshape the cells.
+        let cosLat = GeoMath.lonScale(atLat: Self.thinRefLat)
+        let rawCell = max(latSpan, lonSpan * cosLat) / thinTargetAcross
+
+        // Snap the cell size to a fixed 2^(k/4) ladder. Deriving it straight
+        // from the viewport span let the grid rescale by a hair on every pan;
+        // because the grid is anchored at the global origin and only the
+        // fastest vector per bin is drawn, that re-bucketed vectors and
+        // re-picked winners, so arrows blinked in and out of an unmoved map
+        // section. Snapping means a pan at constant zoom yields the IDENTICAL
+        // grid — it steps only across zoom changes, where the map rebuilds
+        // anyway. Each rung's ±9% stability window dwarfs the sub-1% span jitter
+        // a pan produces (incl. the Mercator latitude stretch across the region).
+        let cellLat = Self.quantizedCell(rawCell)
         let cellLon = cellLat / cosLat
         guard cellLat > 0, cellLon > 0 else { return vectors }
 
@@ -427,7 +444,21 @@ final class MapViewModel {
                 best[cell] = v
             }
         }
-        return Array(best.values)
+        // Deterministic order so the downstream `!=` change check doesn't fire
+        // on dictionary reordering alone (an identical set in a new order would
+        // otherwise trigger a redundant full arrow/particle rebuild).
+        return best.values.sorted {
+            $0.lat != $1.lat ? $0.lat < $1.lat : $0.lon < $1.lon
+        }
+    }
+
+    // Snap a cell size to a fixed 2^(k/4) ladder (quarter-octave rungs, ~1.19×
+    // apart) so the thinning grid is a stable function of zoom rather than of
+    // the exact viewport, keeping bins identical across pans. See thinned().
+    private static func quantizedCell(_ size: Double) -> Double {
+        guard size > 0, size.isFinite else { return size }
+        let step = 0.25
+        return pow(2, (log2(size) / step).rounded() * step)
     }
 
     // 0 if the volume's bounds contain the viewport center, else 1 — used only
