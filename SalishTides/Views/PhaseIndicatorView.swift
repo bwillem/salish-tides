@@ -8,46 +8,27 @@ struct PhaseIndicatorView: View {
 
     var body: some View {
         if let sel = vm.currentSelection {
-            VStack(alignment: .leading, spacing: Spacing.md) {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                TideChartView(currentDate: vm.displayDate,
+                              events: vm.tideEvents,
+                              live: vm.liveTideSeries)
+                    .frame(height: 108)
+                    .accessibilityElement()
+                    .accessibilityLabel(tideChartLabel)
 
-                // Chart + its station label, tightly grouped.
-                VStack(alignment: .leading, spacing: Spacing.xs) {
-                    TideChartView(currentDate: vm.displayDate,
-                                  events: vm.tideEvents,
-                                  live: vm.liveTideSeries)
-                        .frame(height: 108)
-                        .accessibilityElement()
-                        .accessibilityLabel(tideChartLabel)
-
-                    // Provenance: which station the tide curve is from. The datum
-                    // (e.g. "CD"/"MLLW") is omitted — jargon that means nothing to
-                    // a user; the a11y label below still states it in words. The
-                    // "Live" flag is dropped too: "live what?" reads as ambiguous,
-                    // and the bottom-right Online-mode badge already signals it.
-                    if let station = vm.tideStation {
-                        Text(station.name.titleCasedStation)
-                            .font(.stCaption)
-                            .foregroundStyle(Color.inkSecondary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                            .frame(maxWidth: .infinity, alignment: .center)
-                    }
-                }
-
-                // Phase state — separated from the chart group by more space.
-                HStack(spacing: Spacing.xs) {
-                    Image(systemName: tendencyIcon(sel.tendency))
-                        .font(.stPhase.weight(.semibold))
-                        .foregroundStyle(tendencyColor(sel.tendency))
-                    Text(phaseText(sel))
-                        .font(.stPhase)
-                        .foregroundStyle(.primary)
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("\(phaseText(sel)) tide.")
-                // Currents-source provenance (Online mode / Offline model) lives
-                // in its own bottom-right glass pill now — see SourceBadge in
-                // ContentView — so it isn't crowded into this card.
+                // Station provenance + tide phase on one wrapping caption line,
+                // e.g. "Georgina Point · Small Ebb". The phase keeps its
+                // flood/ebb colour as the only emphasis — the old large phase
+                // title + arrow was more weight than this secondary readout
+                // needs. Datum and the "Live" flag are omitted (jargon /
+                // ambiguous; the chart's a11y label and the Online-mode badge in
+                // ContentView cover them).
+                provenanceLine(sel)
+                    .font(.stCaption)
+                    .foregroundStyle(Color.inkSecondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .accessibilityLabel(phaseAccessibilityLabel(sel))
             }
             .padding(Spacing.md)
             .frame(width: 248)
@@ -69,13 +50,23 @@ struct PhaseIndicatorView: View {
         return String(format: "Tide %.1f %@ at %@, above %@.", height, unit, station.name.titleCasedStation, datum)
     }
 
+    /// "Station · Phase" as one Text, the phase tinted flood/ebb — e.g.
+    /// "Georgina Point · Small Ebb". Falls back to just the phase when no
+    /// station resolved.
+    private func provenanceLine(_ sel: ChartSelection) -> Text {
+        let phase = Text(phaseText(sel)).foregroundStyle(tendencyColor(sel.tendency))
+        guard let station = vm.tideStation else { return phase }
+        return Text(station.name.titleCasedStation) + Text("  ·  ") + phase
+    }
+
+    private func phaseAccessibilityLabel(_ sel: ChartSelection) -> String {
+        guard let station = vm.tideStation else { return "\(phaseText(sel)) tide." }
+        return "\(station.name.titleCasedStation), \(phaseText(sel)) tide."
+    }
+
     /// Display name for the tide phase, e.g. "Small Flood".
     private func phaseText(_ sel: ChartSelection) -> String {
         sel.phase.replacingOccurrences(of: "_", with: " ").capitalized
-    }
-
-    private func tendencyIcon(_ tendency: Tendency) -> String {
-        tendency == .flood ? "arrow.up" : "arrow.down"
     }
 
     private func tendencyColor(_ tendency: Tendency) -> Color {
@@ -98,4 +89,29 @@ private extension String {
             }
             .joined(separator: " ")
     }
+}
+
+#Preview("Tide card") {
+    // Stub VM/settings so the card renders standalone in the canvas — no DB or
+    // network. Tweak the fields below (station name casing, phase, events) and
+    // the canvas updates live. "BEDWELL HARBOUR" is deliberately ALL CAPS to
+    // exercise titleCasedStation.
+    let vm = MapViewModel()
+    let base = Date(timeIntervalSince1970: 1_752_534_000)
+    vm.currentDate = base
+    vm.displayDate = base
+    vm.tideStation = TideStation(id: "CHS:07330", name: "BEDWELL HARBOUR",
+                                 lat: 48.75, lon: -123.23, datum: "CD", source: "CHS")
+    vm.tideEvents = [
+        TideEvent(time: base.addingTimeInterval(-6 * 3600), height: 0.9, isHigh: false),
+        TideEvent(time: base.addingTimeInterval(-1 * 3600), height: 3.4, isHigh: true),
+        TideEvent(time: base.addingTimeInterval(4 * 3600),  height: 2.6, isHigh: false),
+        TideEvent(time: base.addingTimeInterval(9 * 3600),  height: 3.2, isHigh: true),
+    ]
+    vm.currentSelections = [ChartSelection(volume: 1, chart: 3, phase: "small_ebb", tendency: .ebb)]
+
+    return PhaseIndicatorView()
+        .environment(vm)
+        .environment(AppSettings(defaults: UserDefaults(suiteName: "preview.phasecard")!))
+        .padding(40)
 }
