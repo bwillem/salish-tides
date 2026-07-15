@@ -61,6 +61,11 @@ enum MapStyleLoader {
             json = json.replacingOccurrences(of: tilesPlaceholder, with: tiles)
         }
 
+        if json.contains(glyphsPlaceholder) {
+            guard let glyphs = localGlyphsURL() else { return nil }
+            json = json.replacingOccurrences(of: glyphsPlaceholder, with: glyphs)
+        }
+
         // Rewrite on every call: the injected local-tiles path is an absolute
         // bundle URL that changes between installs, so a cached temp file could go
         // stale. The cost is a ~20 KB write on a (rare) style/theme switch.
@@ -90,6 +95,22 @@ enum MapStyleLoader {
         }
     }
 
-    private static let keyPlaceholder   = "{{MAPTILER_KEY}}"
-    private static let tilesPlaceholder = "{{LOCAL_TILES}}"
+    /// A `file://` URL prefix for the bundled glyph PBFs (basemap/glyphs/…),
+    /// or `nil` if they aren't present. The style appends
+    /// `/{fontstack}/{range}.pbf` itself (MapLibre template).
+    private static func localGlyphsURL() -> String? {
+        guard let base = Bundle.main.resourceURL?
+                .appendingPathComponent("basemap/glyphs", isDirectory: true),
+              FileManager.default.fileExists(atPath: base.path) else {
+            return nil
+        }
+        // Trim the trailing "/" so the template reads {{LOCAL_GLYPHS}}/{fontstack}/…
+        return base.absoluteString.hasSuffix("/")
+            ? String(base.absoluteString.dropLast())
+            : base.absoluteString
+    }
+
+    private static let keyPlaceholder    = "{{MAPTILER_KEY}}"
+    private static let tilesPlaceholder  = "{{LOCAL_TILES}}"
+    private static let glyphsPlaceholder = "{{LOCAL_GLYPHS}}"
 }
