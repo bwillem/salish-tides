@@ -42,7 +42,6 @@ struct SettingsView: View {
                         }
                     }
                     .pickerStyle(.segmented)
-                    Toggle("Crosshair", isOn: $settings.showCrosshair)
                 } header: {
                     Text("Map & Display")
                 } footer: {

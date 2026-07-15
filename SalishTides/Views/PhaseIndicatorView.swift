@@ -41,25 +41,6 @@ struct PhaseIndicatorView: View {
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("\(phaseText(sel)) tide.")
-
-                // Currents provenance: shown only while the rendered current
-                // field is live SalishSeaCast data (the tide curve's own
-                // provenance is the "· Live" suffix on the station caption
-                // above — the two can differ, e.g. no gauge near the station).
-                // Full attribution lives in Settings → Data Sources.
-                if vm.isLiveCurrents {
-                    HStack(spacing: Spacing.xs) {
-                        Circle()
-                            .fill(Color.brandAccent)
-                            .frame(width: 5, height: 5)
-                        Text("Online mode")
-                            .font(.stCaption)
-                            .foregroundStyle(Color.inkSecondary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("Online mode: showing live SalishSeaCast current forecast.")
-                }
             }
             .padding(Spacing.md)
             .frame(width: 248)

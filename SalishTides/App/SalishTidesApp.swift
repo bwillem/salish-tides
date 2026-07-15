@@ -6,6 +6,7 @@ struct SalishTidesApp: App {
     @State private var settings: AppSettings
     @State private var network: NetworkMonitor
     @State private var mapController = MapController()
+    @State private var crosshair = CrosshairPresenter()
     @State private var offline = OfflineMapManager()
     @State private var liveData: LiveDataService
 
@@ -29,6 +30,7 @@ struct SalishTidesApp: App {
                 .environment(settings)
                 .environment(network)
                 .environment(mapController)
+                .environment(crosshair)
                 .environment(offline)
                 .environment(liveData)
                 .tint(.brandAccent)

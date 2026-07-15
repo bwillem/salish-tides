@@ -6,6 +6,7 @@ struct MapLibreView: UIViewRepresentable {
     @Environment(MapViewModel.self) private var vm
     @Environment(AppSettings.self) private var settings
     @Environment(MapController.self) private var mapController
+    @Environment(CrosshairPresenter.self) private var crosshair
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
 
@@ -84,6 +85,11 @@ struct MapLibreView: UIViewRepresentable {
                 Task { @MainActor in
                     if mapController.bearing != bearing { mapController.bearing = bearing }
                 }
+            },
+            onInteraction: { [crosshair] active in
+                Task { @MainActor in
+                    active ? crosshair.interactionBegan() : crosshair.interactionEnded()
+                }
             }
         )
     }
@@ -108,11 +114,33 @@ struct MapLibreView: UIViewRepresentable {
         nonisolated(unsafe) var appliedBasemap: Basemap?
         private let onViewportChange: (ChartBounds) -> Void
         private let onBearingChange: (Double) -> Void
+        // Signals the start (true) / end (false) of a user pan/zoom/rotate.
+        private let onInteraction: (Bool) -> Void
 
         init(onViewportChange: @escaping (ChartBounds) -> Void,
-             onBearingChange: @escaping (Double) -> Void) {
+             onBearingChange: @escaping (Double) -> Void,
+             onInteraction: @escaping (Bool) -> Void) {
             self.onViewportChange = onViewportChange
             self.onBearingChange = onBearingChange
+            self.onInteraction = onInteraction
+        }
+
+        // Gesture-driven camera changes (as opposed to programmatic moves like
+        // the locate/compass buttons or the initial framing), used to gate the
+        // on-demand crosshair.
+        private static let gestureMask: MLNCameraChangeReason =
+            [.gesturePan, .gesturePinch, .gestureRotate, .gestureZoomIn,
+             .gestureZoomOut, .gestureOneFingerZoom]
+
+        // Reason-based variants are dispatched independently of the legacy
+        // region callbacks above (both fire), so these only add crosshair
+        // gating and leave the viewport/bearing logic untouched.
+        func mapView(_ mapView: MLNMapView, regionWillChangeWith reason: MLNCameraChangeReason, animated: Bool) {
+            if !reason.isDisjoint(with: Self.gestureMask) { onInteraction(true) }
+        }
+
+        func mapView(_ mapView: MLNMapView, regionDidChangeWith reason: MLNCameraChangeReason, animated: Bool) {
+            if !reason.isDisjoint(with: Self.gestureMask) { onInteraction(false) }
         }
 
         // Setting styleURL tears down the added source/layers; stash the vectors

@@ -3,12 +3,17 @@ import SwiftUI
 struct TimelineControlView: View {
     @Environment(MapViewModel.self) private var vm
     @Environment(AppSettings.self) private var settings
+    @Environment(CrosshairPresenter.self) private var crosshair
     @Environment(\.scenePhase) private var scenePhase
     @State private var offsetHours: Int = 0
     @State private var sessionAnchor: Date = .now
     // True between the first scrub tick of a drag and its commit — gates
     // re-anchoring, which must never move the tape's base under a gesture.
     @State private var isScrubbing = false
+    // Drives the date-picker sheet; seeded from the current display date each
+    // time it opens so the calendar lands on the day being viewed.
+    @State private var showingDatePicker = false
+    @State private var pickerDate: Date = .now
 
     // Reflects the live scrub position (displayDate), not just the committed
     // offset, so the dot/pill respond as the user drags.
@@ -17,7 +22,7 @@ struct TimelineControlView: View {
     }
 
     var body: some View {
-        VStack(spacing: Spacing.sm) {
+        VStack(spacing: Spacing.lg) {
 
             // ── Time readout + contextual "Now" pill ─────────────────────────
             // The readout is purely informational (centred, neutral, with a live
@@ -26,7 +31,11 @@ struct TimelineControlView: View {
             // action, not on the time itself. (Phase/tendency is omitted here —
             // it already lives in the phase-indicator card.)
             ZStack {
-                readout
+                Button(action: presentDatePicker) {
+                    readout
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Opens a date picker to jump to any date")
                 HStack {
                     Spacer()
                     if !isNow {
@@ -43,15 +52,18 @@ struct TimelineControlView: View {
                 sessionAnchor: sessionAnchor,
                 onScrub: { offset in
                     isScrubbing = true
+                    crosshair.interactionBegan()
                     vm.scrub(to: sessionAnchor.addingTimeInterval(offset * 3600))
                 },
                 onCommit: {
                     isScrubbing = false
+                    crosshair.interactionEnded()
                     applyOffset()
                 }
             )
             .frame(height: 36)
         }
+        .sheet(isPresented: $showingDatePicker) { datePickerSheet }
         .onAppear { jumpToNow() }
         // "Now" moves: without re-anchoring, an app left open (or foregrounded
         // hours later) keeps showing the launch hour with the live dot lit —
@@ -84,6 +96,11 @@ struct TimelineControlView: View {
             }
             Text(settings.formatTimelineDate(vm.displayDate))
                 .font(.stClock)
+            // Affordance that the date opens a picker; muted so it reads as a
+            // hint, not a control competing with the time text.
+            Image(systemName: "chevron.down")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(timeLabel)
@@ -110,6 +127,41 @@ struct TimelineControlView: View {
         .accessibilityHint("Returns the timeline to the current time")
     }
 
+    // MARK: - Date picker
+
+    // Graphical (calendar) picker — the modern iOS date selector. Date only;
+    // the tape still owns the hour within the chosen day.
+    private var datePickerSheet: some View {
+        NavigationStack {
+            DatePicker(
+                "Date",
+                selection: $pickerDate,
+                displayedComponents: [.date]
+            )
+            .datePickerStyle(.graphical)
+            .padding()
+            .navigationTitle("Jump to Date")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { showingDatePicker = false }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        jumpToDate(pickerDate)
+                        showingDatePicker = false
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private func presentDatePicker() {
+        pickerDate = vm.displayDate
+        showingDatePicker = true
+    }
+
     // MARK: - Actions
 
     private func jumpToNow() {
@@ -121,6 +173,20 @@ struct TimelineControlView: View {
     private func applyOffset() {
         let date = sessionAnchor.addingTimeInterval(Double(offsetHours) * 3600)
         Task { await vm.setTime(date) }
+    }
+
+    // Re-anchor the tape onto an arbitrary day chosen from the picker, keeping
+    // the currently displayed hour so only the calendar day moves. Resets the
+    // offset to zero so the tape recentres on the new anchor.
+    private func jumpToDate(_ date: Date) {
+        let cal = Calendar.salish
+        let hour = cal.component(.hour, from: vm.displayDate)
+        var comps = cal.dateComponents([.year, .month, .day], from: date)
+        comps.hour = hour
+        guard let anchored = cal.date(from: comps) else { return }
+        sessionAnchor = anchored
+        offsetHours = 0
+        Task { await vm.setTime(anchored) }
     }
 
     // Keep sessionAnchor tracking the real current hour. Sitting at "now"

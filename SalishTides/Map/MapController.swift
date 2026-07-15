@@ -42,6 +42,49 @@ final class MapController {
     }
 }
 
+// MARK: - Crosshair presentation
+
+/// Drives the on-demand crosshair (Navionics-style): the reticle is hidden at
+/// rest and appears only while the user is actively repositioning the view —
+/// panning/zooming the map or scrubbing the timeline — then fades out a couple
+/// of seconds after they let go.
+///
+/// Interaction sources call `interactionBegan()` continuously while active and
+/// `interactionEnded()` once on release; the grace timer keeps the reticle up
+/// briefly so a pause between gestures (or the map's momentum settling) doesn't
+/// flicker it off.
+@MainActor
+@Observable
+final class CrosshairPresenter {
+    /// Whether the reticle should be shown. The view animates its own opacity
+    /// off this — quick fade-in, slower fade-out.
+    private(set) var isVisible = false
+
+    /// How long the reticle lingers after the last interaction ends.
+    private static let lingerSeconds: Double = 2
+
+    @ObservationIgnored private var hideTask: Task<Void, Never>?
+
+    /// A pan/zoom gesture or scrub is in progress — show immediately and hold.
+    /// Cheap to call every frame: no-ops once already visible.
+    func interactionBegan() {
+        hideTask?.cancel()
+        hideTask = nil
+        if !isVisible { isVisible = true }
+    }
+
+    /// The gesture/scrub ended — start (or restart) the linger timer, after
+    /// which the reticle fades away.
+    func interactionEnded() {
+        hideTask?.cancel()
+        hideTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(Self.lingerSeconds))
+            guard !Task.isCancelled else { return }
+            self?.isVisible = false
+        }
+    }
+}
+
 // MARK: - Offline downloads
 
 /// Downloads and tracks `MLNOfflinePack`s so a network style selected while

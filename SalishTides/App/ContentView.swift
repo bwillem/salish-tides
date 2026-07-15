@@ -5,6 +5,7 @@ struct ContentView: View {
     @Environment(AppSettings.self) private var settings
     @Environment(NetworkMonitor.self) private var network
     @Environment(MapController.self) private var mapController
+    @Environment(CrosshairPresenter.self) private var crosshair
     @Environment(OfflineMapManager.self) private var offline
     @Environment(LiveDataService.self) private var liveData
     @Environment(\.colorScheme) private var colorScheme
@@ -62,9 +63,14 @@ struct ContentView: View {
         ZStack(alignment: .bottom) {
             MapLibreView()
                 .ignoresSafeArea()
-            if settings.showCrosshair {
-                CrosshairView()
-            }
+            // Navionics-style: hidden at rest, fades in while panning/zooming or
+            // scrubbing, fades out a couple seconds after release. Quick in,
+            // gentle out.
+            CrosshairView()
+                .opacity(crosshair.isVisible ? 1 : 0)
+                .animation(crosshair.isVisible ? .easeOut(duration: 0.18)
+                                               : .easeIn(duration: 0.5),
+                           value: crosshair.isVisible)
             VStack(spacing: 0) {
                 HStack(alignment: .top) {
                     // Top-left control cluster: settings, compass (only when
@@ -91,6 +97,18 @@ struct ContentView: View {
                     .padding(.top, Spacing.sm)
                 }
                 Spacer()
+                // Live-data badge — its own small glass pill, bottom-right, above
+                // the timeline. Only while the rendered current field is live
+                // SalishSeaCast data. (Full attribution: Settings → Data Sources.)
+                if vm.isLiveCurrents {
+                    HStack {
+                        Spacer()
+                        OnlineModeBadge()
+                    }
+                    .padding(.horizontal, Spacing.lg)
+                    .padding(.bottom, Spacing.sm)
+                    .transition(.opacity)
+                }
                 TimelineControlView()
                     .padding(.horizontal, Spacing.lg)
                     .padding(.vertical, Spacing.md)
@@ -197,6 +215,26 @@ private struct LocateButton: View {
     }
 }
 
+/// Live-data status pill — a dot + "Online mode" in its own small glass
+/// container, shown bottom-right while live SalishSeaCast currents are rendered.
+private struct OnlineModeBadge: View {
+    var body: some View {
+        HStack(spacing: Spacing.xs) {
+            Circle()
+                .fill(Color.brandAccent)
+                .frame(width: 5, height: 5)
+            Text("Online mode")
+                .font(.stCaption)
+                .foregroundStyle(Color.inkSecondary)
+        }
+        .padding(.horizontal, Spacing.sm)
+        .padding(.vertical, Spacing.xs)
+        .floatingCard(cornerRadius: Radius.pill)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Online mode: showing live SalishSeaCast current forecast.")
+    }
+}
+
 private struct CrosshairView: View {
     var body: some View {
         ZStack {
@@ -212,18 +250,27 @@ private struct CrosshairView: View {
     }
 }
 
-// Ring + four ticks centred on the view's rect. As a Shape it fills the
-// proposed space and centres on the screen, so both strokes stay aligned and
-// the reticle sits at the viewport centre (the point the readouts refer to).
+// Navionics-style reticle: a small "+" marking the exact centre point, plus
+// four longer lines extending outward past a gap — a fine crosshair that pins
+// the readout location without hiding the water under it. As a Shape it fills
+// the proposed space and centres on the screen, so both strokes stay aligned.
 private struct ReticleShape: Shape {
     func path(in rect: CGRect) -> Path {
         let cx = rect.midX, cy = rect.midY
+        let center: CGFloat = 3    // half-length of the small centre "+"
+        let gap: CGFloat = 8       // clear space before the extending arms start
+        let arm: CGFloat = 22      // length of each extending line
         var p = Path()
-        p.addEllipse(in: CGRect(x: cx - 11, y: cy - 11, width: 22, height: 22))
-        p.move(to: CGPoint(x: cx, y: cy - 18)); p.addLine(to: CGPoint(x: cx, y: cy - 12))
-        p.move(to: CGPoint(x: cx, y: cy + 12)); p.addLine(to: CGPoint(x: cx, y: cy + 18))
-        p.move(to: CGPoint(x: cx - 18, y: cy)); p.addLine(to: CGPoint(x: cx - 12, y: cy))
-        p.move(to: CGPoint(x: cx + 12, y: cy)); p.addLine(to: CGPoint(x: cx + 18, y: cy))
+
+        // Small centre "+".
+        p.move(to: CGPoint(x: cx, y: cy - center)); p.addLine(to: CGPoint(x: cx, y: cy + center))
+        p.move(to: CGPoint(x: cx - center, y: cy)); p.addLine(to: CGPoint(x: cx + center, y: cy))
+
+        // Four longer arms extending outward, starting past the gap.
+        p.move(to: CGPoint(x: cx, y: cy - gap)); p.addLine(to: CGPoint(x: cx, y: cy - gap - arm))
+        p.move(to: CGPoint(x: cx, y: cy + gap)); p.addLine(to: CGPoint(x: cx, y: cy + gap + arm))
+        p.move(to: CGPoint(x: cx - gap, y: cy)); p.addLine(to: CGPoint(x: cx - gap - arm, y: cy))
+        p.move(to: CGPoint(x: cx + gap, y: cy)); p.addLine(to: CGPoint(x: cx + gap + arm, y: cy))
         return p
     }
 }
