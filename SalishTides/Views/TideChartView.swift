@@ -25,7 +25,10 @@ struct TideChartView: View {
     private let stepMinutes: Int = 12
 
     // Layout constants
-    private let leftPad:   CGFloat = 26   // y-axis label width
+    // Shared so the phase card can inset its labels to the plot's left edge —
+    // see PhaseIndicatorView.
+    static let plotLeftInset: CGFloat = 26   // y-axis label width
+    private var leftPad: CGFloat { Self.plotLeftInset }
     private let bottomPad: CGFloat = 18   // x-axis label height
     private let topPad:    CGFloat = 8
 

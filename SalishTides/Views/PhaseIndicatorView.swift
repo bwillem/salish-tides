@@ -16,18 +16,26 @@ struct PhaseIndicatorView: View {
                     .accessibilityElement()
                     .accessibilityLabel(tideChartLabel)
 
-                // Station provenance + tide phase on one wrapping caption line,
-                // e.g. "Georgina Point · ↓ Small Ebb". A plain up/down arrow
-                // marks flood/ebb — the old large, coloured phase title was more
-                // weight than this secondary readout needs. Datum and the "Live"
-                // flag are omitted (jargon / ambiguous; the chart's a11y label
-                // and the Online-mode badge in ContentView cover them).
-                provenanceLine(sel)
-                    .font(.stCaption)
-                    .foregroundStyle(Color.inkSecondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .accessibilityLabel(phaseAccessibilityLabel(sel))
+                // Station and tide phase, each on its own line, left-aligned and
+                // inset to the chart's plot edge (past the y-axis labels) so they
+                // line up under the curve. A plain up/down arrow marks flood/ebb
+                // (no colour); datum and the "Live" flag are omitted (jargon /
+                // ambiguous — the chart's a11y label and the Online-mode badge in
+                // ContentView cover them).
+                VStack(alignment: .leading, spacing: 1) {
+                    if let station = vm.tideStation {
+                        Text(station.name.stationDisplayName)
+                    }
+                    Text("\(sel.tendency == .flood ? "↑" : "↓") \(phaseText(sel))")
+                }
+                .font(.stCaption)
+                .foregroundStyle(Color.inkSecondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .padding(.leading, TideChartView.plotLeftInset)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(phaseAccessibilityLabel(sel))
             }
             .padding(Spacing.md)
             .frame(width: 248)
@@ -47,15 +55,6 @@ struct PhaseIndicatorView: View {
         let height = settings.heightUnit.value(fromMetres: h)
         let unit = settings.heightUnit.label.lowercased()
         return String(format: "Tide %.1f %@ at %@, above %@.", height, unit, station.name.stationDisplayName, datum)
-    }
-
-    /// "Station · ↑/↓ Phase" as one Text — e.g. "Georgina Point · ↓ Small Ebb".
-    /// A plain up/down arrow marks flood/ebb (no colour); falls back to just the
-    /// phase when no station resolved.
-    private func provenanceLine(_ sel: ChartSelection) -> Text {
-        let phase = Text("\(sel.tendency == .flood ? "↑" : "↓") \(phaseText(sel))")
-        guard let station = vm.tideStation else { return phase }
-        return Text(station.name.stationDisplayName) + Text("  ·  ") + phase
     }
 
     private func phaseAccessibilityLabel(_ sel: ChartSelection) -> String {
