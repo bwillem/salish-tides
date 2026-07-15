@@ -19,14 +19,17 @@ struct PhaseIndicatorView: View {
                         .accessibilityElement()
                         .accessibilityLabel(tideChartLabel)
 
-                    // Provenance: which station the curve is from + its datum,
-                    // and whether the drawn curve itself is live model data.
+                    // Provenance: which station the tide curve is from, plus a
+                    // "Live" flag when the drawn curve is live model data. The
+                    // datum (e.g. "CD"/"MLLW") is omitted — jargon that means
+                    // nothing to a user; the a11y label states it in words.
                     if let station = vm.tideStation {
-                        Text("\(station.name) · \(station.datum)\(isLiveTide ? " · Live" : "")")
+                        Text("\(station.name.titleCasedStation)\(isLiveTide ? " · Live" : "")")
                             .font(.stCaption)
                             .foregroundStyle(Color.inkSecondary)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
+                            .frame(maxWidth: .infinity, alignment: .center)
                     }
                 }
 
@@ -51,10 +54,6 @@ struct PhaseIndicatorView: View {
         }
     }
 
-    /// Whether the drawn tide curve is live model data at the cursor.
-    private var isLiveTide: Bool {
-        vm.liveTideSeries?.covers(vm.displayDate) == true
-    }
 
     private var tideChartLabel: String {
         let predicted = TideCurve.height(at: vm.displayDate, events: vm.tideEvents)
@@ -66,7 +65,7 @@ struct PhaseIndicatorView: View {
         let datum = station.datum == "MLLW" ? "mean lower low water" : "chart datum"
         let height = settings.heightUnit.value(fromMetres: h)
         let unit = settings.heightUnit.label.lowercased()
-        return String(format: "Tide %.1f %@ at %@, above %@.", height, unit, station.name, datum)
+        return String(format: "Tide %.1f %@ at %@, above %@.", height, unit, station.name.titleCasedStation, datum)
     }
 
     /// Display name for the tide phase, e.g. "Small Flood".
@@ -80,5 +79,27 @@ struct PhaseIndicatorView: View {
 
     private func tendencyColor(_ tendency: Tendency) -> Color {
         tendency == .flood ? .tideFlood : .tideEbb
+    }
+
+    /// Whether the drawn tide curve is live model data at the cursor.
+    private var isLiveTide: Bool {
+        vm.liveTideSeries?.covers(vm.displayDate) == true
+    }
+}
+
+private extension String {
+    /// Tide-station names arrive inconsistently cased — some sources give Title
+    /// Case, others ALL CAPS. Normalise only the all-caps ones to Title Case;
+    /// names that already contain a lowercase letter are assumed correct and
+    /// left untouched (so we don't `.capitalized`-mangle "McNeill" or "Fisher's").
+    var titleCasedStation: String {
+        guard !contains(where: \.isLowercase) else { return self }
+        return lowercased()
+            .split(separator: " ", omittingEmptySubsequences: false)
+            .map { word in
+                guard let first = word.first else { return String(word) }
+                return first.uppercased() + word.dropFirst()
+            }
+            .joined(separator: " ")
     }
 }
