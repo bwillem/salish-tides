@@ -70,12 +70,12 @@ struct SettingsView: View {
                 } header: {
                     Text("Map Style")
                 } footer: {
-                    Text("Standard works fully offline. Selecting Ocean while online downloads it for offline use across the region. Satellite streams online only.")
+                    Text("Standard works fully offline. Satellite streams online only, caching the areas you view.")
                 }
 
                 // ── Live Data ────────────────────────────────────────────
                 Section {
-                    Toggle("Offline only", isOn: $settings.offlineOnly)
+                    Toggle("Disable live data", isOn: $settings.offlineOnly)
                 } footer: {
                     Text("Salish Tides will fetch real-time current data from the SalishSeaCast model when it can. It works offline by using predictive harmonic analysis from historical data.")
                 }

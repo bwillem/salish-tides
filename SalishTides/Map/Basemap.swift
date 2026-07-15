@@ -13,13 +13,19 @@ enum MapConfig {
 /// The chart's base map style.
 ///
 /// Offline-first: a style with a `bundledArchive` (local tiles in the app) works
-/// with no network. `.ocean` and `.satellite` are MapTiler styles that stream
-/// when online and are cached by MapLibre's ambient cache, so they keep working
-/// offline over waters you've already viewed. Each style has a light + dark
-/// variant (bundled JSON), so a Day→Night flip offline still renders.
+/// with no network. `.satellite` is a MapTiler style that streams when online and
+/// is cached by MapLibre's ambient cache, so it keeps working offline over waters
+/// you've already viewed. Each style has a light + dark variant (bundled JSON), so
+/// a Day→Night flip offline still renders.
 enum Basemap: String, CaseIterable, Identifiable {
     case standard
-    case ocean
+    // Temporarily removed from the picker: Ocean is the least legible basemap and
+    // needs its own current-arrow palette for contrast, which we haven't done yet.
+    // To revive, uncomment this case and every `.ocean` branch below (label,
+    // bundledArchive, supportsOfflineDownload, styleResource) — the ocean-*.json
+    // styles are still bundled. Note: Ocean streams online only (its raster-DEM
+    // sources can't be packed offline; see supportsOfflineDownload).
+    // case ocean
     case satellite
 
     var id: String { rawValue }
@@ -27,7 +33,7 @@ enum Basemap: String, CaseIterable, Identifiable {
     var label: String {
         switch self {
         case .standard:  "Standard"
-        case .ocean:     "Ocean — bathymetry"
+        // case .ocean:     "Ocean — bathymetry"
         case .satellite: "Satellite"
         }
     }
@@ -44,7 +50,7 @@ enum Basemap: String, CaseIterable, Identifiable {
     var bundledArchive: String? {
         switch self {
         case .standard:  "salish.pmtiles"   // Protomaps vector — the offline baseline
-        case .ocean:     nil                 // online until an open bathymetry archive is sourced
+        // case .ocean:     nil                 // online until an open bathymetry archive is sourced
         case .satellite: nil                 // online — imagery is impractical / licence-bound offline
         }
     }
@@ -54,13 +60,15 @@ enum Basemap: String, CaseIterable, Identifiable {
 
     /// Whether selecting this style while online should pre-download an offline
     /// pack (so it works offline everywhere, not just where the ambient cache
-    /// happened to capture). Vector network styles only — raster imagery
-    /// (satellite) is far too large to pack (~1 GB+ for the region); standard is
-    /// already bundled, so it needs no pack.
+    /// happened to capture). Neither current style qualifies: satellite imagery is
+    /// far too large to pack, and standard already ships bundled. (Ocean, when
+    /// revived, is also online-only — its two raster-DEM sources plus several
+    /// vector sources can't be packed on-device; the pack stalls on any tile the
+    /// key's plan can't serve.)
     var supportsOfflineDownload: Bool {
         switch self {
-        case .ocean:                true   // MapTiler vector — compact enough to pack
-        case .standard, .satellite: false  // bundled already / raster imagery, too large
+        // case .ocean:               false
+        case .standard, .satellite: false
         }
     }
 
@@ -69,7 +77,7 @@ enum Basemap: String, CaseIterable, Identifiable {
     func styleResource(dark: Bool) -> String {
         switch self {
         case .standard:  dark ? "standard-dark" : "standard-light"
-        case .ocean:     dark ? "ocean-dark"    : "ocean-light"
+        // case .ocean:     dark ? "ocean-dark"    : "ocean-light"
         case .satellite: "satellite"
         }
     }
