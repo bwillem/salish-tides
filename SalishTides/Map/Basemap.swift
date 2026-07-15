@@ -13,16 +13,27 @@ enum MapConfig {
 /// The chart's base map style.
 ///
 /// Offline-first: a style with a `bundledArchive` (local tiles in the app) works
-/// with no network. `.ocean` and `.satellite` are MapTiler styles that stream
-/// when online and are cached by MapLibre's ambient cache, so they keep working
-/// offline over waters you've already viewed. Each style has a light + dark
-/// variant (bundled JSON), so a Day→Night flip offline still renders.
+/// with no network. `.ocean` and `.satellite` are MapTiler styles that stream when
+/// online and are cached by MapLibre's ambient cache, so they keep working offline
+/// over waters you've already viewed. Each style has a light + dark variant
+/// (bundled JSON), so a Day→Night flip offline still renders.
 enum Basemap: String, CaseIterable, Identifiable {
     case standard
     case ocean
     case satellite
 
     var id: String { rawValue }
+
+    /// Whether the style is offered in the picker. Ocean is fully implemented but
+    /// hidden for now — it's the least legible basemap and needs its own
+    /// current-arrow palette for contrast, which isn't done yet. Flip this to
+    /// re-expose it; SettingsView filters `allCases` on `isAvailable`.
+    var isAvailable: Bool {
+        switch self {
+        case .ocean:                false
+        case .standard, .satellite: true
+        }
+    }
 
     var label: String {
         switch self {
@@ -44,25 +55,13 @@ enum Basemap: String, CaseIterable, Identifiable {
     var bundledArchive: String? {
         switch self {
         case .standard:  "salish.pmtiles"   // Protomaps vector — the offline baseline
-        case .ocean:     nil                 // online until an open bathymetry archive is sourced
+        case .ocean:     nil                 // online — no open bathymetry archive sourced yet
         case .satellite: nil                 // online — imagery is impractical / licence-bound offline
         }
     }
 
     /// Online-only until cached. A style with a `bundledArchive` always works offline.
     var requiresNetwork: Bool { bundledArchive == nil }
-
-    /// Whether selecting this style while online should pre-download an offline
-    /// pack (so it works offline everywhere, not just where the ambient cache
-    /// happened to capture). Vector network styles only — raster imagery
-    /// (satellite) is far too large to pack (~1 GB+ for the region); standard is
-    /// already bundled, so it needs no pack.
-    var supportsOfflineDownload: Bool {
-        switch self {
-        case .ocean:                true   // MapTiler vector — compact enough to pack
-        case .standard, .satellite: false  // bundled already / raster imagery, too large
-        }
-    }
 
     /// Bundled style-JSON resource for the given appearance.
     /// Satellite is imagery — one style for both appearances.

@@ -36,6 +36,7 @@ struct TimelineControlView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityHint("Opens a date picker to jump to any date")
+                .popover(isPresented: $showingDatePicker) { datePickerPopover }
                 HStack {
                     Spacer()
                     if !isNow {
@@ -63,7 +64,6 @@ struct TimelineControlView: View {
             )
             .frame(height: 36)
         }
-        .sheet(isPresented: $showingDatePicker) { datePickerSheet }
         .onAppear { jumpToNow() }
         // "Now" moves: without re-anchoring, an app left open (or foregrounded
         // hours later) keeps showing the launch hour with the live dot lit —
@@ -129,37 +129,45 @@ struct TimelineControlView: View {
 
     // MARK: - Date picker
 
-    // Graphical (calendar) picker — the modern iOS date selector. Date only;
-    // the tape still owns the hour within the chosen day.
-    private var datePickerSheet: some View {
-        NavigationStack {
+    // Graphical (calendar) picker in a popover anchored to the date readout —
+    // the standard iOS pattern for a compact date selector. On iPad it appears
+    // beside the readout; on iPhone SwiftUI adapts it to a sheet. Date only; the
+    // tape still owns the hour within the chosen day. A Done button applies the
+    // selection (tapping outside dismisses without changing anything). We commit
+    // on Done rather than on `.onChange(of: pickerDate)`, because a value-change
+    // hook can't dismiss when the user re-taps the already-selected day (no
+    // change fires) and would re-apply on any incidental selection.
+    private var datePickerPopover: some View {
+        VStack(spacing: Spacing.md) {
             DatePicker(
                 "Date",
                 selection: $pickerDate,
                 displayedComponents: [.date]
             )
             .datePickerStyle(.graphical)
-            .padding()
-            .navigationTitle("Jump to Date")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { showingDatePicker = false }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        jumpToDate(pickerDate)
-                        showingDatePicker = false
-                    }
-                }
-            }
+            .labelsHidden()
+
+            Button("Done", action: commitDatePicker)
+                .buttonStyle(.borderedProminent)
+                .frame(maxWidth: .infinity)
         }
-        .presentationDetents([.medium, .large])
+        .frame(width: 320)
+        .padding(Spacing.md)
     }
 
     private func presentDatePicker() {
         pickerDate = vm.displayDate
         showingDatePicker = true
+    }
+
+    // Apply the chosen day and dismiss. Skip the re-anchor when the day is
+    // unchanged, so confirming the current day doesn't needlessly reset the
+    // scrub offset or re-issue setTime.
+    private func commitDatePicker() {
+        if !Calendar.salish.isDate(pickerDate, inSameDayAs: vm.displayDate) {
+            jumpToDate(pickerDate)
+        }
+        showingDatePicker = false
     }
 
     // MARK: - Actions

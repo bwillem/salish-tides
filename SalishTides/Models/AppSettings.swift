@@ -181,13 +181,6 @@ final class AppSettings {
         didSet { defaults.set(offlineOnly, forKey: Keys.offlineOnly) }
     }
 
-    /// Raw values of network styles that have been viewed online and are thus
-    /// cached for offline use. Lets the picker stay usable offline for styles
-    /// the user already has, while gating ones they don't.
-    private(set) var offlineReadyStyles: Set<String> {
-        didSet { defaults.set(Array(offlineReadyStyles), forKey: Keys.offlineReadyStyles) }
-    }
-
     // Mirrors the accessibility / power state; updated via notifications so
     // `effectiveCurrentStyle` re-evaluates (and observers re-render) when the
     // user toggles Reduce Motion or Low Power Mode while the app is running.
@@ -211,7 +204,6 @@ final class AppSettings {
         self.currentStyle = defaults.string(forKey: Keys.currentStyle).flatMap(CurrentStyle.init) ?? .particles
         self.basemap    = defaults.string(forKey: Keys.basemap).flatMap(Basemap.init) ?? .standard
         self.offlineOnly = defaults.object(forKey: Keys.offlineOnly) as? Bool ?? false
-        self.offlineReadyStyles = Set(defaults.stringArray(forKey: Keys.offlineReadyStyles) ?? [])
 
         observeAccessibilityAndPower()
     }
@@ -231,16 +223,9 @@ final class AppSettings {
     // MARK: Basemap availability
 
     /// Whether `basemap` can be selected right now: the bundled standard style
-    /// always; network styles only when online or already cached offline.
+    /// always; network styles only when online.
     func isSelectable(_ basemap: Basemap, online: Bool) -> Bool {
-        !basemap.requiresNetwork || online || offlineReadyStyles.contains(basemap.rawValue)
-    }
-
-    /// Record that a network style has been shown online (so its tiles are now
-    /// in the ambient cache and it stays selectable offline). Idempotent.
-    func markOfflineReady(_ basemap: Basemap) {
-        guard basemap.requiresNetwork, !offlineReadyStyles.contains(basemap.rawValue) else { return }
-        offlineReadyStyles.insert(basemap.rawValue)
+        !basemap.requiresNetwork || online
     }
 
     // MARK: Formatting helpers
@@ -294,6 +279,5 @@ final class AppSettings {
         static let currentStyle  = "settings.currentStyle"
         static let basemap       = "settings.basemap"
         static let offlineOnly   = "settings.offlineOnly"
-        static let offlineReadyStyles = "settings.offlineReadyStyles"
     }
 }

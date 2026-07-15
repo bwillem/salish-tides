@@ -7,7 +7,6 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(AppSettings.self) private var settings
     @Environment(NetworkMonitor.self) private var network
-    @Environment(OfflineMapManager.self) private var offline
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -64,18 +63,18 @@ struct SettingsView: View {
 
                 // ── Map Style ────────────────────────────────────────────
                 Section {
-                    ForEach(Basemap.allCases) { style in
+                    ForEach(Basemap.allCases.filter(\.isAvailable)) { style in
                         mapStyleRow(style)
                     }
                 } header: {
                     Text("Map Style")
                 } footer: {
-                    Text("Standard works fully offline. Selecting Ocean while online downloads it for offline use across the region. Satellite streams online only.")
+                    Text("Standard works fully offline. Satellite streams online only, caching the areas you view.")
                 }
 
                 // ── Live Data ────────────────────────────────────────────
                 Section {
-                    Toggle("Offline only", isOn: $settings.offlineOnly)
+                    Toggle("Disable live data", isOn: $settings.offlineOnly)
                 } footer: {
                     Text("Salish Tides will fetch real-time current data from the SalishSeaCast model when it can. It works offline by using predictive harmonic analysis from historical data.")
                 }
@@ -108,7 +107,6 @@ struct SettingsView: View {
                 Text(style.label)
                     .foregroundStyle(selectable ? .primary : .secondary)
                 Spacer()
-                offlineStatus(style)
                 if settings.basemap == style {
                     Image(systemName: "checkmark")
                         .foregroundStyle(.tint)
@@ -121,33 +119,6 @@ struct SettingsView: View {
             .contentShape(.rect)
         }
         .disabled(!selectable)
-    }
-
-    /// Offline-download indicator for a downloadable style: progress while a pack
-    /// downloads, a "saved" badge once it's available offline, a warning on
-    /// failure. Nothing for styles that aren't pre-downloaded.
-    @ViewBuilder
-    private func offlineStatus(_ style: Basemap) -> some View {
-        switch offline.state(for: style) {
-        case .downloading(let fraction):
-            HStack(spacing: Spacing.xs) {
-                ProgressView().controlSize(.small)
-                Text("\(Int(fraction * 100))%")
-                    .font(.caption).monospacedDigit().foregroundStyle(.secondary)
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Downloading \(Int(fraction * 100)) percent")
-        case .ready:
-            Image(systemName: "arrow.down.circle.fill")
-                .foregroundStyle(.secondary)
-                .accessibilityLabel("Saved offline")
-        case .failed:
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
-                .accessibilityLabel("Download failed")
-        case .none:
-            EmptyView()
-        }
     }
 
     private static var appVersion: String {

@@ -6,35 +6,9 @@ struct ContentView: View {
     @Environment(NetworkMonitor.self) private var network
     @Environment(MapController.self) private var mapController
     @Environment(CrosshairPresenter.self) private var crosshair
-    @Environment(OfflineMapManager.self) private var offline
     @Environment(LiveDataService.self) private var liveData
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
     @State private var showingSettings = false
-
-    // When a downloadable network style is selected while *confirmed* online,
-    // pre-download its offline pack so it works offline everywhere. Gating on
-    // didConfirmOnline avoids acting on the optimistic launch default.
-    private func cacheCurrentStyleIfOnline() {
-        guard network.isOnline, network.didConfirmOnline else { return }
-        let basemap = settings.basemap
-        // Use the strict resolver, not `styleURL`: the latter falls back to the
-        // Standard (local-pmtiles) style when e.g. the MapTiler key is missing,
-        // and packing that under Ocean's identity yields a download that hangs
-        // forever (its tiles aren't network-fetchable). No real style → no pack.
-        guard basemap.supportsOfflineDownload,
-              let url = MapStyleLoader.resolvedStyleURL(for: basemap, dark: colorScheme == .dark) else { return }
-        offline.download(basemap, styleURL: url)
-    }
-
-    // Record any style whose pack has finished as offline-selectable. Runs off
-    // the manager's published state, so a download that completes after the user
-    // has switched away is still captured.
-    private func syncOfflineReady() {
-        for (raw, state) in offline.states where state == .ready {
-            if let basemap = Basemap(rawValue: raw) { settings.markOfflineReady(basemap) }
-        }
-    }
 
     var body: some View {
         Group {
@@ -67,14 +41,14 @@ struct ContentView: View {
         ZStack(alignment: .bottom) {
             MapLibreView()
                 .ignoresSafeArea()
-            // Navionics-style: hidden at rest, fades in while panning/zooming or
-            // scrubbing, fades out a couple seconds after release. Quick in,
-            // gentle out.
+            // Navionics-style: always on-screen but faint at rest, ramping to
+            // full contrast while panning/zooming or scrubbing, then easing back
+            // a couple seconds after release. Quick up, gentle down.
             CrosshairView()
-                .opacity(crosshair.isVisible ? 1 : 0)
-                .animation(crosshair.isVisible ? .easeOut(duration: 0.18)
-                                               : .easeOut(duration: 0.5),
-                           value: crosshair.isVisible)
+                .opacity(crosshair.isEmphasized ? 1 : 0.5)
+                .animation(crosshair.isEmphasized ? .easeOut(duration: 0.18)
+                                                  : .easeOut(duration: 0.5),
+                           value: crosshair.isEmphasized)
             VStack(spacing: 0) {
                 HStack(alignment: .top) {
                     // Top-left control cluster: settings, compass (only when
@@ -147,14 +121,9 @@ struct ContentView: View {
         .sheet(isPresented: $showingSettings) {
             SettingsView()
         }
-        .onAppear { cacheCurrentStyleIfOnline(); syncOfflineReady() }
-        .onChange(of: settings.basemap) { cacheCurrentStyleIfOnline() }
         .onChange(of: network.isOnline) {
-            cacheCurrentStyleIfOnline()
             if network.isOnline { liveData.kick() }
         }
-        .onChange(of: network.didConfirmOnline) { cacheCurrentStyleIfOnline() }
-        .onChange(of: offline.states) { syncOfflineReady() }
     }
 }
 
