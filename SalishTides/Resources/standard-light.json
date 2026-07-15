@@ -25,7 +25,14 @@
       "source-layer": "water",
       "paint": {
         "fill-color": "#cfdce6"
-      }
+      },
+      "filter": [
+        "==",
+        [
+          "geometry-type"
+        ],
+        "Polygon"
+      ]
     },
     {
       "id": "earth",
@@ -103,12 +110,22 @@
         "fill-color": "#cfdce6"
       },
       "filter": [
-        "!=",
+        "all",
         [
-          "get",
-          "kind"
+          "==",
+          [
+            "geometry-type"
+          ],
+          "Polygon"
         ],
-        "ocean"
+        [
+          "!=",
+          [
+            "get",
+            "kind"
+          ],
+          "ocean"
+        ]
       ]
     },
     {
