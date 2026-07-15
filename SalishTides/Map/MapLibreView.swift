@@ -157,7 +157,7 @@ struct MapLibreView: UIViewRepresentable {
         func mapView(_ mapView: MLNMapView, didFinishLoading style: MLNStyle) {
             addLayers(to: style)
             if let v = pendingVectors {
-                applyVectors(v, style: style)
+                applyVectors(v, style: style, zoom: mapView.zoomLevel)
                 pendingVectors = nil
             }
         }
@@ -180,14 +180,18 @@ struct MapLibreView: UIViewRepresentable {
             // keeps the same vectors, so the viewport-driven data reload may
             // not rebuild the shapes — re-apply here so the arrows track the
             // new zoom even when the data is unchanged. Cheap and arrows-only.
-            let zoom = mapView.zoomLevel
-            if zoom != lastZoom {
-                let rescaled = Self.arrowScale(forZoom: zoom) != Self.arrowScale(forZoom: lastZoom)
-                lastZoom = zoom
-                if rescaled, lastStyleMode == .arrows, !lastVectors.isEmpty,
-                   let style = mapView.style {
-                    applyVectors(lastVectors, style: style)
-                }
+            // Compare against the scale the arrows were last BUILT at (not the
+            // last observed zoom), so a skipped rebuild can't desync the check;
+            // and only rebuild when the on-screen size actually changes enough
+            // to see (>3%), so an inertial zoom's invisible sub-steps don't each
+            // swap the whole shape source. Sub-threshold deltas accumulate
+            // because lastAppliedZoom only advances on an actual rebuild.
+            let builtScale = Self.arrowScale(forZoom: lastAppliedZoom)
+            let targetScale = Self.arrowScale(forZoom: mapView.zoomLevel)
+            if abs(targetScale - builtScale) > builtScale * 0.03,
+               lastStyleMode == .arrows, !lastVectors.isEmpty,
+               let style = mapView.style {
+                applyVectors(lastVectors, style: style, zoom: mapView.zoomLevel)
             }
             // Recentre the particle field on the new viewport immediately with
             // the data already in hand — a camera move alone never re-runs the
@@ -232,7 +236,6 @@ struct MapLibreView: UIViewRepresentable {
             let dataChanged = vectors != lastVectors || fieldVectors != lastFieldVectors
                 || mask != lastMask
             let boundsChanged = bounds != lastBoundsWorld
-            lastZoom = mapView.zoomLevel
             guard dataChanged || boundsChanged || !landPolygonsValid else { return }
 
             lastVectors = vectors
@@ -252,7 +255,7 @@ struct MapLibreView: UIViewRepresentable {
                 pendingVectors = vectors
                 return
             }
-            if dataChanged { applyVectors(vectors, style: style) }
+            if dataChanged { applyVectors(vectors, style: style, zoom: mapView.zoomLevel) }
         }
 
         /// Rendering settled (tiles loaded, camera at rest): re-capture the
@@ -335,10 +338,13 @@ struct MapLibreView: UIViewRepresentable {
         nonisolated(unsafe) private var lastDark = true
         nonisolated(unsafe) private var lastStyleMode: CurrentStyle = .particles
 
-        // Latest camera zoom, so the arrow geometry (built in geographic
-        // degrees) can be scaled to hold a roughly constant on-screen size at
-        // tight zoom — see arrowScale(forZoom:).
-        nonisolated(unsafe) private var lastZoom: Double = 9.5
+        // The zoom the arrow geometry was last BUILT at (the geometry is in
+        // geographic degrees, scaled to hold a roughly constant on-screen size —
+        // see arrowScale(forZoom:)). Written only inside applyVectors, so it
+        // always reflects the scale of what's currently on screen; regionDidSettle
+        // compares the live zoom against it to decide whether a rescale is due.
+        // Defaults to the initial camera zoom set in makeUIView.
+        nonisolated(unsafe) private var lastAppliedZoom: Double = 9.5
 
         // Arrows are geographic polylines with a fixed ground length, so they
         // hold ground size and balloon on screen as you zoom in: at tight zoom
@@ -449,9 +455,10 @@ struct MapLibreView: UIViewRepresentable {
             particleLayer.setActive(lastStyleMode != .arrows)
         }
 
-        private func applyVectors(_ vectors: [CurrentVector], style: MLNStyle) {
+        private func applyVectors(_ vectors: [CurrentVector], style: MLNStyle, zoom: Double) {
             guard let source = style.source(withIdentifier: sourceID) as? MLNShapeSource else { return }
-            let scale = Self.arrowScale(forZoom: lastZoom)
+            lastAppliedZoom = zoom
+            let scale = Self.arrowScale(forZoom: zoom)
             source.shape = MLNShapeCollectionFeature(shapes: buildFeatures(from: vectors, zoomScale: scale))
         }
 

@@ -413,24 +413,28 @@ final class MapViewModel {
         let lonSpan = vp.lon_max - vp.lon_min
         guard latSpan > 0, lonSpan > 0 else { return vectors }
 
-        // Square-ish cells on screen: a degree of longitude is shorter than a
-        // degree of latitude by cos(lat), so widen the longitude cell to match.
-        // Use a FIXED reference latitude, not the viewport centre, so panning
-        // north/south doesn't reshape the cells.
-        let cosLat = GeoMath.lonScale(atLat: Self.thinRefLat)
-        let rawCell = max(latSpan, lonSpan * cosLat) / thinTargetAcross
+        // Size the cell from the LONGER screen axis, expressed in
+        // longitude-degrees so it's invariant under panning at a fixed zoom:
+        // lonSpan is constant in Web Mercator, and dividing latSpan by the
+        // centre-latitude cos() divides out the Mercator latitude stretch, so
+        // both terms depend only on zoom, not on where you've panned. (latSpan
+        // alone drifts ~6% across the region's latitude range — enough for a big
+        // north–south pan to nudge the quantized size across a rung and snap the
+        // whole grid mid-pan.)
+        let cosCenter = GeoMath.lonScale(atLat: (vp.lat_min + vp.lat_max) / 2)
+        let rawCellLon = max(lonSpan, latSpan / cosCenter) / thinTargetAcross
 
-        // Snap the cell size to a fixed 2^(k/4) ladder. Deriving it straight
-        // from the viewport span let the grid rescale by a hair on every pan;
-        // because the grid is anchored at the global origin and only the
-        // fastest vector per bin is drawn, that re-bucketed vectors and
-        // re-picked winners, so arrows blinked in and out of an unmoved map
-        // section. Snapping means a pan at constant zoom yields the IDENTICAL
-        // grid — it steps only across zoom changes, where the map rebuilds
-        // anyway. Each rung's ±9% stability window dwarfs the sub-1% span jitter
-        // a pan produces (incl. the Mercator latitude stretch across the region).
-        let cellLat = Self.quantizedCell(rawCell)
-        let cellLon = cellLat / cosLat
+        // Snap to a fixed 2^(k/4) ladder so the grid is a stable function of
+        // zoom, not of the exact viewport: a pan yields the IDENTICAL grid, and
+        // it steps only across real zoom changes (where the map rebuilds
+        // anyway). Only the fastest vector per bin is drawn, so an unstable grid
+        // re-picks winners and makes arrows blink in and out of an unmoved map
+        // section — this keeps them put.
+        let cellLon = Self.quantizedCell(rawCellLon)
+        // Square-ish cells: a longitude degree is shorter than a latitude degree
+        // by cos(lat). Use a FIXED reference latitude for the cell shape so it
+        // doesn't change as you pan (squareness error over ~48–50°N is negligible).
+        let cellLat = cellLon * GeoMath.lonScale(atLat: Self.thinRefLat)
         guard cellLat > 0, cellLon > 0 else { return vectors }
 
         var best: [Cell: CurrentVector] = [:]
