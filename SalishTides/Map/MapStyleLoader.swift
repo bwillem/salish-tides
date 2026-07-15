@@ -62,8 +62,18 @@ enum MapStyleLoader {
         }
 
         if json.contains(glyphsPlaceholder) {
-            guard let glyphs = localGlyphsURL() else { return nil }
-            json = json.replacingOccurrences(of: glyphsPlaceholder, with: glyphs)
+            if let glyphs = localGlyphsURL() {
+                json = json.replacingOccurrences(of: glyphsPlaceholder, with: glyphs)
+            } else if let stripped = strippingLabelLayers(from: json) {
+                // Glyphs missing from the bundle (a build that never ran
+                // dev/basemap/fetch-glyphs.sh). Labels are an enhancement:
+                // drop the symbol layers rather than failing the style —
+                // Standard is the universal offline fallback, and failing it
+                // over a fonts directory would blank the whole basemap.
+                json = stripped
+            } else {
+                return nil
+            }
         }
 
         // Rewrite on every call: the injected local-tiles path is an absolute
@@ -77,6 +87,21 @@ enum MapStyleLoader {
         } catch {
             return nil
         }
+    }
+
+    /// The style with its `glyphs` template and every symbol layer removed —
+    /// a text-free but otherwise complete style for when the glyph PBFs are
+    /// absent. `nil` if the JSON can't be parsed (caller falls back).
+    private static func strippingLabelLayers(from json: String) -> String? {
+        guard let data = json.data(using: .utf8),
+              var obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let layers = obj["layers"] as? [[String: Any]] else {
+            return nil
+        }
+        obj["glyphs"] = nil
+        obj["layers"] = layers.filter { ($0["type"] as? String) != "symbol" }
+        guard let out = try? JSONSerialization.data(withJSONObject: obj) else { return nil }
+        return String(data: out, encoding: .utf8)
     }
 
     /// A `pmtiles://`/`mbtiles://` URL for a basemap's bundled archive (in the

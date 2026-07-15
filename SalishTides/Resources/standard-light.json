@@ -41,7 +41,14 @@
       "source-layer": "earth",
       "paint": {
         "fill-color": "#f4f1ea"
-      }
+      },
+      "filter": [
+        "==",
+        [
+          "geometry-type"
+        ],
+        "Polygon"
+      ]
     },
     {
       "id": "landcover",
