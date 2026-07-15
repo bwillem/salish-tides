@@ -17,8 +17,12 @@ struct ContentView: View {
     private func cacheCurrentStyleIfOnline() {
         guard network.isOnline, network.didConfirmOnline else { return }
         let basemap = settings.basemap
+        // Use the strict resolver, not `styleURL`: the latter falls back to the
+        // Standard (local-pmtiles) style when e.g. the MapTiler key is missing,
+        // and packing that under Ocean's identity yields a download that hangs
+        // forever (its tiles aren't network-fetchable). No real style → no pack.
         guard basemap.supportsOfflineDownload,
-              let url = MapStyleLoader.styleURL(for: basemap, dark: colorScheme == .dark) else { return }
+              let url = MapStyleLoader.resolvedStyleURL(for: basemap, dark: colorScheme == .dark) else { return }
         offline.download(basemap, styleURL: url)
     }
 

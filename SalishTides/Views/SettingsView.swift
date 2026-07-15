@@ -77,10 +77,8 @@ struct SettingsView: View {
                 // ── Live Data ────────────────────────────────────────────
                 Section {
                     Toggle("Offline only", isOn: $settings.offlineOnly)
-                } header: {
-                    Text("Live Data")
                 } footer: {
-                    Text("When online, real-time current and water-level forecasts from the SalishSeaCast model (UBC) are downloaded in the background and shown in place of the bundled atlas data for the next ~36 hours. Turn on Offline Only to use bundled data exclusively.")
+                    Text("Salish Tides will fetch real-time current data from the SalishSeaCast model when it can. It works offline by using predictive harmonic analysis from historical data.")
                 }
 
                 // ── About ────────────────────────────────────────────────

@@ -16,7 +16,7 @@ import SwiftUI
 enum MapStyleLoader {
 
     static func styleURL(for basemap: Basemap, dark: Bool) -> URL? {
-        if let url = resolve(basemap, dark: dark) { return url }
+        if let url = resolvedStyleURL(for: basemap, dark: dark) { return url }
         // Offline-safe fallback: the bundled-offline Standard style.
         if basemap != .standard, let url = resolve(.standard, dark: dark) { return url }
         // Last resort, with zero external dependencies: a flat water-coloured
@@ -24,6 +24,18 @@ enum MapStyleLoader {
         // missing (e.g. a checkout that hasn't run dev/basemap/build-pmtiles.sh).
         // The current-arrow overlay still draws on top.
         return fallbackStyleURL(dark: dark)
+    }
+
+    /// The style URL for *this exact* basemap, or `nil` if it genuinely can't be
+    /// produced (a network style with no MapTiler key, a missing bundled archive,
+    /// an I/O error). Unlike `styleURL`, it never substitutes a different style.
+    ///
+    /// Callers that must know whether *this* style is really available — the
+    /// offline-pack download in particular — use this: packing the Standard
+    /// fallback under Ocean's identity produces a pack that can never finish
+    /// (its tiles live in a local `pmtiles://` archive, not on the network).
+    static func resolvedStyleURL(for basemap: Basemap, dark: Bool) -> URL? {
+        resolve(basemap, dark: dark)
     }
 
     /// A minimal style with no sources — just a solid water background matching
