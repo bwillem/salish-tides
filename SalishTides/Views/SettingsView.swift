@@ -76,8 +76,6 @@ struct SettingsView: View {
                 // ── Live Data ────────────────────────────────────────────
                 Section {
                     Toggle("Offline only", isOn: $settings.offlineOnly)
-                } header: {
-                    Text("Live Data")
                 } footer: {
                     Text("Salish Tides will fetch real-time current data from the SalishSeaCast model when it can. It works offline by using predictive harmonic analysis from historical data.")
                 }
