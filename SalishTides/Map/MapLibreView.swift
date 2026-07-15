@@ -132,15 +132,20 @@ struct MapLibreView: UIViewRepresentable {
             [.gesturePan, .gesturePinch, .gestureRotate, .gestureZoomIn,
              .gestureZoomOut, .gestureOneFingerZoom]
 
-        // Reason-based variants are dispatched independently of the legacy
-        // region callbacks above (both fire), so these only add crosshair
-        // gating and leave the viewport/bearing logic untouched.
+        // Reason-based region callbacks. Implementing these SUPPRESSES the plain
+        // -regionWillChangeAnimated: / -regionDidChangeAnimated: variants (see
+        // MLNMapViewDelegate.h), so all region-change work must live here — we
+        // can't leave it in a plain callback and expect both to fire. We gate the
+        // on-demand crosshair on gesture reasons, then run the viewport/bearing/
+        // particle-field settle on every change (gesture or programmatic), exactly
+        // as the old regionDidChangeAnimated: did.
         func mapView(_ mapView: MLNMapView, regionWillChangeWith reason: MLNCameraChangeReason, animated: Bool) {
             if !reason.isDisjoint(with: Self.gestureMask) { onInteraction(true) }
         }
 
         func mapView(_ mapView: MLNMapView, regionDidChangeWith reason: MLNCameraChangeReason, animated: Bool) {
             if !reason.isDisjoint(with: Self.gestureMask) { onInteraction(false) }
+            regionDidSettle(mapView)
         }
 
         // Setting styleURL tears down the added source/layers; stash the vectors
@@ -157,7 +162,11 @@ struct MapLibreView: UIViewRepresentable {
             }
         }
 
-        func mapView(_ mapView: MLNMapView, regionDidChangeAnimated animated: Bool) {
+        // Viewport settle: reload data for the new bounds, sync the compass
+        // bearing, and recentre the particle field. Driven from
+        // regionDidChangeWith:animated: above — the reason-based callback replaces
+        // the plain regionDidChangeAnimated: this logic used to live in.
+        private func regionDidSettle(_ mapView: MLNMapView) {
             let b = mapView.visibleCoordinateBounds
             let viewport = ChartBounds(
                 lat_min: b.sw.latitude,
