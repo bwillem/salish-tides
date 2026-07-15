@@ -73,6 +73,13 @@ targets:
         # answers the per-upload encryption prompt in App Store Connect once.
         ITSAppUsesNonExemptEncryption: false
         UIRequiresFullScreen: true
+        # Background refresh: wake opportunistically to keep the SalishSeaCast
+        # live-data cache fresh. `fetch` gates the BGAppRefreshTask; the
+        # identifier must match BackgroundRefresh.taskIdentifier exactly.
+        UIBackgroundModes:
+          - fetch
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.bguenther.salishtides.refresh
         UISupportedInterfaceOrientations~ipad:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight

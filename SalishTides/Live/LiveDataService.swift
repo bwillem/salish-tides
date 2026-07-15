@@ -159,6 +159,19 @@ final class LiveDataService {
         }
     }
 
+    /// One staleness-aware pass suitable for a `BGAppRefreshTask` window (called
+    /// from the `.backgroundTask(.appRefresh:)` handler). Opens the cache if the
+    /// foreground loop hasn't yet, then runs the same `refresh()` the foreground
+    /// loop uses: it fetches nearest-now first and checks `Task.isCancelled`
+    /// every iteration, so a ~30 s window covers grid + stale SSH + the nearest
+    /// hours and truncates cleanly when the system reclaims time (cancellation
+    /// is how the modifier signals expiration). A no-op in offline mode —
+    /// `refresh()` self-guards on `fetchingAllowed`.
+    func backgroundRefresh() async {
+        await ensureReady()
+        await refresh()
+    }
+
     /// Nudge the refresh loop — cheap and safe to call on any trigger.
     func kick() {
         guard ready, fetchingAllowed, !refreshing else { return }
