@@ -174,9 +174,18 @@ final class LiveDataService {
     /// window, mirroring how ContentView gates the initial submit. Runs here
     /// rather than in the scene handler because `offlineOnly` is main-actor
     /// state and the `.backgroundTask` closure isn't.
+    ///
+    /// Shares the `refreshing` flag with `kick()` so a background pass and a
+    /// foreground one can't run `refresh()` concurrently (e.g. the user opens
+    /// the app mid-window): whoever holds the flag does the work, the other
+    /// skips. Held inline — the task must stay alive until the fetch finishes —
+    /// and cleared via `defer` so a reclaimed window can't strand the flag.
     func backgroundRefresh() async {
         if !settings.offlineOnly { BackgroundRefresh.schedule() }
         await ensureReady()
+        guard !refreshing else { return }
+        refreshing = true
+        defer { refreshing = false }
         await refresh()
     }
 
