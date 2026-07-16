@@ -47,6 +47,7 @@
 		A5373274BBC15D93DDE7A47B /* Basemap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E351A5A0241F5F0CB272A0D /* Basemap.swift */; };
 		A8762D5675981B3B04E5896F /* OfflineCurrentModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59FDAF7820C92D47A610A686 /* OfflineCurrentModelTests.swift */; };
 		B3E0A98667446BD785E78FBB /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 808EEF6FA5FE567E488AA3D5 /* DesignTokens.swift */; };
+		BA6B911921151E86E9D7186D /* BackgroundRefresh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7747E5C99D5D557F3C3E89BE /* BackgroundRefresh.swift */; };
 		C768CFA66D7E07064485173C /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D191057D343E390CB41EAF3B /* NetworkMonitor.swift */; };
 		CC1DE4A9F7C994DD5459CB22 /* TapeSliderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28E631FED305377F6178516B /* TapeSliderView.swift */; };
 		CD10BDF599A8B4DC91FC583E /* TideStation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EE458C039CC8A1CCE1AD9D9 /* TideStation.swift */; };
@@ -103,6 +104,7 @@
 		6F8AC975A9DE6B660C38E780 /* SalishTidesApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SalishTidesApp.swift; sourceTree = "<group>"; };
 		705E9152F8BEA1FA75608D3F /* MapLibreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapLibreView.swift; sourceTree = "<group>"; };
 		727BC113893557DFF4A9C2AF /* standard-light.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "standard-light.json"; sourceTree = "<group>"; };
+		7747E5C99D5D557F3C3E89BE /* BackgroundRefresh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundRefresh.swift; sourceTree = "<group>"; };
 		7DFE8DC52452666E434AA9D7 /* SalishTides.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = SalishTides.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		808EEF6FA5FE567E488AA3D5 /* DesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
 		83BD3EE7B3E3404AA899666B /* atlas_index_vol4.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = atlas_index_vol4.json; sourceTree = "<group>"; };
@@ -222,6 +224,7 @@
 		6028F1022317C345369B928B /* Live */ = {
 			isa = PBXGroup;
 			children = (
+				7747E5C99D5D557F3C3E89BE /* BackgroundRefresh.swift */,
 				B98F7598EF156FEBB14254C0 /* LiveDataService.swift */,
 				FB7F5692AE18799CAFFCA75E /* LiveDataStore.swift */,
 				F59E3A1C7E73F800052D2EB1 /* SalishSeaCastAPI.swift */,
@@ -489,6 +492,7 @@
 				5634D37C27B06326BEB8F192 /* AtlasIndex.swift in Sources */,
 				DEEA37D4F253B7A4E151C3EB /* AtlasLookupTable.swift in Sources */,
 				2872EC1D5D05AB899A667652 /* AtlasVolume.swift in Sources */,
+				BA6B911921151E86E9D7186D /* BackgroundRefresh.swift in Sources */,
 				A5373274BBC15D93DDE7A47B /* Basemap.swift in Sources */,
 				1F1918795868670251164A0C /* ContentView.swift in Sources */,
 				DA90180CAF28E691D0B6F0AE /* CurrentParticleLayer.swift in Sources */,

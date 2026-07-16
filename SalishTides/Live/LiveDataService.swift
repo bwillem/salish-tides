@@ -159,6 +159,36 @@ final class LiveDataService {
         }
     }
 
+    /// One staleness-aware pass suitable for a `BGAppRefreshTask` window (called
+    /// from the `.backgroundTask(.appRefresh:)` handler). Opens the cache if the
+    /// foreground loop hasn't yet, then runs the same `refresh()` the foreground
+    /// loop uses: it fetches nearest-now first and checks `Task.isCancelled`
+    /// every iteration, so a ~30 s window covers grid + stale SSH + the nearest
+    /// hours and truncates cleanly when the system reclaims time (cancellation
+    /// is how the modifier signals expiration). A no-op in offline mode —
+    /// `refresh()` self-guards on `fetchingAllowed`.
+    ///
+    /// Reschedules first (before the fetch work) so the wake chain survives an
+    /// early expiration, but only while live fetching is permitted: in offline
+    /// mode we let the chain lapse instead of re-arming on every granted
+    /// window, mirroring how ContentView gates the initial submit. Runs here
+    /// rather than in the scene handler because `offlineOnly` is main-actor
+    /// state and the `.backgroundTask` closure isn't.
+    ///
+    /// Shares the `refreshing` flag with `kick()` so a background pass and a
+    /// foreground one can't run `refresh()` concurrently (e.g. the user opens
+    /// the app mid-window): whoever holds the flag does the work, the other
+    /// skips. Held inline — the task must stay alive until the fetch finishes —
+    /// and cleared via `defer` so a reclaimed window can't strand the flag.
+    func backgroundRefresh() async {
+        if !settings.offlineOnly { BackgroundRefresh.schedule() }
+        await ensureReady()
+        guard !refreshing else { return }
+        refreshing = true
+        defer { refreshing = false }
+        await refresh()
+    }
+
     /// Nudge the refresh loop — cheap and safe to call on any trigger.
     func kick() {
         guard ready, fetchingAllowed, !refreshing else { return }

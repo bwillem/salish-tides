@@ -37,5 +37,15 @@ struct SalishTidesApp: App {
                 .tint(.brandAccent)
                 .preferredColorScheme(settings.appearance.colorScheme)
         }
+        // Registers the app-refresh handler (before launch finishes, as the
+        // system requires) and runs it when iOS grants a background window.
+        // `backgroundRefresh()` reschedules first (so the chain survives an
+        // early expiration) and then runs one staleness pass; returning
+        // completes the task successfully, and a reclaimed window cancels this
+        // closure, which `backgroundRefresh()` honors. ContentView submits the
+        // initial request on backgrounding.
+        .backgroundTask(.appRefresh(BackgroundRefresh.taskIdentifier)) {
+            await liveData.backgroundRefresh()
+        }
     }
 }
