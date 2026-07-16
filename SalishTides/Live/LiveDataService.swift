@@ -167,7 +167,15 @@ final class LiveDataService {
     /// hours and truncates cleanly when the system reclaims time (cancellation
     /// is how the modifier signals expiration). A no-op in offline mode —
     /// `refresh()` self-guards on `fetchingAllowed`.
+    ///
+    /// Reschedules first (before the fetch work) so the wake chain survives an
+    /// early expiration, but only while live fetching is permitted: in offline
+    /// mode we let the chain lapse instead of re-arming on every granted
+    /// window, mirroring how ContentView gates the initial submit. Runs here
+    /// rather than in the scene handler because `offlineOnly` is main-actor
+    /// state and the `.backgroundTask` closure isn't.
     func backgroundRefresh() async {
+        if !settings.offlineOnly { BackgroundRefresh.schedule() }
         await ensureReady()
         await refresh()
     }
