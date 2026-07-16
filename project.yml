@@ -64,11 +64,13 @@ targets:
         CFBundleDisplayName: "Salish Tides"
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
-        # Modern launch screen (no storyboard). An empty dict renders a plain
-        # launch surface that adapts to every device size — required so the app
-        # is not letterboxed and so the storyboard reference below stays empty.
-        UILaunchScreen: {}
-        UILaunchStoryboardName: ""
+        # Modern launch screen (no storyboard). The centered LaunchLogo image
+        # set (light/dark variants) renders the wordmark on the system
+        # background, which adapts white/black per appearance. Sized in the
+        # asset catalog (~280 pt wide), so it's centered at native size on
+        # every device rather than scaled/letterboxed.
+        UILaunchScreen:
+          UIImageName: LaunchLogo
         # Export compliance: the app uses only standard HTTPS (exempt), so this
         # answers the per-upload encryption prompt in App Store Connect once.
         ITSAppUsesNonExemptEncryption: false

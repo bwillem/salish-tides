@@ -33,6 +33,10 @@ __pycache__/
 # Local build output (xcodebuild -derivedDataPath)
 /build/
 
+# App Store screenshots: generated from the simulator and uploaded to App Store
+# Connect, not shipped in the app. Kept on disk under dev/brand/screenshots/.
+/dev/brand/screenshots/
+
 # B1 model: large derived artifacts. The reproducible pipeline (b1_download_full
 # → b1_analyze_full) is tracked; its bulky outputs are not. b1_grid_full.parts/
 # is the resumable per-tile utide cache; b1_grid_full.json is the fat unpacked
