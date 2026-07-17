@@ -54,6 +54,13 @@ struct EpochUTCTests {
         "2026-13-01T00:00:00Z",                 // month 13
         "2026-00-01T00:00:00Z",                 // month 0
         "2026-01-32T00:00:00Z",                 // day 32
+        // Impossible calendar days within 1...31: daysFromCivil would happily
+        // normalise these into the next month (Feb 30 → Mar 2 — a wrong
+        // instant, not nil), so the guard must know each month's length.
+        "2026-02-30T00:00:00Z",                 // Feb 30 — would become Mar 2
+        "2026-04-31T00:00:00Z",                 // April has 30 days
+        "2026-02-29T00:00:00Z",                 // 2026 is not a leap year
+        "2100-02-29T00:00:00Z",                 // century non-leap (not ÷400)
         "2026-01-01T00:61:00Z",                 // minute 61
         "2026-07-14T12:34.5Z",                  // fractional minutes — must not shift into seconds
         "2026.07.14T12:34:56Z",                 // dotted date

@@ -56,9 +56,11 @@ actor OfflineCurrentModel {
     func currents(for date: Date, viewport: ChartBounds?) -> [CurrentVector]? {
         guard let field = loadedField() else { return nil }
 
-        // Mesh index window covering the expanded viewport. decode() has
-        // validated the header (dLat/dLon finite and > 0), so the divisions
-        // and Int conversions here can't trap.
+        // Mesh index window covering the expanded viewport. decode() bounds
+        // the header (|lat0|/|lon0| ≤ 360°, dLat/dLon in 1e-6...1.0°), so
+        // with viewport coordinates in real-world range these quotients stay
+        // ≲ 1e9 — far inside Int — and the divisions and Int conversions
+        // here can't trap.
         var r0 = 0, r1 = field.rows - 1, c0 = 0, c1 = field.cols - 1
         if let vp = viewport {
             let e = vp.expanded(byFraction: ChartBounds.cullMarginFraction)
@@ -232,11 +234,20 @@ actor OfflineCurrentModel {
         let dLat = try cursor.float64()
         let dLon = try cursor.float64()
         // Header sanity: the window math divides by dLat/dLon and converts
-        // the result with Int(Double), which TRAPS on non-finite input — a
-        // corrupt header must fail decode here, not trap there.
+        // the result with Int(Double), which TRAPS on non-finite input AND on
+        // finite values outside Int's range — a subnormal dLat (5e-324) or a
+        // lat0 of -1e308 sails past a finite-and-positive check and still
+        // crashes at launch in Int((lat - lat0) / dLat). So bound the
+        // geometry to plausible geography: origins within ±360°, cell edges
+        // 1e-6...1.0° (≈ 0.1 m ... 111 km — the shipped meshes are ~0.005°
+        // and ~0.036°). Any real-world coordinate divided by a bounded dLat
+        // then stays ≲ 1e9, comfortably inside Int. Non-finite values fail
+        // the range comparisons too (NaN compares false), so the old
+        // isFinite checks are subsumed. A corrupt header must fail decode
+        // here, not trap there.
         guard rows > 0, cols > 0, rows * cols <= 4_000_000,
-              lat0.isFinite, lon0.isFinite,
-              dLat.isFinite, dLat > 0, dLon.isFinite, dLon > 0
+              abs(lat0) <= 360, abs(lon0) <= 360,
+              (1e-6...1.0).contains(dLat), (1e-6...1.0).contains(dLon)
         else { throw DecodeError.badHeader }
 
         let nConst = Int(try cursor.uint8())

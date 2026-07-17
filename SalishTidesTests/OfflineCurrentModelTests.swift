@@ -81,9 +81,15 @@ struct OfflineCurrentModelTests {
     }
 
     @Test func rejectsCorruptHeader() {
-        // dLat == 0 (or NaN) previously survived decode and trapped later in
-        // Int(Double) window math — must fail decode instead.
-        for bad in [(dLat: 0.0, lat0: 48.0), (dLat: 0.01, lat0: Double.nan)] {
+        // Corrupt geometry previously survived decode and trapped later in
+        // Int(Double) window math — must fail decode instead. Non-finite
+        // values aren't the only killers: a subnormal dLat (5e-324) and a
+        // lat0 of -1e308 are both finite-and-"valid" to a naive check, yet
+        // (lat - lat0) / dLat overflows Int and traps at launch.
+        for bad in [(dLat: 0.0, lat0: 48.0), (dLat: 0.01, lat0: Double.nan),
+                    (dLat: 5e-324, lat0: 48.0),      // subnormal cell edge
+                    (dLat: 0.01, lat0: -1e308),      // absurd finite origin
+                    (dLat: 90.0, lat0: 48.0)] {      // cell edge beyond 1° cap
             let asset = makeAsset(lat0: bad.lat0, dLat: bad.dLat,
                                   presence: [true, false, false, false],
                                   records: [record()])
