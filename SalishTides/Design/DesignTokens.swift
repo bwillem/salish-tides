@@ -132,12 +132,23 @@ extension View {
     }
 }
 
-// MARK: - UIColor Helpers (for MapLibre NSExpression)
+// MARK: - UIKit Mirrors (for MapLibre layers & annotation views)
 //
-// MapLibre style layers use UIColor, not SwiftUI Color.
-// Mirror the current speed scale here so MapLibreView can reference the same values.
+// MapLibre style layers and annotation views use UIColor/UIFont, not SwiftUI
+// Color/Font. Mirror the needed tokens here so the map references the same
+// values as the SwiftUI chrome.
 
 extension UIColor {
+    /// Tide-station marker fill (badge + pulse ring). Deliberately MUTED, not
+    /// `brandAccent`: the marker is wayfinding, not the screen's focus, so it
+    /// keeps the teal family but desaturated and sunk toward the basemap —
+    /// deep ocean-teal in Night, slate-teal in Day.
+    static let stationMarker = UIColor { trait in
+        trait.userInterfaceStyle == .dark
+            ? UIColor(red: 0.12, green: 0.33, blue: 0.41, alpha: 1)   // deep ocean-teal
+            : UIColor(red: 0.55, green: 0.71, blue: 0.77, alpha: 1)   // pale slate-teal
+    }
+
     // Current-speed ramp for the map arrows, per theme. Buckets:
     // <0.5  <1.5  <3.0  <4.5  4.5+ knots (calm → very strong).
     // Seeded from Apple's system colors resolved for the theme, so the ramp
@@ -164,5 +175,16 @@ extension UIColor {
         var light = ramp
         light[2] = UIColor(red: 0.80, green: 0.55, blue: 0.05, alpha: 1)  // amber
         return light
+    }
+}
+
+extension UIFont {
+    /// UIKit mirror of `Font.stCaption` (caption, monospaced design) — on-map
+    /// UIKit text (the station marker's name pill), so it matches the cards.
+    /// Semantic base style, so it tracks Dynamic Type like the SwiftUI token.
+    static var stCaption: UIFont {
+        let base = UIFont.preferredFont(forTextStyle: .caption1)
+        guard let descriptor = base.fontDescriptor.withDesign(.monospaced) else { return base }
+        return UIFont(descriptor: descriptor, size: 0)
     }
 }
