@@ -341,8 +341,10 @@ private struct MigrationView: View {
             Color.appBackground
                 .ignoresSafeArea()
             VStack(spacing: 24) {
-                Image(systemName: "water.waves")
-                    .font(.system(size: 48))
+                Image("SplashEmblem")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 104)
                     .foregroundStyle(.primary.opacity(0.8))
                 Text("Salish Tides")
                     .font(.largeTitle.bold())
