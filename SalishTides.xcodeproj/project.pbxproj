@@ -49,10 +49,10 @@
 		C768CFA66D7E07064485173C /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D191057D343E390CB41EAF3B /* NetworkMonitor.swift */; };
 		CC1DE4A9F7C994DD5459CB22 /* TapeSliderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28E631FED305377F6178516B /* TapeSliderView.swift */; };
 		CD10BDF599A8B4DC91FC583E /* TideStation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EE458C039CC8A1CCE1AD9D9 /* TideStation.swift */; };
-		CD8117E2EC8DDCFA72F0F749 /* TideStationAnnotationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44643342F4806E02274A663E /* TideStationAnnotationView.swift */; };
 		D02F6CEBAD38ED7BCD07D911 /* MapLibre in Frameworks */ = {isa = PBXBuildFile; productRef = 42B0127065AEDC608BD0C4A4 /* MapLibre */; };
 		D7B586A7ED13970C8F267F1A /* SalishSeaCastClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A81CE1B298B64CEDF727ACF4 /* SalishSeaCastClient.swift */; };
 		D8860EEF5F47286C0F504784 /* CurrentPhase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81EB316AD168CB2F9A704957 /* CurrentPhase.swift */; };
+		D8CE6A85E97C502ED3211F8E /* StationMarkerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13F1A8410C09D220966B31D2 /* StationMarkerView.swift */; };
 		DA90180CAF28E691D0B6F0AE /* CurrentParticleLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB02102BE8D3A61DEB2FB722 /* CurrentParticleLayer.swift */; };
 		DB1DA594128D65FAE7F67967 /* standard-light.json in Resources */ = {isa = PBXBuildFile; fileRef = 727BC113893557DFF4A9C2AF /* standard-light.json */; };
 		E1217A140CE89A8A73B3C4A6 /* TimelineControlView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B460FF242F858B027A672B40 /* TimelineControlView.swift */; };
@@ -76,6 +76,7 @@
 
 /* Begin PBXFileReference section */
 		111F059C707D7FB549B00EE7 /* CurrentPhaseEstimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrentPhaseEstimator.swift; sourceTree = "<group>"; };
+		13F1A8410C09D220966B31D2 /* StationMarkerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StationMarkerView.swift; sourceTree = "<group>"; };
 		174AD48AFB6611FDE9777B62 /* TidalHarmonics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TidalHarmonics.swift; sourceTree = "<group>"; };
 		190464A173F749BB0A3B786E /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		28E631FED305377F6178516B /* TapeSliderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TapeSliderView.swift; sourceTree = "<group>"; };
@@ -84,7 +85,6 @@
 		2BB7C4074365FDAFA91601A1 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		3B718AE48715B4E7020D1029 /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
 		3DDA2FAF2D0189860F478A7C /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
-		44643342F4806E02274A663E /* TideStationAnnotationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TideStationAnnotationView.swift; sourceTree = "<group>"; };
 		4725F47676631EBF5824A138 /* EpochUTCTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EpochUTCTests.swift; sourceTree = "<group>"; };
 		4FA576D80059DF72E4354E26 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		529E7D505F4A804C9AC32942 /* standard-dark.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "standard-dark.json"; sourceTree = "<group>"; };
@@ -268,6 +268,7 @@
 				FF9286BF11F407E9F9851157 /* CurrentSpeedView.swift */,
 				BF78D89E101E6B88EB6D487E /* PhaseIndicatorView.swift */,
 				190464A173F749BB0A3B786E /* SettingsView.swift */,
+				13F1A8410C09D220966B31D2 /* StationMarkerView.swift */,
 				28E631FED305377F6178516B /* TapeSliderView.swift */,
 				E02E5CB168CDB0660201216E /* TideChartView.swift */,
 				B460FF242F858B027A672B40 /* TimelineControlView.swift */,
@@ -302,7 +303,6 @@
 				BC0C2E94595CF5DDCD144C35 /* MapController.swift */,
 				705E9152F8BEA1FA75608D3F /* MapLibreView.swift */,
 				AA074DF096B9F67F83B4959E /* MapStyleLoader.swift */,
-				44643342F4806E02274A663E /* TideStationAnnotationView.swift */,
 			);
 			path = Map;
 			sourceTree = "<group>";
@@ -500,13 +500,13 @@
 				D7B586A7ED13970C8F267F1A /* SalishSeaCastClient.swift in Sources */,
 				FB3737835F764AD3A85B61BE /* SalishTidesApp.swift in Sources */,
 				086279564982225F48B141F0 /* SettingsView.swift in Sources */,
+				D8CE6A85E97C502ED3211F8E /* StationMarkerView.swift in Sources */,
 				CC1DE4A9F7C994DD5459CB22 /* TapeSliderView.swift in Sources */,
 				983B4B36E574FAE3AA740712 /* TidalCurrentField.swift in Sources */,
 				053B19B40E8654F9155B864F /* TidalHarmonics.swift in Sources */,
 				5DB2319BABC9FB829D843F6A /* TideChartView.swift in Sources */,
 				9CEBBFBDEB99CD300FC775BF /* TideDatabase.swift in Sources */,
 				CD10BDF599A8B4DC91FC583E /* TideStation.swift in Sources */,
-				CD8117E2EC8DDCFA72F0F749 /* TideStationAnnotationView.swift in Sources */,
 				E1217A140CE89A8A73B3C4A6 /* TimelineControlView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

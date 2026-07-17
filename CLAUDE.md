@@ -22,7 +22,7 @@ To see a change in the running app, prefer the `/run` skill (drives the simulato
 
 ## Data bootstrap (required before first build)
 
-`data/` is **gitignored** and absent from a fresh clone, but a post-build script (`project.yml`) rsyncs it into the app bundle — a missing/empty dir **fails the build**. Generate it first:
+A post-build script (`project.yml`) rsyncs `data/tides/` + `data/basemap/` into the app bundle — a missing/empty dir **fails the build**. Those two subdirs **are committed** (so Xcode Cloud, which has no bootstrap step, can build); the rest of `data/` (retired print-atlas `maps*/`, scratch) stays gitignored. If you need to regenerate the committed inputs:
 
 - **Tide predictions** (`data/tides/tides_2026.json`) — `python3 dev/tides/fetch_tides.py` (needs network: NOAA + CHS).
 - **Basemap** (`data/basemap/`) — bundled PMTiles; see `dev/basemap/`.
@@ -79,8 +79,10 @@ Bundled JSON → SQLite (GRDB) is populated once by `DatabaseMigrator` on first 
 ## Never
 
 - Add Co-Authored-By / "Generated with Claude" lines to commits or PRs.
-- Commit `Config/Secrets.xcconfig`, anything under `data/`, or the raw WebTide
-  download (`dev/model/webtide/` — gitignored).
+- Commit `Config/Secrets.xcconfig`, the raw WebTide download
+  (`dev/model/webtide/` — gitignored), or any part of `data/` **other than** the
+  build inputs `data/tides/` + `data/basemap/` (those two are tracked; the
+  retired print-atlas `data/maps*/` and other scratch stay ignored).
 - **Ship a TestFlight/App Store build containing `webtide_nepac.b1` until the
   DFO/BIO redistribution sign-off lands** (see the license warning in
   `dev/model/webtide_fetch.py`). Merging to main is fine; releasing is not.

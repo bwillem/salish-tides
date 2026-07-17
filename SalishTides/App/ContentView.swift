@@ -81,6 +81,13 @@ struct ContentView: View {
                 .animation(crosshair.isEmphasized ? .easeOut(duration: 0.18)
                                                   : .easeOut(duration: 0.5),
                            value: crosshair.isEmphasized)
+            // Tide-station marker: a SwiftUI glass overlay pinned over the map at
+            // the station's projected screen point. It lives here — above the
+            // map, below the controls/timeline — precisely so its glass samples
+            // the map, unlike a MapLibre annotation. Isolated in its own subview
+            // so the coordinator's per-frame `screenPoint` writes re-render only
+            // the marker, not all of ContentView.
+            StationMarkerOverlay()
             VStack(spacing: 0) {
                 HStack(alignment: .top) {
                     // Top-left control cluster: settings, compass (only when
@@ -351,6 +358,37 @@ private struct CrosshairTagsView: View {
         let points = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
         let index = Int((d + 22.5).truncatingRemainder(dividingBy: 360) / 45) % 8
         return String(format: "%03.0f° %@", d, points[index])
+    }
+}
+
+/// The tide-station marker overlay, isolated from `ContentView` so the
+/// coordinator's per-frame `screenPoint` writes during a pan/zoom re-render only
+/// this small view — not the entire map UI. Reads the presenter, positions the
+/// marker in the map's full-bleed coordinate space, and cross-fades on a station
+/// change keyed by the real station id (so two same-named stations still swap).
+private struct StationMarkerOverlay: View {
+    @Environment(StationMarkerPresenter.self) private var marker
+
+    var body: some View {
+        Group {
+            if let point = marker.screenPoint {
+                StationMarkerView(tendency: marker.tendency,
+                                  name: marker.name,
+                                  nearCrosshair: marker.nearCrosshair)
+                    .id(marker.stationID)
+                    .position(point)
+                    .transition(.opacity)
+            }
+        }
+        // Match the map's full-bleed coordinate space: the coordinator projects
+        // via `mapView.convert(_:toPointTo:)`, whose points are measured from the
+        // full-screen map (it ignores the safe area). This overlay must ignore it
+        // too, or every `.position` is shifted by the top inset — a constant
+        // screen offset that reads as a zoom-dependent drift on the map (a few km
+        // zoomed out, metres zoomed in).
+        .ignoresSafeArea()
+        .animation(.easeOut(duration: 0.22), value: marker.stationID)
+        .animation(.easeOut(duration: 0.22), value: marker.screenPoint == nil)
     }
 }
 
