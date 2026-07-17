@@ -9,14 +9,11 @@ assign each mesh cell to the closest NEMO water node within ~1 cell. Nearest
 (not interpolate) avoids phase-wrap issues; the runtime bilinear interpolates
 predicted VELOCITIES, which is safe.
 
-Binary format (little-endian), magic 'SCTF1':
-  header: magic[5], rows u16, cols u16, lat0/lon0/dLat/dLon f64,
-          nConst u8, then per const: nameLen u8 + name ascii
-  body:   presence bitmap (rows*cols bits, row-major, 1=water node present),
-          then per present node in row-major order:
-            uMean f32, vMean f32, then per const: uAmp,uPhase,vAmp,vPhase f32
+Binary format: SCTF1 — the full byte layout is documented (and read/written)
+in dev/model/sctf1.py, the shared module all .b1 tooling goes through. The
+Swift decoder in OfflineCurrentModel.swift must stay in lockstep with it.
 """
-import json, struct, math, os, sys, argparse
+import json, math, os, sys, argparse
 import numpy as np
 from scipy.spatial import cKDTree
 
@@ -25,6 +22,7 @@ from scipy.spatial import cKDTree
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.normpath(os.path.join(HERE, "..", ".."))
 sys.path.insert(0, HERE)
+import sctf1
 from tidepredict import CONSTITUENTS
 
 # Mesh resolution is a knob: 1.0 km matches the stride-2 NEMO whole-domain
@@ -117,65 +115,39 @@ src_idx = np.where(assigned, idx, -1).reshape(rows, cols)
 print(f"assigned {assigned.sum()} / {rows*cols} mesh cells to a NEMO node "
       f"({100*assigned.sum()/(rows*cols):.0f}% water)")
 
-# --- write binary -----------------------------------------------------------
-def f32(x): return struct.pack("<f", float(x))
-with open(OUT, "wb") as f:
-    f.write(b"SCTF1")
-    f.write(struct.pack("<HH", rows, cols))
-    f.write(struct.pack("<dddd", lat0, lon0, DLAT, DLON))
-    f.write(struct.pack("<B", len(K)))
+# --- write binary (SCTF1, via the shared module) ----------------------------
+flat = src_idx.ravel()
+present = flat >= 0
+coeffs = np.empty((int(present.sum()), 2 + 4 * len(K)), np.float32)
+for j, si in enumerate(flat[present]):        # present nodes, row-major order
+    n = nodes[si]; c = n["c"]
+    row = [n["uMean"], n["vMean"]]
     for name in K:
-        b = name.encode("ascii")
-        f.write(struct.pack("<B", len(b))); f.write(b)
-    # presence bitmap
-    flat = src_idx.ravel()
-    bits = bytearray((rows * cols + 7) // 8)
-    for i, si in enumerate(flat):
-        if si >= 0:
-            bits[i >> 3] |= 1 << (i & 7)
-    f.write(bytes(bits))
-    # per present node, row-major
-    npres = 0
-    for si in flat:
-        if si < 0:
-            continue
-        n = nodes[si]; c = n["c"]
-        f.write(f32(n["uMean"])); f.write(f32(n["vMean"]))
-        for name in K:
-            cc = c[name]
-            f.write(f32(cc["uAmp"])); f.write(f32(cc["uPhase"]))
-            f.write(f32(cc["vAmp"])); f.write(f32(cc["vPhase"]))
-        npres += 1
-
-sz = os.path.getsize(OUT)
+        cc = c[name]
+        row += [cc["uAmp"], cc["uPhase"], cc["vAmp"], cc["vPhase"]]
+    coeffs[j] = row
+npres = len(coeffs)
+sz = sctf1.write(OUT, sctf1.Grid(rows, cols, lat0, lon0, DLAT, DLON,
+                                 K, present, coeffs))
 print(f"wrote {OUT}  ({sz/1e6:.2f} MB, {npres} nodes, {len(K)} constituents)")
 
-# --- validation: independently re-read the WRITTEN FILE and compare ---------
-# A writer bug (bit order, node order, field order) must fail here, not ship —
-# so this parses current_model.b1 from disk, not the in-memory values.
-buf = open(OUT, "rb").read()
-assert buf[:5] == b"SCTF1"
-rrows, rcols = struct.unpack_from("<HH", buf, 5)
-o = 5 + 4 + 32
-(rn,) = struct.unpack_from("<B", buf, o); o += 1
-rnames = []
-for _ in range(rn):
-    (ln,) = struct.unpack_from("<B", buf, o); o += 1
-    rnames.append(buf[o:o+ln].decode()); o += ln
-assert (rrows, rcols, rnames) == (rows, cols, K), "header mismatch on re-read"
-bitmap_off = o
-o += (rows * cols + 7) // 8
-rec = 4 * (2 + 4 * len(K))
+# --- validation: re-read the WRITTEN FILE and compare to the SOURCE ---------
+# A packing bug (node assignment, node order, field order) must fail here, not
+# ship — so this parses current_model.b1 from disk via sctf1.read and checks
+# random cells against the source JSON values. (The truly independent decoder
+# is the Swift one in OfflineCurrentModel.swift, exercised by the app tests.)
+g2 = sctf1.read(OUT)
+assert (g2.rows, g2.cols, g2.names) == (rows, cols, K), "header mismatch on re-read"
 # node ordinal = number of set presence bits before this cell
-ordinal = np.cumsum(flat >= 0) - 1
+ordinal = np.cumsum(present) - 1
 import random
 random.seed(0)
 present_cells = [(r, c) for r in range(rows) for c in range(cols) if src_idx[r, c] >= 0]
 maxerr = 0.0
 for r, c in random.sample(present_cells, 200):
     i = r * cols + c
-    assert buf[bitmap_off + (i >> 3)] >> (i & 7) & 1 == 1, "presence bit mismatch"
-    vals = struct.unpack_from(f"<{2 + 4*len(K)}f", buf, o + int(ordinal[i]) * rec)
+    assert g2.present[i], "presence bit mismatch"
+    vals = g2.coeffs[int(ordinal[i])]
     n = nodes[src_idx[r, c]]
     want = [n["uMean"], n["vMean"]] + [x for nm in K for x in
             (n["c"][nm]["uAmp"], n["c"][nm]["uPhase"],

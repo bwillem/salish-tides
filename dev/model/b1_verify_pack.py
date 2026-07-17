@@ -3,62 +3,48 @@
 accuracy cost of the curvilinear->regular resample.
 
 Two checks:
-  A. FORMAT round-trip: parse the binary with a reader written from scratch
-     (this is also the byte-level spec the Swift decoder must match) and confirm
-     an assigned mesh node reproduces its source node's predicted velocity
-     exactly (float32).
+  A. FORMAT round-trip: parse the binary with the shared dev-side reader
+     (dev/model/sctf1.py — its docstring is the byte-level spec the Swift
+     decoder must match) and confirm an assigned mesh node reproduces its
+     source node's predicted velocity exactly (float32).
   B. RESAMPLE error: sample the packed REGULAR mesh (bilinear, mirroring the
      Swift TidalCurrentField sampler) at each original NEMO node's lat/lon and
      compare predicted velocity to that node's own prediction, over a spring-
      neap span. This is the real "did packing hurt" number.
 """
-import json, struct, math, random, sys
+import json, math, os, random, sys
 import numpy as np
 from datetime import datetime, timezone, timedelta
-sys.path.insert(0, "dev/model")
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.normpath(os.path.join(HERE, "..", ".."))
+sys.path.insert(0, HERE)
+import sctf1
 from tidepredict import astro, node_factors, equilibrium, CONSTITUENTS
 
-BIN = "SalishTides/Resources/current_model.b1"
-SRC = "dev/model/b1_grid_full.json"
+BIN = os.path.join(REPO, "SalishTides", "Resources", "current_model.b1")
+SRC = os.path.join(HERE, "b1_grid_full.json")
 
-# --- A. parse the binary (from-scratch reader = the format spec) ------------
-with open(BIN, "rb") as f:
-    buf = f.read()
-off = 0
-def take(fmt):
-    global off
-    n = struct.calcsize(fmt); v = struct.unpack_from(fmt, buf, off); off += n
-    return v
-assert buf[:5] == b"SCTF1", "bad magic"; off = 5
-rows, cols = take("<HH")
-lat0, lon0, dLat, dLon = take("<dddd")
-(nConst,) = take("<B")
-names = []
-for _ in range(nConst):
-    (ln,) = take("<B"); names.append(buf[off:off+ln].decode()); off += ln
-print(f"binary: {rows}x{cols} mesh, {nConst} constituents {names}")
+# --- A. parse the binary (shared sctf1 reader = the format spec) ------------
+g = sctf1.read(BIN)      # asserts magic and exact byte consumption
+rows, cols = g.rows, g.cols
+lat0, lon0, dLat, dLon = g.lat0, g.lon0, g.dLat, g.dLon
+names = g.names
+present = g.present
+print(f"binary: {rows}x{cols} mesh, {len(names)} constituents {names}")
 print(f"  lat0 {lat0:.4f} lon0 {lon0:.4f} dLat {dLat:.5f} dLon {dLon:.5f}")
 
 nbits = rows * cols
-bitmap = buf[off:off + (nbits + 7) // 8]; off += (nbits + 7) // 8
-present = np.zeros(nbits, bool)
-for i in range(nbits):
-    if bitmap[i >> 3] >> (i & 7) & 1:
-        present[i] = True
-
 # nodes[r*cols+c] -> dict(name -> (uAmp,uPhase,vAmp,vPhase)), plus mean
 node_const = [None] * nbits
 node_mean = [None] * nbits
-for i in range(nbits):
-    if not present[i]:
-        continue
-    um, vm = take("<ff")
-    d = {}
-    for nm in names:
-        d[nm] = take("<ffff")
-    node_const[i] = d; node_mean[i] = (um, vm)
-print(f"parsed {present.sum()} present nodes; consumed {off}/{len(buf)} bytes "
-      f"({'OK' if off == len(buf) else 'MISMATCH!'})")
+for k, i in enumerate(np.flatnonzero(present)):
+    row = g.coeffs[k]
+    node_mean[i] = (float(row[0]), float(row[1]))
+    node_const[i] = {nm: tuple(float(x) for x in row[2 + 4*j:6 + 4*j])
+                     for j, nm in enumerate(names)}
+print(f"parsed {present.sum()} present nodes; "
+      f"{os.path.getsize(BIN)} bytes fully consumed (OK)")
 
 # --- prediction helpers (mirror the Swift velocity()) -----------------------
 K = list(CONSTITUENTS)

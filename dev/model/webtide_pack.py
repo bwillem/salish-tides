@@ -30,7 +30,7 @@ Usage:
       [--ssc SalishTides/Resources/current_model.b1]
       [--out SalishTides/Resources/webtide_nepac.b1]
 """
-import argparse, hashlib, json, math, os, struct, sys
+import argparse, hashlib, json, math, os, sys
 
 import numpy as np
 from scipy.spatial import cKDTree
@@ -38,6 +38,7 @@ from matplotlib.tri import Triangulation
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+import sctf1
 from tidepredict import CONSTITUENTS
 
 K = list(CONSTITUENTS)                      # M2 S2 N2 K2 K1 O1 P1 Q1
@@ -45,29 +46,13 @@ REC = 2 + 4 * len(K)
 
 
 def decode_b1(path):
-    """SCTF1 → (lat[N], lon[N], coeffs[N,REC]). Shared with the validator."""
-    buf = open(path, "rb").read()
-    assert buf[:5] == b"SCTF1", "bad magic"
-    rows, cols = struct.unpack_from("<HH", buf, 5)
-    lat0, lon0, dLat, dLon = struct.unpack_from("<dddd", buf, 9)
-    o = 41
-    nC = buf[o]; o += 1
-    names = []
-    for _ in range(nC):
-        ln = buf[o]; o += 1
-        names.append(buf[o:o+ln].decode()); o += ln
-    assert names == K, f"constituent set differs: {names} != {K}"
-    nbits = rows * cols
-    bmp = buf[o:o + (nbits + 7)//8]; o += (nbits + 7)//8
-    lats, lons, coeffs = [], [], []
-    p = o
-    for i in range(nbits):
-        if (bmp[i >> 3] >> (i & 7)) & 1:
-            r, c = divmod(i, cols)
-            lats.append(lat0 + r*dLat); lons.append(lon0 + c*dLon)
-            coeffs.append(struct.unpack_from(f"<{REC}f", buf, p)); p += REC*4
-    return (np.array(lats), np.array(lons), np.array(coeffs, np.float64),
-            (rows, cols, lat0, lon0, dLat, dLon))
+    """SCTF1 → (lat[N], lon[N], coeffs[N,REC] f64, header). Thin wrapper over
+    the shared sctf1 module, keeping this script's historical return shape."""
+    g = sctf1.read(path)
+    assert g.names == K, f"constituent set differs: {g.names} != {K}"
+    lat, lon = g.latlon()
+    return (lat, lon, g.coeffs.astype(np.float64),
+            (g.rows, g.cols, g.lat0, g.lon0, g.dLat, g.dLon))
 
 
 def load_webtide_raw(src):
@@ -222,17 +207,8 @@ def main():
     coeff[cells] = block
 
     out = os.path.normpath(args.out)
-    with open(out, "wb") as f:
-        f.write(b"SCTF1")
-        f.write(struct.pack("<HH", rows, cols))
-        f.write(struct.pack("<dddd", lat0, lon0, DLAT, DLON))
-        f.write(struct.pack("<B", len(K)))
-        for nm in K:
-            bb = nm.encode("ascii"); f.write(struct.pack("<B", len(bb))); f.write(bb)
-        # LSB-first within each byte: decoder reads bits[i>>3] & (1<<(i&7)).
-        f.write(np.packbits(present, bitorder="little").tobytes())
-        f.write(coeff[present].tobytes())
-    sz = os.path.getsize(out)
+    sz = sctf1.write(out, sctf1.Grid(rows, cols, lat0, lon0, DLAT, DLON,
+                                     K, present, coeff[present]))
     print(f"wrote {out}  ({sz/1e6:.2f} MB, {len(cells)} nodes)")
 
     # ---- self-validation: independent re-read of what we just wrote ----
