@@ -20,12 +20,12 @@ final class TideStationAnnotation: NSObject, MLNAnnotation {
     }
 }
 
-/// Marker for the tide station driving the phase card: a teal badge carrying a
-/// tendency arrow (↑ flood / ↓ ebb, matching the phase card's arrow) over a
-/// slowly pulsing ring — deliberately glyph-marked and brand-teal so it can't
-/// be mistaken for the plain blue user-location dot — plus a name pill revealed
-/// on tap (MapLibre selection) or when the crosshair centres on the station
-/// (see the coordinator's proximity check).
+/// Marker for the tide station driving the phase card: a neutral badge carrying
+/// a tendency arrow (↑ flood / ↓ ebb, matching the phase card's arrow) over a
+/// slowly pulsing ring — glyph-marked and ink-neutral, so it reads as chrome
+/// rather than data and can't be mistaken for the plain blue user-location dot
+/// — plus a name pill revealed on tap (MapLibre selection) or when the
+/// crosshair centres on the station (see the coordinator's proximity check).
 final class TideStationAnnotationView: MLNAnnotationView {
     static let reuseIdentifier = "tide-station"
 

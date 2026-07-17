@@ -370,15 +370,17 @@ Rendered by `TideStationAnnotationView` (a `MLNAnnotationView`,
 `SalishTides/Map/`), fed by the `MapLibreView` coordinator.
 
 **Design:** a 26 pt circular badge in `UIColor.stationMarker` — a deliberately
-**muted** adaptive fill (deep ocean-teal in Night, pale slate-teal in Day; see
-DesignTokens), *not* `.brandAccent`: the marker is wayfinding, not the screen's
-focus, so it sinks toward the basemap rather than competing with the accent
-chrome. The glyph is a `.label`-ink tendency arrow matching the phase card's —
-`arrow.up` on flood, `arrow.down` on ebb, a neutral `arrow.up.and.down` before
-the first selection — kept in step by the coordinator as the user scrubs. Rim
-is `.label` at 40%; behind it the same muted fill pulses slowly (scale 1 → 2.2,
-fade 0.5 → 0, 2.6 s ease-out loop). The glyph + shape keep it distinct from the
-plain blue user-location dot. Hit target is the full 44 pt view (§4.3).
+**neutral** adaptive fill, the inverse of the theme's ink (white in Day, black
+in Night; see DesignTokens), *not* `.brandAccent`: the marker is wayfinding, not
+the screen's focus, so it carries no hue that would compete with the accent
+chrome or read as a value on the current-speed ramp. The glyph is a `.label`-ink
+tendency arrow matching the phase card's — `arrow.up` on flood, `arrow.down` on
+ebb, a neutral `arrow.up.and.down` before the first selection — kept in step by
+the coordinator as the user scrubs; against the inverted fill it lands at full
+contrast in either theme. Rim is `.label` at 40%; behind it the same neutral
+fill pulses slowly (scale 1 → 2.2, fade 0.5 → 0, 2.6 s ease-out loop). The glyph
++ shape keep it distinct from the plain blue user-location dot. Hit target is
+the full 44 pt view (§4.3).
 
 **Name pill:** the station's `stationDisplayName` in a small glass capsule
 above the badge — `.ultraThinMaterial`, `.stCaption` type, the `Elevation`

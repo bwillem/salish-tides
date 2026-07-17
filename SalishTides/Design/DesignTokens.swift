@@ -139,14 +139,13 @@ extension View {
 // values as the SwiftUI chrome.
 
 extension UIColor {
-    /// Tide-station marker fill (badge + pulse ring). Deliberately MUTED, not
+    /// Tide-station marker fill (badge + pulse ring). Deliberately NEUTRAL, not
     /// `brandAccent`: the marker is wayfinding, not the screen's focus, so it
-    /// keeps the teal family but desaturated and sunk toward the basemap —
-    /// deep ocean-teal in Night, slate-teal in Day.
+    /// carries no hue that would compete with the current-speed ramp. It's the
+    /// inverse of the theme's ink — white in Day, black in Night — which pairs
+    /// with the `.label` glyph and rim for full contrast in either theme.
     static let stationMarker = UIColor { trait in
-        trait.userInterfaceStyle == .dark
-            ? UIColor(red: 0.12, green: 0.33, blue: 0.41, alpha: 1)   // deep ocean-teal
-            : UIColor(red: 0.55, green: 0.71, blue: 0.77, alpha: 1)   // pale slate-teal
+        trait.userInterfaceStyle == .dark ? .black : .white
     }
 
     // Current-speed ramp for the map arrows, per theme. Buckets:
