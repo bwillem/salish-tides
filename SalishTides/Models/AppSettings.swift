@@ -201,7 +201,7 @@ final class AppSettings {
         self.heightUnit = defaults.string(forKey: Keys.heightUnit).flatMap(HeightUnit.init) ?? .metres
         self.appearance = defaults.string(forKey: Keys.appearance).flatMap(AppearanceMode.init) ?? .dark
         self.clockFormat = defaults.string(forKey: Keys.clockFormat).flatMap(ClockFormat.init) ?? .twentyFourHour
-        self.currentStyle = defaults.string(forKey: Keys.currentStyle).flatMap(CurrentStyle.init) ?? .arrows
+        self.currentStyle = defaults.string(forKey: Keys.currentStyle).flatMap(CurrentStyle.init) ?? .particles
         self.basemap    = defaults.string(forKey: Keys.basemap).flatMap(Basemap.init) ?? .standard
         self.offlineOnly = defaults.object(forKey: Keys.offlineOnly) as? Bool ?? false
 
