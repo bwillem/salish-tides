@@ -11,20 +11,34 @@ actor DatabaseMigrator {
     // carry its artifacts — see cleanUpLegacyVectorStore.
     private static let tideKey = "tideDBMigrated_v1"
     private static let legacyVectorKey = "vectorDBMigrated_v9"
-    private var isRunning = false
+    // In-flight migration, memoized so a re-entrant call AWAITS the real
+    // work instead of returning "done" against a half-populated table (a
+    // bare isRunning guard would fall through to success while the first
+    // caller is still mid-insert). Cleared on completion either way; a
+    // failure is retried by the next call, as before.
+    private var inFlight: Task<Void, Error>?
 
     private var needsTides: Bool { !UserDefaults.standard.bool(forKey: Self.tideKey) }
 
     var needsMigration: Bool {
-        !isRunning && needsTides
+        inFlight == nil && needsTides
     }
 
-    func migrate(progress: @Sendable (Double) -> Void) async throws {
+    func migrate(progress: @escaping @Sendable (Double) -> Void) async throws {
+        // Join, don't skip: any caller that lands during a suspension of the
+        // running migration gets the same completion (and the same error).
+        if let running = inFlight {
+            return try await running.value
+        }
         cleanUpLegacyVectorStore()
-        guard !isRunning, needsTides else { return }
-        isRunning = true
-        defer { isRunning = false }
+        guard needsTides else { return }
+        let task = Task { try await runMigration(progress: progress) }
+        inFlight = task
+        defer { inFlight = nil }
+        return try await task.value
+    }
 
+    private func runMigration(progress: @Sendable (Double) -> Void) async throws {
         // Decode errors must propagate (not silently mark the migration done).
         let tideStations = try loadTideBundle().stations
         let total = Double(tideStations.count)

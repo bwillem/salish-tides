@@ -57,6 +57,15 @@ struct TidalCurrentField: Sendable {
         return hasWater(lat: lat, lon: lon, withinCells: radius)
     }
 
+    /// The mesh's own land/water verdict at a point: whether the CONTAINING
+    /// cell is a water node. Distinct from the radius probes below — those
+    /// answer "is water nearby", this answers "is the point itself on water",
+    /// which is what a readout must ask before quoting a neighbouring node's
+    /// current for a crosshair that is actually parked on a beach.
+    func isWater(lat: Double, lon: Double) -> Bool {
+        hasWater(lat: lat, lon: lon, withinCells: 0)
+    }
+
     /// Whether any water node lies within `withinCells` mesh cells of the
     /// point — a cheap O(radius²) grid probe.
     func hasWater(lat: Double, lon: Double, withinCells radius: Int) -> Bool {

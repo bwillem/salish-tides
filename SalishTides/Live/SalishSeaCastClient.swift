@@ -56,21 +56,30 @@ struct SalishSeaCastClient: Sendable {
     }
 
     private func get(_ url: URL) async throws -> Data {
-        let (data, response) = try await session.data(from: url)
+        let (bytes, response) = try await session.bytes(from: url)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             // ERDDAP reports out-of-range/unpublished requests as errors —
             // treated upstream as "no live data for that hour", not a failure.
             throw FetchError.badStatus((response as? HTTPURLResponse)?.statusCode ?? -1)
         }
-        // Checking after the download is deliberate: the cap's job is to
-        // bound what reaches JSONSerialization (whose object graph inflates
-        // several× over the byte size), and timeoutIntervalForResource
-        // already bounds a stalling server. Per-byte streaming enforcement
-        // costs far more than it buys (~millions of iterator steps on the
-        // multi-MB grid fetch).
-        guard data.count <= Self.maxResponseBytes else {
+        // The cap must bind *during* the download, not after: a compromised
+        // host streaming hundreds of MB would jetsam the app long before a
+        // post-buffer check ran. Reject an honestly declared oversize up
+        // front, then enforce as bytes accumulate, aborting the moment the
+        // cap is crossed. (timeoutIntervalForResource still bounds a
+        // stalling server.)
+        let declared = http.expectedContentLength    // -1 when unknown
+        guard declared <= Int64(Self.maxResponseBytes) else {
             throw FetchError.responseTooLarge
         }
-        return data
+        var buffer = [UInt8]()
+        buffer.reserveCapacity(declared > 0 ? Int(declared) : 1 << 16)
+        for try await byte in bytes {
+            guard buffer.count < Self.maxResponseBytes else {
+                throw FetchError.responseTooLarge
+            }
+            buffer.append(byte)
+        }
+        return Data(buffer)
     }
 }

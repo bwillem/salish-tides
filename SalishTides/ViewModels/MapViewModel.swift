@@ -52,9 +52,15 @@ final class MapViewModel {
     private let liveData: LiveDataService?
 
     // Monotonic token so a slow multi-volume load can't overwrite the results
-    // of a newer request (rapid time-scrub / pan). Incremented on the main
-    // actor, captured per call, re-checked after every await.
+    // of a newer request (rapid time-scrub / pan). Incremented ONLY in
+    // scheduleLoad, synchronously at request time; re-checked after every
+    // await inside the load.
     private var loadGeneration = 0
+
+    // The in-flight load, retained so the next request can cancel it — a
+    // superseded load then abandons its remaining synthesis at the next
+    // await instead of running to completion. See scheduleLoad.
+    private var loadTask: Task<Void, Never>?
 
     // Coalesces the burst of regionDidChange callbacks during an active
     // pan/zoom into a single reload once movement settles.
@@ -89,11 +95,18 @@ final class MapViewModel {
 
             if await DatabaseMigrator.shared.needsMigration {
                 isMigrating = true
+                // Fresh baseline per attempt (Retry re-runs migrate), so the
+                // monotonic clamp below can't pin the bar at a previous
+                // attempt's high-water mark.
+                migrationProgress = 0
             }
 
             try await DatabaseMigrator.shared.migrate { [weak self] fraction in
                 Task { @MainActor [weak self] in
-                    self?.migrationProgress = fraction
+                    guard let self else { return }
+                    // The per-callback unstructured tasks aren't guaranteed to
+                    // start in order — clamp so the bar can only advance.
+                    self.migrationProgress = max(self.migrationProgress, fraction)
                 }
             }
 
@@ -102,7 +115,7 @@ final class MapViewModel {
 
             try await TideDatabase.shared.loadStations()
 
-            await loadVectors(for: currentDate)
+            await scheduleLoad(for: currentDate).value
         } catch {
             migrationError = error.localizedDescription
             isMigrating = false
@@ -113,7 +126,7 @@ final class MapViewModel {
         scrubLoadTask?.cancel()
         currentDate = date
         displayDate = date
-        await loadVectors(for: date)
+        await scheduleLoad(for: date).value
     }
 
     // Live scrub from the timeline tape. Updates displayDate every frame (cheap —
@@ -136,7 +149,7 @@ final class MapViewModel {
             scrubLoadTask?.cancel()
             lastScrubLoadAt = Date()
             currentDate = snapped
-            Task { await loadVectors(for: snapped) }
+            scheduleLoad(for: snapped)
         } else {
             // Trailing edge: make sure the latest hour loads even mid-throttle.
             scrubLoadTask?.cancel()
@@ -145,17 +158,19 @@ final class MapViewModel {
                 guard !Task.isCancelled, let self else { return }
                 self.lastScrubLoadAt = Date()
                 self.currentDate = snapped
-                await self.loadVectors(for: snapped)
+                self.scheduleLoad(for: snapped)
             }
         }
     }
 
-    private static func snapToHour(_ date: Date) -> Date {
-        let cal = Calendar.salish
-        let c = cal.dateComponents([.year, .month, .day, .hour, .minute], from: date)
-        var top = c; top.minute = 0; top.second = 0
-        let base = cal.date(from: top) ?? date
-        return (c.minute ?? 0) >= 30 ? base.addingTimeInterval(3600) : base
+    /// Nearest hour by pure epoch rounding. Deliberately NOT wall-clock
+    /// components: round-tripping through Calendar.salish mis-snaps inside
+    /// the DST fall-back's repeated hour (Nov 1 01:30 PST resolves the
+    /// ambiguous 01:00 wall time to its earlier, PDT occurrence, landing an
+    /// hour early in UTC). Epoch math also matches how LiveDataService's
+    /// hourKey buckets hours. Internal static + pure so it's unit-testable.
+    nonisolated static func snapToHour(_ date: Date) -> Date {
+        Date(timeIntervalSince1970: (date.timeIntervalSince1970 / 3600).rounded() * 3600)
     }
 
     func updateViewport(_ bounds: ChartBounds) {
@@ -167,26 +182,55 @@ final class MapViewModel {
         viewportReloadTask = Task { [weak self] in
             try? await Task.sleep(for: delay)
             guard !Task.isCancelled, let self else { return }
-            await self.loadVectors(for: self.currentDate)
+            self.scheduleLoad(for: self.currentDate)
         }
     }
 
     /// Reload for the current committed time — used when new live data arrives
     /// or the offline-only setting flips, so the map reflects the new source.
     func refresh() async {
-        await loadVectors(for: currentDate)
+        await scheduleLoad(for: currentDate).value
     }
 
-    private func loadVectors(for date: Date) async {
+    /// The single entry point for every vector load. Two invariants live here:
+    ///
+    /// 1. The newest REQUEST wins, not the newest task to start: the
+    ///    generation token is taken synchronously, on the main actor, before
+    ///    any await. Unstructured tasks don't start in FIFO order, so a token
+    ///    taken inside the task body would let a late-starting stale load
+    ///    outnumber the newest request and publish wrong-hour vectors.
+    /// 2. Superseded loads stop working: the previous task is cancelled, and
+    ///    loadVectors re-checks cancellation alongside every generation
+    ///    guard, so an obsolete load abandons its remaining synthesis at the
+    ///    next await instead of running to completion for nothing.
+    ///
+    /// Callers that must observe completion (setTime, refresh, initialize)
+    /// await the returned task's `.value`.
+    @discardableResult
+    private func scheduleLoad(for date: Date) -> Task<Void, Never> {
         loadGeneration &+= 1
         let generation = loadGeneration
+        loadTask?.cancel()
+        let task = Task { await loadVectors(for: date, generation: generation) }
+        loadTask = task
+        return task
+    }
+
+    private func loadVectors(for date: Date, generation: Int) async {
+        // No viewport yet (the first frames after launch, before MapLibre
+        // reports a region): bail before any work. The unculled fallback in
+        // viewportFiltered/thinned would otherwise publish the WHOLE domain —
+        // order 10⁵ vectors from both models — into a synchronous main-thread
+        // feature build. Nothing is lost: the map's first regionDidChange
+        // lands in updateViewport, whose debounced reload populates the map.
+        guard visibleViewport != nil else { return }
 
         // Live SalishSeaCast field for this hour, when available. The service
         // needs to know the on-screen hour either way, so its background
         // prefetch can trigger a reload the moment visible data lands.
         liveData?.displayedHourKey = LiveDataService.hourKey(for: date)
         let liveField = await liveData?.currents(for: date)
-        guard generation == loadGeneration else { return }
+        guard generation == loadGeneration, !Task.isCancelled else { return }
 
         // Cull the whole-domain live field to the viewport (with margin, so
         // pans don't immediately hit empty edges) BEFORE choosing the source:
@@ -203,7 +247,7 @@ final class MapViewModel {
         // until the window lands, so the upgrade is seamless.
         if liveVectors != nil, visibleViewport != nil,
            let native = await liveData?.nativeCurrents(for: date, viewport: visibleViewport!) {
-            guard generation == loadGeneration else { return }
+            guard generation == loadGeneration, !Task.isCancelled else { return }
             let culled = viewportFiltered(native)
             if !culled.isEmpty { liveVectors = culled }
         }
@@ -225,7 +269,7 @@ final class MapViewModel {
                 modelVectors += v
                 contributing.append(model)
             }
-            guard generation == loadGeneration else { return }
+            guard generation == loadGeneration, !Task.isCancelled else { return }
         }
 
         let vectors = (liveVectors ?? []) + modelVectors
@@ -240,18 +284,21 @@ final class MapViewModel {
         if liveVectors != nil, let mask = await liveData?.landMask() {
             landMask = viewportFiltered(mask)
         }
-        if !contributing.isEmpty {
-            var higherFields: [TidalCurrentField] = []
-            for model in OfflineCurrentModel.all {
-                if contributing.contains(where: { $0 === model }),
-                   let mask = await model.landMask(excludingShorelineNear: higherFields) {
-                    landMask += viewportFiltered(mask)
-                }
-                if let field = await model.loadedFieldIfAvailable() {
-                    higherFields.append(field)
-                }
-                guard generation == loadGeneration else { return }
+        // Fields collect OUTSIDE the contributing check: the crosshair's
+        // land/water verdict below needs them even when the viewport renders
+        // live-only. At each mask call the array holds exactly the models
+        // EARLIER in `.all` — the higher-priority fields the seam filter
+        // excludes against.
+        var loadedFields: [TidalCurrentField] = []
+        for model in OfflineCurrentModel.all {
+            if contributing.contains(where: { $0 === model }),
+               let mask = await model.landMask(excludingShorelineNear: loadedFields) {
+                landMask += viewportFiltered(mask)
             }
+            if let field = await model.loadedFieldIfAvailable() {
+                loadedFields.append(field)
+            }
+            guard generation == loadGeneration, !Task.isCancelled else { return }
         }
 
         // Crosshair acceptance radius scales with the source under the
@@ -259,29 +306,35 @@ final class MapViewModel {
         // on the ~4 km WebTide mesh the default ~1.6 km radius would miss
         // every node and read "—" over open water, but widening it while the
         // centre sits in the dense Salish Sea field would let a crosshair on
-        // land report a channel's current from 3.7 km away. Resolved BEFORE
-        // the final guard so every published property below updates in one
-        // uninterrupted main-actor stretch.
-        var coarse = contributing.contains { $0 === OfflineCurrentModel.webTide }
-        if coarse, let vp = visibleViewport,
-           let fine = await OfflineCurrentModel.salishSea.coverage(),
-           fine.contains(lat: (vp.lat_min + vp.lat_max) / 2,
-                         lon: (vp.lon_min + vp.lon_max) / 2) {
-            coarse = false
-        }
+        // land report a channel's current from 3.7 km away. The decision
+        // probes the fine field's actual water (crosshairUsesCoarseRadius);
+        // the await is resolved BEFORE the final guard so every published
+        // property below updates in one uninterrupted main-actor stretch.
+        let webTideContributes = contributing.contains { $0 === OfflineCurrentModel.webTide }
+        let fineField = webTideContributes
+            ? await OfflineCurrentModel.salishSea.loadedFieldIfAvailable() : nil
 
-        guard generation == loadGeneration else { return }
+        guard generation == loadGeneration, !Task.isCancelled else { return }
         // Provenance reflects what is actually rendered: a tier is nil (and
         // the next one populated `vectors`) whenever its cull came up empty.
         currentSource = liveVectors != nil ? .live : !modelVectors.isEmpty ? .model : nil
-        // Crosshair readout uses the full-resolution set; only the rendered
-        // layer is down-sampled.
-        let crosshairVector = nearestVector(in: vectors, viewport: visibleViewport,
-                                            maxDistanceDeg: coarse
-                                                ? Self.crosshairMaxDistanceCoarseDeg
-                                                : Self.crosshairMaxDistanceDeg)
-        crosshairSpeed = crosshairVector?.speedKnots
-        crosshairDirection = crosshairVector?.direction_deg
+        // The crosshair readout answers PER FRAME while the map pans (see
+        // panCentreChanged), so everything it needs is cached here: a spatial
+        // bin index over the full-resolution set — a nearest lookup probes a
+        // handful of bins instead of scanning every vector — plus the loaded
+        // fields for the land/water verdict and the coarse-radius inputs.
+        // Rebuilt only on a completed load; a pan between loads answers from
+        // this snapshot until the debounced reload refreshes it.
+        crosshairIndex = VectorSpatialIndex(vectors: vectors,
+                                            binDeg: Self.crosshairMaxDistanceCoarseDeg)
+        crosshairFields = loadedFields
+        crosshairWebTideContributes = webTideContributes
+        crosshairFineField = fineField
+        if let vp = visibleViewport {
+            crosshairCentre = (lat: (vp.lat_min + vp.lat_max) / 2,
+                               lon: (vp.lon_min + vp.lon_max) / 2)
+        }
+        refreshCrosshairReadout()
         // Arrows get the display-density thinned set; the particle field gets
         // full-resolution data (the raster does its own averaging — feeding it
         // the fastest-per-bin thinned picks would bias speeds and starve its
@@ -327,7 +380,7 @@ final class MapViewModel {
                                       cosLat: cos(cLat * .pi / 180))
                 <= Self.stationMaxDistanceDeg * Self.stationMaxDistanceDeg
         else {
-            guard generation == loadGeneration else { return }
+            guard generation == loadGeneration, !Task.isCancelled else { return }
             tideStation = nil; tideEvents = []; liveTideSeries = nil; currentPhase = nil
             return
         }
@@ -335,12 +388,21 @@ final class MapViewModel {
         // run ahead of the throttled currentDate during a fast drag.
         let from = date.addingTimeInterval(-30 * 3600)
         let to = date.addingTimeInterval(30 * 3600)
-        let events = (try? await TideDatabase.shared.events(stationID: station.id, from: from, to: to)) ?? []
+        // Empty is the designed fallback (the tide card simply shows no
+        // curve), but a failing DB read is a diagnosable defect, not routine
+        // absence — log it so "no tide data" in the field can be told apart
+        // from genuinely missing events.
+        var events: [TideEvent] = []
+        do {
+            events = try await TideDatabase.shared.events(stationID: station.id, from: from, to: to)
+        } catch {
+            Log.map.error("tide events query failed for station \(station.id, privacy: .public): \(error, privacy: .public)")
+        }
         // Live model water levels refine the drawn curve where they cover it;
         // the bundled hi/lo events still anchor everything outside coverage.
         let live = await liveData?.liveTideSeries(for: station)
         // A newer load started while we were awaiting — drop these stale results.
-        guard generation == loadGeneration else { return }
+        guard generation == loadGeneration, !Task.isCancelled else { return }
         tideStation = station
         tideEvents = events
         liveTideSeries = live
@@ -382,7 +444,11 @@ final class MapViewModel {
         let cLat = (vp.lat_min + vp.lat_max) / 2
         let cLon = (vp.lon_min + vp.lon_max) / 2
         let events = tideEvents
-        let heightAt: (Date) -> Double? = { TideCurve.height(at: $0, events: events) }
+        // heightIfBracketed, not height: the chart's edge clamp reads as
+        // "falling" to the estimator's central difference, which would pin the
+        // indicator to "Ebb" at the bundled data's boundary. nil makes the
+        // estimator decline (row hides) instead of fabricating a tendency.
+        let heightAt: (Date) -> Double? = { TideCurve.heightIfBracketed(at: $0, events: events) }
 
         // First model (in priority order) with water near the centre wins;
         // the flood-axis series must come from the same model as the sample.
@@ -394,12 +460,12 @@ final class MapViewModel {
                 covering = (model, now.cell, now.series[0].u, now.series[0].v)
                 break
             }
-            guard generation == loadGeneration else { return }
+            guard generation == loadGeneration, !Task.isCancelled else { return }
         }
         guard let covering else {
             // Off every model's water (open ocean, far north): the tide curve
             // alone still gives a defensible rising/falling answer.
-            guard generation == loadGeneration else { return }
+            guard generation == loadGeneration, !Task.isCancelled else { return }
             currentPhase = CurrentPhaseEstimator.phase(u: 0, v: 0, at: date,
                                                        floodDirection: nil,
                                                        heightAt: heightAt)
@@ -423,7 +489,7 @@ final class MapViewModel {
                 if let floodDir { floodDirCache.insert(floodDir, for: key) }
             }
         }
-        guard generation == loadGeneration else { return }
+        guard generation == loadGeneration, !Task.isCancelled else { return }
         currentPhase = CurrentPhaseEstimator.phase(u: covering.u, v: covering.v,
                                                    at: date, floodDirection: floodDir,
                                                    heightAt: heightAt)
@@ -493,28 +559,156 @@ final class MapViewModel {
     }
 
     // Beyond this, the nearest current vector is too far to be "under" the
-    // crosshair — i.e. it's on land or off coverage, so report no speed
-    // (the data has no slack vectors; current exists only where there's flow).
-    // The coarse radius applies when the ~4 km WebTide mesh contributes: it
-    // matches that mesh's own land resolution, so "on land" stays meaningful.
-    private static let crosshairMaxDistanceDeg = 0.015        // ≈ 1.6 km
-    private static let crosshairMaxDistanceCoarseDeg = 0.033  // ≈ 3.7 km
+    // crosshair — i.e. it's on land or off coverage, so report no speed.
+    // The coarse radius applies when the ~4 km WebTide mesh serves the
+    // viewport centre (see crosshairUsesCoarseRadius): it matches that
+    // mesh's own land resolution, so "on land" stays meaningful.
+    private nonisolated static let crosshairMaxDistanceDeg = 0.015        // ≈ 1.6 km
+    private nonisolated static let crosshairMaxDistanceCoarseDeg = 0.033  // ≈ 3.7 km
 
-    private func nearestVector(in vectors: [CurrentVector], viewport: ChartBounds?,
-                               maxDistanceDeg: Double = crosshairMaxDistanceDeg) -> CurrentVector? {
-        guard let vp = viewport else { return nil }
-        let cLat = (vp.lat_min + vp.lat_max) / 2
-        let cLon = (vp.lon_min + vp.lon_max) / 2
-        // Hoisted: min(by:) evaluates dist2 ~2× per element over the full-
-        // resolution set on the main actor during scrubs.
-        let cosLat = cos(cLat * .pi / 180)
-        func dist2(_ v: CurrentVector) -> Double {
-            GeoMath.distanceSquared(fromLat: cLat, fromLon: cLon,
-                                    toLat: v.lat, toLon: v.lon, cosLat: cosLat)
+    /// Whether the crosshair readout should accept vectors out to the coarse
+    /// (~3.7 km) radius instead of the fine (~1.6 km) one. Pure + internal
+    /// static so it's unit-testable.
+    ///
+    /// The fine radius is correct exactly when Salish Sea water sits close
+    /// enough for the fine search to find a node — so probe the fine field's
+    /// ACTUAL water within that radius, never its bounding box: the bbox is
+    /// axis-aligned around the ~29°-rotated NEMO domain, so it contains
+    /// west-coast Vancouver Island water that has no SSC node at all, and a
+    /// bbox test there forced the fine radius where only WebTide's ~4 km
+    /// mesh has nodes (speed card "—" over covered water). An unloaded fine
+    /// field (or no centre yet) can't justify narrowing, so it stays coarse.
+    nonisolated static func crosshairUsesCoarseRadius(
+        webTideContributes: Bool,
+        centre: (lat: Double, lon: Double)?,
+        fineField: TidalCurrentField?
+    ) -> Bool {
+        guard webTideContributes else { return false }
+        guard let centre, let fineField else { return true }
+        // The probe reach IS the fine acceptance radius, converted to km.
+        let fineReachKm = crosshairMaxDistanceDeg * 111.0
+        return !fineField.hasWater(lat: centre.lat, lon: centre.lon,
+                                   withinKm: fineReachKm)
+    }
+
+    /// The models' land/water verdict at a point, across every loaded field:
+    /// - `true`  — some field's containing cell is a water node (the point is
+    ///   on water; a dry verdict from a lower-resolution or pack-masked field
+    ///   never overrules it),
+    /// - `false` — at least one field's grid covers the point and every one
+    ///   that does says dry: the point is land,
+    /// - `nil`   — no grid covers the point (open ocean off every mesh);
+    ///   the caller has no land evidence and should fall back to its own rule.
+    nonisolated static func centreIsWater(fields: [TidalCurrentField],
+                                          lat: Double, lon: Double) -> Bool? {
+        var covered = false
+        for field in fields {
+            if field.isWater(lat: lat, lon: lon) { return true }
+            if field.coverage.contains(lat: lat, lon: lon) { covered = true }
         }
-        guard let nearest = vectors.filter({ $0.isSignificant }).min(by: { dist2($0) < dist2($1) }),
-              dist2(nearest) <= maxDistanceDeg * maxDistanceDeg
-        else { return nil }
-        return nearest
+        return covered ? false : nil
+    }
+
+    // MARK: Crosshair readout (per-frame)
+
+    // Snapshot the per-frame readout answers from, refreshed by each
+    // completed load (see loadVectors). All main-actor; the per-frame path
+    // never awaits.
+    private var crosshairIndex: VectorSpatialIndex?
+    private var crosshairFields: [TidalCurrentField] = []
+    private var crosshairWebTideContributes = false
+    private var crosshairFineField: TidalCurrentField?
+    private var crosshairCentre: (lat: Double, lon: Double)?
+
+    /// Per-frame entry point while the map pans/zooms (MapLibre's
+    /// regionIsChanging): recompute the crosshair readout against the cached
+    /// snapshot — no synthesis, no culling, no awaits — so the reticle tags
+    /// and the corner card track the water sliding under the crosshair in
+    /// real time. Published values assign only on change, so Observation
+    /// re-renders exactly when a displayed number would differ.
+    func panCentreChanged(lat: Double, lon: Double) {
+        if let c = crosshairCentre, c.lat == lat, c.lon == lon { return }
+        crosshairCentre = (lat: lat, lon: lon)
+        refreshCrosshairReadout()
+    }
+
+    private func refreshCrosshairReadout() {
+        guard let centre = crosshairCentre else { return }
+        // A crosshair parked ON land must read "—" even when water (and its
+        // nodes) sit inside the acceptance radius — quoting the channel next
+        // to the beach makes no sense. The models' own grids are the arbiter
+        // (500 m in the Salish Sea): if some field's containing cell is wet
+        // the point is water; if every covering field says dry it's land; if
+        // no grid covers it at all, the radius search stays the only judge.
+        var vector: CurrentVector?
+        if Self.centreIsWater(fields: crosshairFields,
+                              lat: centre.lat, lon: centre.lon) != false {
+            let coarse = Self.crosshairUsesCoarseRadius(
+                webTideContributes: crosshairWebTideContributes,
+                centre: centre, fineField: crosshairFineField)
+            vector = crosshairIndex?.nearest(
+                lat: centre.lat, lon: centre.lon,
+                maxDistanceDeg: coarse ? Self.crosshairMaxDistanceCoarseDeg
+                                       : Self.crosshairMaxDistanceDeg)
+        }
+        // No significance filter on the SPEED: the harmonic model emits real
+        // slack-water speeds, and "0.0 kn" over water is information (slack!)
+        // while "—" means off coverage / on land. The DIRECTION suppresses
+        // below the threshold instead — a near-zero vector's bearing is
+        // numerical noise, but its magnitude is an honest zero.
+        let speed = vector?.speedKnots
+        let direction = (vector?.isSignificant ?? false) ? vector?.direction_deg : nil
+        if crosshairSpeed != speed { crosshairSpeed = speed }
+        if crosshairDirection != direction { crosshairDirection = direction }
+    }
+}
+
+/// Nearest-vector lookup fast enough to run every frame of a pan: vectors
+/// bin onto a fixed degree grid at construction (one O(n) pass per load),
+/// and a query probes only the bins within reach of the point — a few dozen
+/// distance checks instead of a linear scan of the whole viewport set.
+struct VectorSpatialIndex: Sendable {
+    private struct Bin: Hashable { let x: Int; let y: Int }
+    private let binDeg: Double
+    private let bins: [Bin: [CurrentVector]]
+
+    /// `binDeg` must be ≥ any radius later passed to `nearest(...)`; the
+    /// query's bin reach is derived from the radius, so a bigger bin only
+    /// costs scan width, never correctness.
+    init(vectors: [CurrentVector], binDeg: Double) {
+        self.binDeg = binDeg
+        var bins: [Bin: [CurrentVector]] = [:]
+        for v in vectors {
+            let bin = Bin(x: Int((v.lon / binDeg).rounded(.down)),
+                          y: Int((v.lat / binDeg).rounded(.down)))
+            bins[bin, default: []].append(v)
+        }
+        self.bins = bins
+    }
+
+    /// Nearest vector within `maxDistanceDeg` (lat-degree metric, longitude
+    /// cos-scaled — the same GeoMath distance the rest of the app uses), or
+    /// nil. The longitudinal bin reach widens by 1/cos(lat) because bins are
+    /// square in RAW degrees while the radius is not.
+    func nearest(lat: Double, lon: Double, maxDistanceDeg: Double) -> CurrentVector? {
+        let cosLat = cos(lat * .pi / 180)
+        let bx = Int((lon / binDeg).rounded(.down))
+        let by = Int((lat / binDeg).rounded(.down))
+        let yReach = Int((maxDistanceDeg / binDeg).rounded(.up))
+        let xReach = Int((maxDistanceDeg / (binDeg * max(cosLat, 0.01))).rounded(.up))
+        var best: (v: CurrentVector, d2: Double)?
+        for dy in -yReach...yReach {
+            for dx in -xReach...xReach {
+                guard let cell = bins[Bin(x: bx + dx, y: by + dy)] else { continue }
+                for v in cell {
+                    let d2 = GeoMath.distanceSquared(fromLat: lat, fromLon: lon,
+                                                     toLat: v.lat, toLon: v.lon,
+                                                     cosLat: cosLat)
+                    if best == nil || d2 < best!.d2 { best = (v, d2) }
+                }
+            }
+        }
+        guard let best, best.d2 <= maxDistanceDeg * maxDistanceDeg else { return nil }
+        return best.v
     }
 }

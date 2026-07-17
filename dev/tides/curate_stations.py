@@ -3,12 +3,12 @@
 
 Pulls the live station lists from NOAA CO-OPS (US) and CHS IWLS (Canada),
 keeps only stations that actually publish tide PREDICTIONS, restricts to the
-four atlas-volume bounds, and spatially thins to a target spacing so coverage
-is even without carrying redundant clustered ports.
+app's Salish Sea coverage region, and spatially thins to a target spacing so
+coverage is even without carrying redundant clustered ports.
 
 Output: dev/tides/stations_2026.json  — the registry consumed by fetch_tides.py.
 
-The three atlas reference stations (Point Atkinson, Seattle, Powell River) are
+Three primary reference ports (Point Atkinson, Seattle, Powell River) are
 force-kept as anchors regardless of thinning.
 
 Usage:
@@ -20,17 +20,17 @@ import math
 import os
 import urllib.request
 
-# Atlas volume bounds (mirrors SalishTides/Models/AtlasVolume.swift).
-# A station is "atlas-relevant" if it falls within at least one volume box.
-VOLUMES = [
-    ("Vol1", 47.9, 49.5, -124.0, -122.3),  # Strait of Georgia / Gulf Islands
-    ("Vol2", 46.9, 48.5, -123.9, -122.1),  # Puget Sound / S. Juan de Fuca
-    ("Vol3", 49.0, 51.0, -126.1, -124.0),  # Desolation Sound
-    ("Vol4", 49.8, 52.2, -129.1, -125.0),  # Johnstone St. / N. Strait of Georgia
+# Coverage region: lat/lon boxes (latmin, latmax, lonmin, lonmax) that together
+# span the app's Salish Sea domain. A station is kept if it falls in any box.
+REGION_BOXES = [
+    (47.9, 49.5, -124.0, -122.3),  # Strait of Georgia / Gulf Islands
+    (46.9, 48.5, -123.9, -122.1),  # Puget Sound / S. Juan de Fuca
+    (49.0, 51.0, -126.1, -124.0),  # Desolation Sound
+    (49.8, 52.2, -129.1, -125.0),  # Johnstone St. / N. Strait of Georgia
 ]
 PAD = 0.05  # degrees of slop so edge stations aren't dropped
 
-# Atlas timing references, matched by name (see *_lookup_*.json reference_station).
+# Primary reference ports, force-kept through thinning (matched by name).
 REFERENCE_NAMES = ("point atkinson", "seattle", "powell river")
 
 NOAA_URL = ("https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/"
@@ -43,9 +43,9 @@ def _get(url):
     return json.load(urllib.request.urlopen(req, timeout=60))
 
 
-def _vols_for(lat, lon):
-    return [n for n, la, lb, oa, ob in VOLUMES
-            if la - PAD <= lat <= lb + PAD and oa - PAD <= lon <= ob + PAD]
+def _in_region(lat, lon):
+    return any(la - PAD <= lat <= lb + PAD and oa - PAD <= lon <= ob + PAD
+               for la, lb, oa, ob in REGION_BOXES)
 
 
 def _km(a, b):
@@ -66,13 +66,12 @@ def collect():
     # NOAA — every type=tidepredictions station publishes predictions.
     # Datum: MLLW. kind R=harmonic/reference, S=subordinate(offset).
     for s in _get(NOAA_URL)["stations"]:
-        vols = _vols_for(s["lat"], s["lng"])
-        if not vols:
+        if not _in_region(s["lat"], s["lng"]):
             continue
         out.append({
             "src": "NOAA", "id": str(s["id"]), "name": s["name"],
             "lat": round(s["lat"], 4), "lon": round(s["lng"], 4),
-            "datum": "MLLW", "kind": s.get("type", ""), "vols": vols,
+            "datum": "MLLW", "kind": s.get("type", ""),
             "is_reference": _is_reference(s["name"]),
         })
 
@@ -86,14 +85,13 @@ def collect():
         codes = {ts.get("code") for ts in s.get("timeSeries", [])}
         if "wlp" not in codes and "wlp-hilo" not in codes:
             continue
-        vols = _vols_for(lat, lon)
-        if not vols:
+        if not _in_region(lat, lon):
             continue
         out.append({
             "src": "CHS", "id": s.get("code"), "chs_id": s.get("id"),
             "name": s.get("officialName"),
             "lat": round(lat, 4), "lon": round(lon, 4),
-            "datum": "CD", "kind": "wlp", "vols": vols,
+            "datum": "CD", "kind": "wlp",
             "is_reference": _is_reference(s.get("officialName")),
         })
 
@@ -120,7 +118,8 @@ def main():
 
     raw = collect()
     kept = thin(raw, args.spacing_km)
-    kept.sort(key=lambda s: (s["vols"][0], s["src"], s["name"] or ""))
+    # Deterministic output order: source, then station id.
+    kept.sort(key=lambda s: (s["src"], s["id"] or ""))
 
     here = os.path.dirname(os.path.abspath(__file__))
     out_path = os.path.join(here, "stations_2026.json")
@@ -131,13 +130,10 @@ def main():
         "stations": kept,
     }, open(out_path, "w"), indent=2)
 
-    per_vol = {v: sum(v in s["vols"] for s in kept)
-               for v, *_ in VOLUMES}
-    print(f"raw prediction stations in atlas bounds: {len(raw)}")
+    print(f"raw prediction stations in region:  {len(raw)}")
     print(f"after {args.spacing_km} km thinning:        {len(kept)}")
     print(f"  NOAA {sum(s['src']=='NOAA' for s in kept)}, "
           f"CHS {sum(s['src']=='CHS' for s in kept)}")
-    print(f"  per volume: {per_vol}")
     print(f"  anchors kept: "
           f"{[s['name'] for s in kept if s['is_reference']]}")
     print(f"wrote {out_path}")

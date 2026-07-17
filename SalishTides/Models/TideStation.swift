@@ -48,6 +48,15 @@ struct TideEvent: Sendable {
 // Reconstructs a continuous tide curve from discrete hi/lo events using the
 // standard tidal cosine interpolation between consecutive extrema — smooth,
 // flat at each turn, and exact at the predicted highs/lows.
+//
+// Two lookup APIs deliberately coexist:
+// - `height(at:)` CLAMPS outside the events: the tide chart wants a curve
+//   that holds the last known height at the data edge rather than a hole.
+// - `heightIfBracketed(at:)` returns nil there instead: a rising/falling
+//   probe (the flood/ebb estimator's central difference) must never see the
+//   clamp — a constant reads as "falling" against the last rise, fabricating
+//   an "Ebb" verdict at the bundled-data boundary. nil lets that caller
+//   decline rather than report a phase it can't actually know.
 enum TideCurve {
     static func height(at t: Date, events: [TideEvent]) -> Double? {
         guard let first = events.first, let last = events.last else { return nil }
@@ -63,6 +72,16 @@ enum TideCurve {
             }
         }
         return nil
+    }
+
+    /// `height(at:)` without the edge clamp: nil when `t` is not bracketed by
+    /// the events (strictly before the first or after the last extremum), so
+    /// callers can tell "no data" from a real height — see the type comment
+    /// for why both exist. Inside coverage the two agree exactly.
+    static func heightIfBracketed(at t: Date, events: [TideEvent]) -> Double? {
+        guard let first = events.first, let last = events.last,
+              t >= first.time, t <= last.time else { return nil }
+        return height(at: t, events: events)
     }
 }
 
@@ -127,12 +146,26 @@ struct TideBundleEvent: Decodable {
         let secDigits = secField.prefix(while: { $0.isASCII && $0.isNumber })
         guard let se = Int(secDigits),
               secDigits.endIndex == secField.endIndex || secField[secDigits.endIndex] == ".",
-              (1...9999).contains(y), (1...12).contains(mo), (1...31).contains(d),
+              (1...9999).contains(y), (1...12).contains(mo),
+              (1...daysInMonth(y, mo)).contains(d),
               (0...59).contains(mi), (0...60).contains(se),
               // ISO 8601 allows 24:00:00 as end-of-day (next-day midnight).
               (0...23).contains(h) || (h == 24 && mi == 0 && se == 0)
         else { return nil }
         return daysFromCivil(y, mo, d) * 86_400 + h * 3_600 + mi * 60 + se
+    }
+
+    // Days in month `m` of year `y`, standard Gregorian leap rule. The day
+    // guard must be per-month, not a blanket 1...31: daysFromCivil happily
+    // normalises overflow, so "2026-02-30" would otherwise parse and come
+    // back as March 2 — a wrong instant, exactly what this parser promises
+    // never to produce. Only called with `m` already validated to 1...12.
+    private static func daysInMonth(_ y: Int, _ m: Int) -> Int {
+        switch m {
+        case 2: return (y % 4 == 0 && y % 100 != 0) || y % 400 == 0 ? 29 : 28
+        case 4, 6, 9, 11: return 30
+        default: return 31
+        }
     }
 
     // Days since Unix epoch for a proleptic-Gregorian date (Hinnant's algorithm).

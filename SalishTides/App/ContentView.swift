@@ -65,6 +65,15 @@ struct ContentView: View {
                 .animation(crosshair.isEmphasized ? .easeOut(duration: 0.18)
                                                   : .easeOut(duration: 0.5),
                            value: crosshair.isEmphasized)
+            // Speed above / bearing below the reticle. Unlike the reticle,
+            // which rests at half opacity, the tags vanish completely at rest
+            // and ride the SAME emphasis timing back in on pan/zoom/scrub —
+            // data appears when the hand moves, chrome stays when it doesn't.
+            CrosshairTagsView()
+                .opacity(crosshair.isEmphasized ? 1 : 0)
+                .animation(crosshair.isEmphasized ? .easeOut(duration: 0.18)
+                                                  : .easeOut(duration: 0.5),
+                           value: crosshair.isEmphasized)
             VStack(spacing: 0) {
                 HStack(alignment: .top) {
                     // Top-left control cluster: settings, compass (only when
@@ -171,7 +180,7 @@ private struct SettingsButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: "gearshape")
-                .font(.system(size: 18, weight: .medium))
+                .font(.stControlIcon)
                 .foregroundStyle(.primary)
                 .frame(width: 44, height: 44)
         }
@@ -196,7 +205,7 @@ private struct CompassButton: View {
                     .foregroundStyle(.secondary)
                     .offset(y: 4.5)
             }
-            .font(.system(size: 9))
+            .font(.stCompassNeedle)
             .rotationEffect(.degrees(-bearing))
             .frame(width: 44, height: 44)
         }
@@ -214,7 +223,7 @@ private struct LocateButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: "location.fill")
-                .font(.system(size: 16, weight: .medium))
+                .font(.stControlIconSmall)
                 .foregroundStyle(.primary)
                 .frame(width: 44, height: 44)
         }
@@ -290,6 +299,51 @@ private struct OfflineBadge: View {
         .floatingCard(cornerRadius: Radius.pill)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Offline. Showing cached satellite imagery; new areas will fill in once you reconnect.")
+    }
+}
+
+/// The crosshair's own glanceable readout: current speed above the reticle,
+/// flow bearing below, each on a half-transparent tag (see `crosshairTag()`).
+/// A tag renders only when its datum exists, so land / off coverage shows a
+/// bare reticle and slack shows "0.0 kn" with no bearing (a near-zero
+/// vector's direction is suppressed as noise upstream). VoiceOver users get
+/// the same data from the labeled speed card, so the tags stay hidden to it.
+private struct CrosshairTagsView: View {
+    @Environment(MapViewModel.self) private var vm
+    @Environment(AppSettings.self) private var settings
+
+    // Clear of the reticle's reach (gap 8 + arm 22, see ReticleShape) with
+    // breathing room, measured centre-to-tag-centre.
+    private static let tagOffset: CGFloat = 50
+
+    var body: some View {
+        ZStack {
+            if let speed = vm.crosshairSpeed {
+                Text(settings.formatSpeed(knots: speed))
+                    .font(.stClock)
+                    .crosshairTag()
+                    .offset(y: -Self.tagOffset)
+            }
+            if let direction = vm.crosshairDirection {
+                Text(bearingText(direction))
+                    .font(.stCaption)
+                    .crosshairTag()
+                    .offset(y: Self.tagOffset)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    /// Mariner-style three-digit bearing plus an eight-point abbreviation:
+    /// "048° NE". 360 normalizes to 000.
+    private func bearingText(_ degrees: Double) -> String {
+        let d = (degrees.rounded().truncatingRemainder(dividingBy: 360) + 360)
+            .truncatingRemainder(dividingBy: 360)
+        let points = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+        let index = Int((d + 22.5).truncatingRemainder(dividingBy: 360) / 45) % 8
+        return String(format: "%03.0f° %@", d, points[index])
     }
 }
 

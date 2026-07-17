@@ -22,8 +22,9 @@ extension Calendar {
 
 // MARK: - Unit & Appearance Choices
 
-/// Current-speed display unit. Canonical storage everywhere is knots
-/// (`CurrentVector.speedKnots`); these convert from knots at the readout.
+/// Current-speed display unit. Canonical storage is m/s (`CurrentVector.speed_ms`);
+/// readouts consume knots via the computed `speedKnots`, and these convert
+/// from knots at the readout.
 enum SpeedUnit: String, CaseIterable, Identifiable {
     case knots, kmh, ms
 
@@ -84,8 +85,8 @@ enum HeightUnit: String, CaseIterable, Identifiable {
     }
 }
 
-/// Appearance override. `.system` defers to the device setting — the default,
-/// since the basemap (not the OS appearance) is the real visual context here.
+/// Appearance override. `.dark` (Night) is the shipped default — the app is
+/// built around the Night basemap; `.system` defers to the device setting.
 enum AppearanceMode: String, CaseIterable, Identifiable {
     case system, light, dark
 

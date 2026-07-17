@@ -315,7 +315,10 @@ truncate; the name is normalised (first comma-segment, Title-Cased) by
   the current's flow direction at the crosshair (`vm.crosshairDirection`). When
   there's a speed but no direction it falls back to the `scope` reticle glyph.
 - **Crosshair on land / off coverage:** the card shows an em dash (`—`).
-- **No selection:** both cards are hidden (`vm.currentSelection != nil`).
+- **Visibility:** each card gates itself. `CurrentSpeedView` shows only while a
+  current source is rendering vectors in the viewport (`!vm.currentVectors.isEmpty`);
+  the tide card shows only with a resolved station *and* events
+  (`vm.tideStation != nil && !vm.tideEvents.isEmpty`).
 - **Tide data unavailable:** the chart shows its placeholder + a11y "Data unavailable".
 
 ### 5.2 Timeline Control Bar

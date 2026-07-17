@@ -127,7 +127,7 @@ final class TideStationAnnotationView: MLNAnnotationView {
     /// The tide/current tendency shown on the badge — ↑ flood, ↓ ebb, a
     /// neutral ↕ while unknown (no selection yet). Kept in lockstep with the
     /// phase card's arrow by the coordinator as the user scrubs the timeline.
-    func setTendency(_ tendency: Tendency?) {
+    func setTendency(_ tendency: CurrentPhase.Tendency?) {
         guard tendency != appliedTendency else { return }
         appliedTendency = tendency
         glyph.image = Self.glyphImage(for: tendency)
@@ -135,9 +135,9 @@ final class TideStationAnnotationView: MLNAnnotationView {
 
     // Starts as a value setTendency can never receive, so the first real
     // tendency (including nil) always applies.
-    private var appliedTendency: Tendency?? = Tendency??.none
+    private var appliedTendency: CurrentPhase.Tendency?? = CurrentPhase.Tendency??.none
 
-    private static func glyphImage(for tendency: Tendency?) -> UIImage? {
+    private static func glyphImage(for tendency: CurrentPhase.Tendency?) -> UIImage? {
         let name = switch tendency {
         case .flood: "arrow.up"
         case .ebb: "arrow.down"
