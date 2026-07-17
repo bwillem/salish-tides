@@ -54,9 +54,12 @@ struct TidalCurrentField: Sendable {
         // Ring reach in cells, from the smaller of the two cell edges so an
         // anisotropic mesh can't stop the scan short of maxDistanceKm.
         let cellDeg = min(dLat, dLon * cosLat)
-        guard cellDeg > 0 else { return nil }
+        guard cellDeg > 0, maxDistanceKm > 0 else { return nil }
         let maxDistanceDeg = maxDistanceKm / 111.0
-        let maxRing = Int((maxDistanceDeg / cellDeg).rounded(.up))
+        // Cap the walk at the grid's own span: a huge reach on a fine mesh
+        // must not turn an off-grid query into an O(reach²) scan.
+        let maxRing = min(Int((maxDistanceDeg / cellDeg).rounded(.up)),
+                          max(rows, cols))
         for ring in 0...maxRing {
             var best: (cell: Int, d2: Double)?
             for dr in -ring...ring {

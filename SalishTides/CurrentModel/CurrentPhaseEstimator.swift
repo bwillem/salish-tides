@@ -48,8 +48,11 @@ enum CurrentPhaseEstimator {
     /// all-slack water).
     ///
     /// Summing rising-tide velocities MINUS falling-tide velocities doubles
-    /// the tidal signal while cancelling any steady residual flow (river
-    /// outflow would otherwise drag the axis toward the river mouth).
+    /// the tidal signal while strongly suppressing steady residual flow
+    /// (river outflow would otherwise drag the axis toward the river mouth).
+    /// Suppression is near-total, not exact: the residual survives scaled by
+    /// the rising/falling sample-count imbalance, at most a few samples of
+    /// the 25 — pinned by the residual test's tolerance.
     static func floodDirection(samples: [Sample],
                                heightAt: (Date) -> Double?) -> FloodDirection? {
         var east = 0.0, north = 0.0, total = 0.0
