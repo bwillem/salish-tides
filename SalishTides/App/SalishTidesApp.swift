@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 @main
 struct SalishTidesApp: App {
@@ -19,7 +20,7 @@ struct SalishTidesApp: App {
         // service — a small dependency chain.
         let settings = AppSettings()
         let network = NetworkMonitor()
-        let liveData = LiveDataService(settings: settings, network: network)
+        let liveData = LiveDataService(network: network)
         _settings = State(initialValue: settings)
         _network = State(initialValue: network)
         _liveData = State(initialValue: liveData)
@@ -37,7 +38,15 @@ struct SalishTidesApp: App {
                 .environment(stationMarker)
                 .environment(liveData)
                 .tint(.brandAccent)
-                .preferredColorScheme(settings.appearance.colorScheme)
+                // Drive the window's interface style directly rather than via
+                // `.preferredColorScheme`, which themes only the in-hierarchy
+                // views and leaves presented sheets/alerts on the system trait.
+                // The override on the window propagates to those detached
+                // presentations too, so the whole app follows the setting.
+                .onAppear { applyInterfaceStyle(settings.appearance) }
+                .onChange(of: settings.appearance) { _, mode in
+                    applyInterfaceStyle(mode)
+                }
         }
         // Registers the app-refresh handler (before launch finishes, as the
         // system requires) and runs it when iOS grants a background window.
@@ -48,6 +57,19 @@ struct SalishTidesApp: App {
         // initial request on backgrounding.
         .backgroundTask(.appRefresh(BackgroundRefresh.taskIdentifier)) {
             await liveData.backgroundRefresh()
+        }
+    }
+
+    /// Applies the appearance override to every window in the connected scenes.
+    /// Set on the window (not just the SwiftUI hierarchy) so modally presented
+    /// content — the Settings sheet, the disclaimer alert — inherits it.
+    private func applyInterfaceStyle(_ mode: AppearanceMode) {
+        let style = mode.uiStyle
+        for scene in UIApplication.shared.connectedScenes {
+            guard let windowScene = scene as? UIWindowScene else { continue }
+            for window in windowScene.windows {
+                window.overrideUserInterfaceStyle = style
+            }
         }
     }
 }

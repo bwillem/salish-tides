@@ -49,8 +49,8 @@ struct LiveTideSeries: Sendable {
 /// offline data. Everything it fetches lands in `LiveDataStore`, so data
 /// downloaded at the dock keeps working underway; when neither the cache nor
 /// the network can cover a request, callers get nil and fall back to the
-/// offline model/predictions. Fetching (and rendering, via nil returns) is disabled
-/// entirely by `AppSettings.offlineOnly`.
+/// offline model/predictions. When offline, fetching is skipped and callers
+/// get nil, so the app runs entirely on the bundled model.
 @MainActor
 @Observable
 final class LiveDataService {
@@ -91,7 +91,6 @@ final class LiveDataService {
     private static let maxNativeCells = 8_000
     private static let nativeCacheLimit = 6
 
-    private let settings: AppSettings
     private let network: NetworkMonitor
     private let client = SalishSeaCastClient()
     private let store = LiveDataStore.shared
@@ -132,12 +131,11 @@ final class LiveDataService {
     // (conservative: a save for any window invalidates in-progress inserts).
     private var nativeSaveGeneration = 0
 
-    init(settings: AppSettings, network: NetworkMonitor) {
-        self.settings = settings
+    init(network: NetworkMonitor) {
         self.network = network
     }
 
-    private var fetchingAllowed: Bool { !settings.offlineOnly && network.isOnline }
+    private var fetchingAllowed: Bool { network.isOnline }
 
     /// Hour bucket for a moment in time — slices are keyed by the epoch second
     /// of their hour's start.
@@ -170,15 +168,11 @@ final class LiveDataService {
     /// loop uses: it fetches nearest-now first and checks `Task.isCancelled`
     /// every iteration, so a ~30 s window covers grid + stale SSH + the nearest
     /// hours and truncates cleanly when the system reclaims time (cancellation
-    /// is how the modifier signals expiration). A no-op in offline mode —
+    /// is how the modifier signals expiration). A no-op while offline —
     /// `refresh()` self-guards on `fetchingAllowed`.
     ///
     /// Reschedules first (before the fetch work) so the wake chain survives an
-    /// early expiration, but only while live fetching is permitted: in offline
-    /// mode we let the chain lapse instead of re-arming on every granted
-    /// window, mirroring how ContentView gates the initial submit. Runs here
-    /// rather than in the scene handler because `offlineOnly` is main-actor
-    /// state and the `.backgroundTask` closure isn't.
+    /// early expiration.
     ///
     /// Shares the `refreshing` flag with `kick()` so a background pass and a
     /// foreground one can't run `refresh()` concurrently (e.g. the user opens
@@ -186,7 +180,7 @@ final class LiveDataService {
     /// skips. Held inline — the task must stay alive until the fetch finishes —
     /// and cleared via `defer` so a reclaimed window can't strand the flag.
     func backgroundRefresh() async {
-        if !settings.offlineOnly { BackgroundRefresh.schedule() }
+        BackgroundRefresh.schedule()
         await ensureReady()
         guard !refreshing else { return }
         refreshing = true
@@ -373,11 +367,10 @@ final class LiveDataService {
     // MARK: - Lookup (called by MapViewModel)
 
     /// Live current vectors for the hour containing `date`, or nil when live
-    /// data can't/shouldn't be shown (offline-only, no coverage) — callers
-    /// fall back to the bundled model. A cache miss for a plausible hour kicks
+    /// data can't be shown (no coverage, cold cache offline) — callers fall
+    /// back to the bundled model. A cache miss for a plausible hour kicks
     /// off an on-demand fetch; `dataGeneration` bumps when it lands.
     func currents(for date: Date) async -> [CurrentVector]? {
-        guard !settings.offlineOnly else { return nil }
         await ensureReady()
         guard ready, let grid else { return nil }
 
@@ -453,7 +446,6 @@ final class LiveDataService {
     /// only strided candidates are the coast-masked ones. Navigation zooms
     /// need every cell the model has.
     func nativeCurrents(for date: Date, viewport: ChartBounds) async -> [CurrentVector]? {
-        guard !settings.offlineOnly else { return nil }
         await ensureReady()
         guard ready, let grid else { return nil }
 
@@ -550,10 +542,9 @@ final class LiveDataService {
     /// the model coastline instead of coasting ~1 km onto land past the
     /// outermost wet point. NEMO's land mask is time-invariant, so the band is
     /// computed once from any cached slice and reused for the app's lifetime.
-    /// nil when live data can't be shown (offline-only, cold cache) — the
-    /// offline model supplies its own mask then.
+    /// nil when live data can't be shown (cold cache offline) — the offline
+    /// model supplies its own mask then.
     func landMask() async -> [CurrentVector]? {
-        guard !settings.offlineOnly else { return nil }
         await ensureReady()
         guard ready, let grid else { return nil }
         if let cached = landMaskCache { return cached }
@@ -607,7 +598,7 @@ final class LiveDataService {
     /// Live water-level series for `station` on its own datum, or nil when no
     /// gauge is near enough / no data / calibration isn't possible yet.
     func liveTideSeries(for station: TideStation) async -> LiveTideSeries? {
-        guard !settings.offlineOnly, ready,
+        guard ready,
               let gauge = Self.nearestGauge(lat: station.lat, lon: station.lon),
               let raw = sshSeries[gauge.dataset], raw.count >= 2,
               let k = await calibration(gauge: gauge, station: station, samples: raw)

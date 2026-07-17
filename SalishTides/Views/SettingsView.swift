@@ -33,32 +33,24 @@ struct SettingsView: View {
                     }
                 }
 
-                // ── Map & Display ────────────────────────────────────────
-                Section {
+                // ── Currents ─────────────────────────────────────────────
+                Section("Currents") {
                     Picker("Current", selection: $settings.currentStyle) {
                         ForEach(CurrentStyle.allCases) { style in
                             Text(style.label).tag(style)
                         }
                     }
                     .pickerStyle(.segmented)
-                } header: {
-                    Text("Map & Display")
-                } footer: {
-                    Text("Particles animate the flow of the current; Arrows show it statically. Arrows are used automatically when Reduce Motion or Low Power Mode is on. The crosshair marks the point used for the speed readout.")
                 }
 
                 // ── Appearance ───────────────────────────────────────────
-                Section {
+                Section("Appearance") {
                     Picker("Appearance", selection: $settings.appearance) {
                         ForEach(AppearanceMode.allCases) { mode in
                             Text(mode.label).tag(mode)
                         }
                     }
                     .pickerStyle(.segmented)
-                } header: {
-                    Text("Appearance")
-                } footer: {
-                    Text("Switches the full Day / Night theme — basemap, panels, and current-arrow colours. System follows your device setting.")
                 }
 
                 // ── Map Style ────────────────────────────────────────────
@@ -70,13 +62,6 @@ struct SettingsView: View {
                     Text("Map Style")
                 } footer: {
                     Text("Standard works fully offline. Satellite streams online only, caching the areas you view.")
-                }
-
-                // ── Live Data ────────────────────────────────────────────
-                Section {
-                    Toggle("Disable live data", isOn: $settings.offlineOnly)
-                } footer: {
-                    Text("Salish Tides fetches real-time data from the SalishSeaCast model when it can. It works offline by using predictive harmonic analysis from historical data.")
                 }
 
                 // ── About ────────────────────────────────────────────────

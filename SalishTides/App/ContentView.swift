@@ -9,6 +9,9 @@ struct ContentView: View {
     @Environment(LiveDataService.self) private var liveData
     @Environment(\.scenePhase) private var scenePhase
     @State private var showingSettings = false
+    // First-launch acknowledgment that the app isn't an official navigation
+    // source. Persisted, so the disclaimer alert shows exactly once.
+    @AppStorage("hasAcceptedNavigationDisclaimer") private var hasAcceptedDisclaimer = false
 
     var body: some View {
         Group {
@@ -26,22 +29,26 @@ struct ContentView: View {
         .onChange(of: scenePhase) {
             if scenePhase == .active {
                 liveData.kick()
-            } else if scenePhase == .background, !settings.offlineOnly {
+            } else if scenePhase == .background {
                 // Keep one app-refresh request pending whenever we leave the
-                // foreground, so iOS can wake us to refresh the live cache.
-                // Skipped in offline mode, matching how offlineOnly gates all
-                // fetching; the handler reschedules the chain thereafter.
+                // foreground, so iOS can wake us to refresh the live cache; the
+                // handler reschedules the chain thereafter.
                 BackgroundRefresh.schedule()
             }
         }
-        .onChange(of: settings.offlineOnly) {
-            // Flipping the switch swaps the rendered source immediately, both
-            // directions — not just on the next fetch.
-            liveData.kick()
-            Task { await vm.refresh() }
-        }
         .onChange(of: liveData.dataGeneration) {
             Task { await vm.refresh() }
+        }
+        // First-run navigation disclaimer — a blocking alert that can only be
+        // cleared by tapping Accept (iOS alerts have no swipe/tap-outside
+        // dismissal), shown once the splash/migration is done and never again.
+        .alert("", isPresented: Binding(
+            get: { !hasAcceptedDisclaimer && !vm.isMigrating && vm.migrationError == nil },
+            set: { _ in }
+        )) {
+            Button("Accept") { hasAcceptedDisclaimer = true }
+        } message: {
+            Text("Salish Tides uses historical data and modelling to approximate currents. Not an official source for navigation.")
         }
     }
 
