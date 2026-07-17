@@ -1,7 +1,11 @@
 # Salish Tides — Design System
 
-Living design reference for the Salish Tides iOS/iPadOS app.  
+Living design reference for the Salish Tides iOS/iPadOS app.
 **Update this document whenever a design decision is made or a token value changes.**
+
+> Tokens, colours, and component anatomy below are reconciled against the code
+> (`DesignTokens.swift` and the view files) as the source of truth. When code and
+> this doc disagree, the code wins — fix the doc.
 
 ---
 
@@ -27,138 +31,164 @@ Living design reference for the Salish Tides iOS/iPadOS app.
 
 ### 2.1 Semantic Palette
 
-All colors live in `SalishTides/Design/DesignTokens.swift` as `Color` extensions.  
-**Never use hex literals or `Color(red:green:blue:)` calls outside of `DesignTokens.swift`.**
+All colors live in `SalishTides/Design/DesignTokens.swift` as `Color` / `UIColor`
+extensions. **Never use hex literals or `Color(red:green:blue:)` calls outside of
+`DesignTokens.swift`.**
 
-#### Ocean Palette (brand)
-| Token | Hex | Use |
-|-------|-----|-----|
-| `.oceanDeep` | `#1A3A5C` | Migration/splash background |
-| `.oceanMid` | `#2166AB` | Primary brand color, flood indicator |
-| `.oceanLight` | `#73AECF` | Secondary accent, light current arrows |
+The palette is deliberately built from **system colors** wherever possible: they
+carry their own light / dark / increased-contrast variants, so brand chrome tracks
+the platform the way Apple's own apps do. Only true *surfaces* and the one
+hand-tuned map ramp bucket use explicit values.
 
-#### Tide Tendency
-| Token | Hex | Meaning |
-|-------|-----|---------|
-| `.tideFlood` | `#2166AB` | Incoming tide (same as oceanMid) |
-| `.tideEbb` | `#DE7314` | Outgoing tide — warm amber |
+#### Brand & surface tokens (`Color`)
+| Token | Value | Use |
+|-------|-------|-----|
+| `.brandAccent` | `Color.teal` (system) | Global `.tint`; every accent-chrome surface — the "Now" pill, live dot, tape "now" marker, tide-chart fill. |
+| `.appBackground` | adaptive `UIColor` — deep ocean `rgb(0.10,0.22,0.36)` in Night, pale sky `rgb(0.86,0.91,0.95)` in Day | Splash / migration background. The only adaptive *surface* token. |
+| `.inkSecondary` | adaptive — white @ 80% (dark) / black @ 58% (light) | Muted caption "ink" on glass cards (station name, phase, unit, status pills). Brighter than system `secondaryLabel` so it stays legible on the material per principle #1. |
+
+#### Tide Tendency (`Color`)
+| Token | Value | Meaning |
+|-------|-------|---------|
+| `.tideFlood` | `Color.teal` (== `brandAccent`) | Incoming tide |
+| `.tideEbb` | `Color.orange` (system) | Outgoing tide |
 | `Color.secondary` | system | Slack water / neutral |
 
-Flood = blue (water rising, ocean filling). Ebb = amber (receding, warmth). This mapping is consistent with traditional tidal imagery and avoids red/green colorblindness conflicts.
+Flood tracks the brand accent (teal); ebb is system orange. Both are system hues,
+so they adapt across light / dark / contrast for free, and the pairing avoids
+red/green colorblindness conflicts.
 
 #### Current Speed Scale (diverging, per-theme)
 
-Used exclusively for MapLibre arrow rendering (cool→warm diverging scale). The
-single source of truth is `UIColor.currentSpeedRamp(dark:)` — a 5-stop ramp that
-differs by theme so each arrow contrasts against its basemap.
+Used **exclusively** for MapLibre arrow / slack-dot rendering. The single source
+of truth is `UIColor.currentSpeedRamp(dark:)` — a 5-stop diverging ramp seeded
+from **system colors** and resolved for the given theme, so it brightens in dark
+mode and darkens in light mode automatically.
 
-| Bucket | Speed | Night (dark map) | Day (light map) |
-|--------|-------|------------------|-----------------|
-| calm | < 0.5 kn | `#2166AB` muted blue | `#14577D` deep blue |
-| light | 0.5 – 1.5 kn | `#73AED1` sky blue | `#2685BC` ocean blue |
-| moderate | 1.5 – 3.0 kn | `#FAD95E` amber | `#CC8500` dark amber |
-| strong | 3.0 – 4.5 kn | `#F56E43` orange-red | `#DB591A` burnt orange |
-| very strong | ≥ 4.5 kn | `#D73026` deep red | `#B81C19` deep red |
+| Bucket | Speed | Source colour |
+|--------|-------|---------------|
+| calm | < 0.5 kn | `systemBlue` |
+| light | 0.5 – 1.5 kn | `systemTeal` |
+| moderate | 1.5 – 3.0 kn | `systemYellow` — **except Day**, hand-darkened to amber `rgb(0.80,0.55,0.05)` |
+| strong | 3.0 – 4.5 kn | `systemOrange` |
+| very strong | ≥ 4.5 kn | `systemRed` |
 
-> **Why per-theme:** the bright Night ramp's mid amber (`#FAD95E`) and sky blue
-> wash out on the light Day basemap. The Day ramp darkens/saturates every stop
-> so the amber especially stays legible. (The `.current*` SwiftUI `Color` tokens
-> mirror the Night values for any future legend.)
+> **The one hand-tuned bucket:** on the pale Day basemap, `systemYellow` (the
+> diverging midpoint) lacks contrast against light water, so `currentSpeedRamp`
+> overrides *only* that stop to amber. Every other stop is pure system colour,
+> resolved per theme. There is no separate hardcoded night/day table anymore.
 
-> **Colorblindness note:** The blue→amber→red ramp is partially accessible (avoids pure red/green). The calm→light transition (both blue) may be hard to distinguish for some users. Future: add line-weight encoding as a secondary cue.
+> **Colorblindness note:** the blue→amber→red ramp is partially accessible (avoids
+> pure red/green). The calm→light transition (blue→teal) may be hard to
+> distinguish for some users; line-weight is the secondary cue (§5.4).
 
 ### 2.2 System Colors & Materials
 
-- **Overlay backgrounds:** `.ultraThinMaterial` (adapts to dark mode and blurs the map behind). Applied via the **Floating Card** surface — see §4.1b.
-- **Text over map:** `.primary` / `.secondary` work in both light and dark because they adapt. Prefer these over hardcoded white.
-- **Text on `oceanDeep`:** Hardcode `.white` — the background is fixed dark.
+- **Overlay backgrounds:** the **Floating Card** surface — Liquid Glass on iOS 26+,
+  `.ultraThinMaterial` on iOS 17–25 (see §4.1b).
+- **Text over map:** `.primary` / `.inkSecondary` — both adapt to the theme.
+  Prefer these over hardcoded white.
+- **Text on `.appBackground` (splash):** uses `.primary` / `.secondary`, which
+  adapt because `appBackground` pairs with the system background.
 
 ### 2.3 Day / Night Themes
 
-The app follows the **system appearance** and ships two full themes — **Day**
-(light) and **Night** (dark). Every surface adapts:
+The app ships two full themes — **Day** (light) and **Night** (dark). It follows
+the **system appearance** by default, but the persisted **Appearance** setting
+defaults to **Night** (`.dark`) — see §8. Every surface adapts:
 
 | Surface | Day (light) | Night (dark) |
 |---------|-------------|--------------|
-| Basemap | CARTO `light_all` raster (`standard-light.json`) | CARTO `dark_all` raster (`standard-dark.json`) |
-| Splash / migration bg | `Color.appBackground` — pale sky | `Color.appBackground` — `oceanDeep` |
-| Floating cards | `.ultraThinMaterial` (auto) | `.ultraThinMaterial` (auto) |
-| Ink (card text, chart, tape) | `.primary` / `.secondary` (auto → dark ink) | `.primary` / `.secondary` (auto → light ink) |
-| Crosshair | `.primary` reticle + `Color(.systemBackground)` halo (inverse) | same, inverts automatically |
-| Current arrows | `UIColor.currentSpeedRamp(dark: false)` — darker, saturated (amber reads on light) | `currentSpeedRamp(dark: true)` — brighter ramp for the dark basemap |
+| Basemap | Bundled Protomaps vector, `standard-light.json` | Bundled Protomaps vector, `standard-dark.json` |
+| Splash / migration bg | `Color.appBackground` — pale sky | `Color.appBackground` — deep ocean |
+| Floating cards | Liquid Glass / `.ultraThinMaterial` (auto) | same (auto) |
+| Ink (card text, chart, tape) | `.primary` / `.inkSecondary` (auto → dark ink) | `.primary` / `.inkSecondary` (auto → light ink) |
+| Crosshair | `.primary` reticle + `Color(.systemBackground)` inverse halo | same, inverts automatically |
+| Current arrows | `currentSpeedRamp(dark: false)` — system hues resolved light, amber-corrected mid | `currentSpeedRamp(dark: true)` — system hues resolved dark |
 
 **Rules**
-- **Never hardcode `.white`** in Canvas views — use `.primary`/`.secondary` so
-  the chart and tape ink flip with the theme. The `GraphicsContext` resolves
+- **Never hardcode `.white`** in Canvas views — use `.primary` / `.inkSecondary`
+  so the chart and tape ink flip with the theme. The `GraphicsContext` resolves
   semantic colors against the view's color scheme.
-- **Adaptive colors live as one token** (`Color.appBackground`, defined with a
-  `UIColor` dynamic provider in `DesignTokens.swift`); the `oceanMid` chart fill
-  stays constant, while the current-speed ramp is per-theme (`currentSpeedRamp`).
+- **Adaptive colors live as one token** (`Color.appBackground` / `.inkSecondary`,
+  defined with `UIColor` dynamic providers); the current-speed ramp is per-theme
+  (`currentSpeedRamp`, re-evaluated whenever the style reloads).
 - The basemap switches via `MapLibreView` observing `@Environment(\.colorScheme)`
   and swapping `styleURL`; vectors are re-applied on the new style.
 
-The current-speed arrow ramp is **per-theme** (`UIColor.currentSpeedRamp(dark:)`,
-the single source of truth — re-evaluated whenever the style reloads). The Day
-ramp is darker and more saturated so the mid "amber" arrow reads on the light
-basemap rather than washing out; the Night ramp stays bright for the dark map.
-
 ### 2.4 Map Style (offline-first, online-enhanced)
 
-The basemap follows an **offline-first, progressively-enhanced** model: the app
-must work 100% offline, but light up richer maps when a connection exists
-(Starlink, dock WiFi). User-selectable in **Settings → Map Style** (`Basemap`).
+The basemap is **offline-first, progressively enhanced**: the app works 100%
+offline on the bundled vector basemap, and lights up richer imagery when a
+connection exists (Starlink, dock WiFi). User-selectable in **Settings → Map
+Style** (`Basemap`).
 
 | Style | Source | Offline? | Light / Dark |
 |-------|--------|----------|--------------|
-| **Standard** | Bundled CARTO raster (`standard-{light,dark}.json`) | Always (the offline baseline) | per-theme pair |
-| **Ocean** | MapTiler bathymetry (`ocean-{light,dark}.json`) | After viewing online (ambient cache) | bundled pair |
-| **Satellite** | MapTiler imagery (`satellite.json`) | After viewing online | single (imagery is theme-agnostic) |
+| **Standard** | **Bundled Protomaps vector PMTiles** (`salish.pmtiles`) + `standard-{light,dark}.json` | **Always** (the true offline baseline) | per-theme pair |
+| **Satellite** | MapTiler imagery (`satellite.json`), streams | After viewing online (ambient cache) | single (imagery is theme-agnostic) |
+| **Ocean** | MapTiler bathymetry (`ocean-{light,dark}.json`) | — | **hidden** (`Basemap.isAvailable == false`) — implemented but withheld until it gets its own legible current-arrow palette |
 
 **Key mechanics:**
-- **Style JSONs are bundled** in `Resources/styles/` (tiny text). Each carries a
-  `{{MAPTILER_KEY}}` placeholder; `MapStyleLoader` injects `MapConfig.maptilerKey`
-  at load and writes a temp file MapLibre loads. **The key is never committed** —
-  it lives in the gitignored `Config/Secrets.xcconfig`. No key → falls back to the
-  Standard style, so a fresh checkout always renders.
-- **Light + dark are bundled together** so a Day→Night flip works offline: if a
-  sailor cached Ocean in daylight then loses signal at dusk, the dark Ocean still
-  renders (it reuses the same cached tiles, only the colour JSON differs).
-- **Caching is automatic** via MapLibre's ambient cache (raised to 256 MB in
-  `MapLibreView`). Tiles are cached as you view them online — no explicit
-  download/progress. Coverage = waters you've actually looked at.
-- **Reachability** (`NetworkMonitor`, `NWPathMonitor`) gates the picker: a network
-  style is selectable only when online **or** already cached
-  (`AppSettings.offlineReadyStyles`, recorded when a style is shown online).
-  Otherwise the row is disabled with an **"Online only"** caption — but any style
-  you've already used stays swappable offline.
-- The **dark Ocean** variant is an authored colour remap of the light Ocean style
-  (same bathymetry tiles, darkened water/land, lightened labels).
+- **Style JSONs are bundled** in `Resources/styles/` (tiny text) and resolved by
+  `MapStyleLoader`, which fills placeholders at load time and writes a temp file
+  MapLibre loads:
+  - `{{LOCAL_TILES}}` → a `pmtiles://` (vector) / `mbtiles://` (raster) URL for the
+    style's bundled archive. `Basemap.bundledArchive` is the single switch that
+    decides which style ships offline — give a style an archive and it needs no
+    network; leave it `nil` and it streams.
+  - `{{MAPTILER_KEY}}` → the MapTiler key for online styles. **Never committed** —
+    it lives in the gitignored `Config/Secrets.xcconfig`. No key → network styles
+    are disabled in the picker ("Online only" / "Unavailable").
+  - `{{LOCAL_GLYPHS}}` → bundled label fonts (`basemap/glyphs/`). If glyphs are
+    absent (a build that never ran `dev/basemap/fetch-glyphs.sh`), the loader
+    strips symbol layers rather than fail the style.
+- **Fallback chain** (`MapStyleLoader.styleURL`): the requested style → **Standard**
+  → a flat water-coloured style with no dependencies. The map is never blank, even
+  on a checkout that hasn't built the PMTiles archive.
+- **Light + dark are bundled together** so a Day→Night flip works offline.
+- **Streaming styles cache automatically** via MapLibre's ambient cache (raised to
+  **256 MB** in `MapLibreView`). Tiles are cached as you view them online — no
+  explicit download/progress.
+- **The map never swaps basemaps on connectivity change** — the selected style
+  stays, cached tiles keep serving, and the rest streams back once online. The
+  "Offline" pill (§ContentView) is the only signal; it just notes new imagery is
+  paused.
+- **Reachability** (`NetworkMonitor`, `NWPathMonitor`) gates the picker via
+  `AppSettings.isSelectable`: a network style is selectable only when online *and*
+  the build carries a MapTiler key.
 
-> The Standard style still streams CARTO rasters, so it is not *truly*
-> offline yet — a real bundled baseline (PMTiles bathymetry, backlog #1) is the
-> next milestone. MapTiler online is the enhancement layer; a future SalishSeaCast
-> current model will hang off the same `NetworkMonitor` plumbing.
+> The old CARTO-raster placeholder is gone: Standard now ships a real bundled
+> vector basemap (Protomaps / © OpenStreetMap, ODbL). Depth contours and seamark
+> data are the remaining chart-quality gap (§9).
 
 ---
 
 ## 3. Typography
 
-Named styles live in `DesignTokens.swift` as `Font` extensions.
+Named styles live in `DesignTokens.swift` as `Font` extensions. All use SF Pro,
+or SF Mono where digits must align.
 
-| Token | Base style | Weight | Role |
-|-------|-----------|--------|------|
-| `.stDisplay` | `.largeTitle` | Bold | Splash screen headline |
-| `.stHeadline` | `.subheadline` | Bold | Phase name in panel |
-| `.stClock` | `.headline` | Regular + monospacedDigit | Date/time in timeline |
-| `.stCaption` | `.caption` | Regular | Secondary labels |
-| `.stMono` | `.caption2` | Mono + monospacedDigit | Speed readout, offset label |
+| Token | Base style | Weight / trait | Role |
+|-------|-----------|----------------|------|
+| `.stDisplay` | `.largeTitle` | Bold | Splash / hero headline |
+| `.stReadout` | `.title` | Bold + monospacedDigit | **Hero** crosshair current-speed value |
+| `.stReadoutUnit` | `.callout` | Medium | Unit ("kn") beside the readout |
+| `.stPhase` | `.subheadline` | Regular | Tide phase label (defined; general phase text) |
+| `.stClock` | `.headline` | monospacedDigit | Timeline date/time readout |
+| `.stCaption` | `.caption` | **monospaced** | Station name, phase line, status-pill labels |
 
 **Design rationale:**
-- All digit-bearing labels use `.monospacedDigit()` so the layout doesn't shift as numbers change during scrubbing
-- SF Pro is the only acceptable typeface — it's optimized for iPad display legibility and respects Dynamic Type
-- No custom fonts: custom fonts require font loading, add bundle weight, and bypass system accessibility scaling
+- All digit-bearing labels use `.monospacedDigit()` so layout doesn't shift as
+  numbers change during scrubbing.
+- SF Pro / SF Mono only — optimized for iPad legibility, respect Dynamic Type, and
+  add no bundle weight.
 
-**Dynamic Type:** All `Font` tokens use semantic styles (`.headline`, `.caption`, etc.) which automatically scale with the user's text size preference. Do not use `.system(size: 14)` — fixed-point sizes opt out of Dynamic Type.
+**Dynamic Type:** all `Font` tokens use semantic styles (`.title`, `.headline`,
+`.caption`, …) which scale with the user's text-size preference. Do not use
+`.system(size: 14)` for body text — fixed sizes opt out of Dynamic Type. (The tape
+and chart Canvas draw fixed 9 pt tick labels, which is acceptable for dense
+axis ticks.)
 
 ---
 
@@ -166,7 +196,7 @@ Named styles live in `DesignTokens.swift` as `Font` extensions.
 
 ### 4.1 Spacing Scale
 
-From `Spacing` enum in `DesignTokens.swift`:
+From `Spacing` enum in `DesignTokens.swift` (4 pt base grid):
 
 | Token | Value | Common use |
 |-------|-------|-----------|
@@ -180,31 +210,28 @@ From `Spacing` enum in `DesignTokens.swift`:
 
 ### 4.1a Corner Radius
 
-From the `Radius` enum in `DesignTokens.swift`. All card-level surfaces use the
-**continuous** (squircle) corner curve, not the default circular one.
+From the `Radius` enum. Card-level surfaces use the **continuous** (squircle) curve.
 
 | Token | Value | Common use |
 |-------|-------|-----------|
 | `Radius.sm` | 8 pt | Small controls, inner chips |
 | `Radius.md` | 12 pt | Buttons, secondary surfaces |
-| `Radius.lg` | 16 pt | Mid-size panels |
+| `Radius.lg` | 16 pt | Settings / compass / locate buttons |
 | `Radius.xl` | 28 pt | **Floating glass cards** (phase panel, timeline bar) |
-| `Radius.pill` | 999 | Capsule-equivalent rounded rects |
+| `Radius.pill` | 999 | Capsule-equivalent rounded rects (status pills) |
 
 ### 4.1b Elevation & The Floating Card
 
-The single surface treatment for every floating overlay. Defined once as the
-`.floatingCard()` view modifier (`DesignTokens.swift`) and the `Elevation`
-tokens — **do not re-derive it per view**, so the phase panel and timeline bar
-stay visually identical.
+The single surface treatment for every floating overlay, defined once as the
+`.floatingCard(cornerRadius:)` view modifier — **do not re-derive it per view**.
 
-| Property | Value |
-|----------|-------|
-| Material | `.ultraThinMaterial` |
-| Corner | `Radius.xl` (28 pt), `.continuous` |
-| Border | `Elevation.cardBorderColor` = white @ 12%, 0.5 pt hairline (`strokeBorder`) |
-| Shadow | `Elevation.cardShadowColor` = black @ 25%, radius 12, y-offset 4 |
-| Clip | content clipped to the rounded shape so nothing overflows the corners |
+- **iOS 26+:** native `.glassEffect(.regular, in: shape)` — Liquid Glass supplies
+  translucency, edge highlight, and shadow as one adaptive material, clipped to the
+  shape.
+- **iOS 17–25:** the hand-built fallback so older devices look unchanged —
+  `.ultraThinMaterial`, `Radius.xl` continuous corner, a `Elevation.cardBorderColor`
+  (white @ 12%, 0.5 pt) hairline, and an `Elevation.cardShadowColor` (black @ 25%,
+  radius 12, y-offset 4) drop shadow, content clipped to the shape.
 
 ```swift
 SomeContent()
@@ -212,41 +239,41 @@ SomeContent()
     .floatingCard()      // then apply the surface
 ```
 
-**Why a shared modifier:** before harmonization the timeline bar was an
-edge-to-edge frameless material slab while the phase panel was a 16 pt capsule —
-they read as two different systems. Floating both on the same card makes them a
-deliberate pair bracketing the map, and the map currents stay visible around and
-beneath each card.
+**Why a shared modifier:** it keeps the phase panel, speed card, timeline bar, and
+corner buttons a single visual system, and lets the whole app adopt Liquid Glass
+by touching one function.
 
 ### 4.2 iPad Layout Grid
 
-- **Safe area:** Respect all four safe areas (status bar, home indicator, multitasking sidebars)
-- **Screen edge margin:** `Spacing.lg` (16 pt) minimum from any safe-area edge
-- **Map chrome budget:** Timeline bar + phase panel together should not exceed 15% of vertical screen height on the smallest supported iPad (iPad 10th gen, 1180×820 pt landscape)
+- **Safe area:** respect all four safe areas (status bar, home indicator, sidebars).
+- **Screen edge margin:** `Spacing.lg` (16 pt) minimum from any safe-area edge.
+- **Map chrome budget:** timeline bar + phase panel together should not exceed ~15%
+  of vertical screen height on the smallest supported iPad.
 
 ### 4.3 Touch Targets
 
-**Minimum:** 44×44 pt (Apple HIG). 
-**Recommended for gloved/outdoor use:** 48×48 pt.
-
-The **Now** button uses `.controlSize(.small)` and may fall below 44 pt — audit. The time tape is 36 pt tall but spans the full card width, so its drag target is large.
+**Minimum:** 44×44 pt (Apple HIG). **Recommended for gloved/outdoor use:** 48×48 pt.
+The corner buttons (settings, compass, locate) are fixed 44×44 pt. The time tape is
+36 pt tall but spans the full card width, so its drag target is large.
 
 ### 4.4 Overlay Placement
 
-Both overlays are **floating cards** (§4.1b) — inset from the screen edges with
-the map visible around and beneath them.
+Overlays are **floating cards** (§4.1b), inset from the screen edges with the map
+visible around and beneath them.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  [status bar]                          ╭────────────────╮    │  ← top-right floating card
-│                                        │  tide chart    │    │     (safe area + 8pt)
-│                        MAP             │  Phase · kn ✛  │    │
-│                       (full bleed)     ╰────────────────╯    │
-│                        [crosshair]                           │
-│                                                              │
-│        ╭──────────────────────────────────────────────╮      │  ← floating card, inset 16pt
-│        │            Jun 24 at 15:00                    │      │
-│        │  [Now]   ·····│····· (time tape) ·····        │      │
+│  [gear]                                ╭────────────────╮    │  ← top-right: tide/phase card
+│  [compass?]              MAP           │  tide chart    │    │     (safe area + 8pt)
+│  [locate]              (full bleed)    │  station·phase │    │
+│                         [crosshair]    ╰────────────────╯    │
+│                                        ╭────────────────╮    │  ← speed card (its own card)
+│                                        │  ➤ X.X kn      │    │
+│                                        ╰────────────────╯    │
+│      [Offline]                          [Offline model]      │  ← status pills row
+│        ╭──────────────────────────────────────────────╮      │  ← timeline card, inset 16pt
+│        │            Jun 24, 15:00  ⌄        [Now]       │      │
+│        │  ·····│····· (time tape) ·····                 │      │
 │        ╰──────────────────────────────────────────────╯      │
 │  [home indicator]                                            │
 └──────────────────────────────────────────────────────────────┘
@@ -256,135 +283,171 @@ the map visible around and beneath them.
 
 ## 5. Component Anatomy
 
-### 5.1 PhaseIndicator Panel
+### 5.1 Tide/Phase Card + Speed Card (top-right)
 
-**Location:** Top-right, `.padding(.trailing)` + `.padding(.top, 8)` from safe area  
-**Surface:** Floating card (§4.1b), fixed `width: 248`  
-**Composition:** two groups separated by spacing alone (no divider) — the tide
-chart + its phase state on top, then the current-speed hero.
+The upper-right cluster is **two stacked floating cards**, not one:
 
-**Anatomy:**
+**A. `PhaseIndicatorView`** — tide chart + its phase state. Fixed `width: 248`,
+`Spacing.md` inner padding.
 ```
 ╭──────────────────────────────╮
-│  [TideChartView — 108 pt]     │  ← station name · datum, curve, cursor height
-│  ↑ Phase Name                 │  ← tide group: tendency + phase, tied to chart
-│                               │  ← separation by spacing (Spacing.lg), no line
-│  ✛ X.X kn                     │  ← HERO: crosshair speed (.stReadout, large/bold)
+│  [TideChartView — 108 pt]     │  ← curve + cursor height, station a11y label
+│  Station Name                 │  ← .stCaption / .inkSecondary, inset to plot edge
+│  ↑ Flood                      │  ← text arrow (↑ flood / ↓ ebb) + phase, no colour
 ╰──────────────────────────────╯
 ```
+Station name and phase are left-aligned and inset by `TideChartView.plotLeftInset`
+(26 pt) so they line up under the curve. Datum and any "Live" flag are omitted here
+(the chart's a11y label and the Online-mode badge carry them). Long station names
+truncate; the name is normalised (first comma-segment, Title-Cased) by
+`stationDisplayName`.
 
-**Information hierarchy & grouping:**
-- The **current speed at the crosshair is the primary datum** — large, bold
-  `.stReadout` with a smaller `.stReadoutUnit` unit beside it. It scales down
-  (`minimumScaleFactor`) rather than wrap at large Dynamic Type (fixed 248 pt).
-- The **tide phase + tendency** is conceptually part of the chart (it names the
-  state the curve shows), so it sits **directly under the chart** as one group.
-- The two groups are separated by **spacing only** — no hairline divider — in
-  keeping with the matte/purposeful principle (§1). The size jump from the small
-  phase label to the big readout reinforces the break.
-
-**States:**
-- **Normal:** plain tendency arrow on the phase line — `arrow.up` `.tideFlood` (flood) or `arrow.down` `.tideEbb` (ebb). Not the filled-circle variants.
-- **No selection:** hidden (conditional on `vm.currentSelection != nil`)
-- **Crosshair on land / off coverage:** hero shows an em dash (`—`) — no speed to report
-- **Tide data unavailable:** chart shows a "Tide data unavailable" placeholder
-
-**Speed readout:** value is formatted from `AppSettings.speedUnit` so it honours
-the user's unit (kn / km·h / m·s — see §9). The crosshair association uses the
-`scope` SF Symbol, not the former non-standard `✛` glyph (which did not read
-naturally on VoiceOver). The accessibility label leads with the speed to match
-the visual hierarchy.
+**B. `CurrentSpeedView`** — the crosshair speed in its **own** compact card below.
+```
+╭──────────────────────╮
+│  ➤  0.3 kn            │  ← compass needle (direction) + value + unit
+╰──────────────────────╯
+```
+- The **speed is the primary at-a-glance datum** — value in `.stReadout` (large
+  bold mono), unit in `.stReadoutUnit` beside it, baseline-aligned, `minimumScaleFactor(0.6)`
+  rather than wrap. Formatted per `AppSettings.speedUnit`.
+- The leading glyph is a **compass needle** (`location.north.fill`, red) rotated to
+  the current's flow direction at the crosshair (`vm.crosshairDirection`). When
+  there's a speed but no direction it falls back to the `scope` reticle glyph.
+- **Crosshair on land / off coverage:** the card shows an em dash (`—`).
+- **No selection:** both cards are hidden (`vm.currentSelection != nil`).
+- **Tide data unavailable:** the chart shows its placeholder + a11y "Data unavailable".
 
 ### 5.2 Timeline Control Bar
 
-**Location:** Bottom, floating, inset `Spacing.lg` (16 pt) from the side edges, above the home indicator  
-**Surface:** Floating card (§4.1b)  
-**Inner padding:** `Spacing.lg` horizontal, `Spacing.md` vertical
+**Location:** bottom, floating card, inset `Spacing.lg` (16 pt) from the sides.
+**Composition:** a top readout row and a time-tape row (`TapeSliderView`), spaced
+`Spacing.lg`.
 
-**Anatomy (top row):**
-```
-[Now]            [Date Mon DD at HH:MM]            (balance)
-                 [Phase Name]
-```
+**Top row** — a centred, tappable date/time readout; an amber-free live dot
+(`.tint`) shows when at "now"; a `chevron.down` hints the readout opens a
+**graphical date-picker popover** (date only — the tape owns the hour). When
+scrubbed away from now, a **"Now" pill** fades in at the right — a filled `.tint`
+(teal) capsule, the unambiguous return-to-now tap target. (No phase name here — it
+lives in the phase card, §5.1.)
 
-**Anatomy (bottom row):**
-```
-·····│····· Time Tape (fixed centre cursor, ticks scroll, snaps to hour) ·····
-```
+**Bottom row — time tape** (`TapeSliderView`):
+- **Range ±48 hours** (`maxHours = 48`), `pixelsPerHour = 27`. The centre cursor is
+  fixed; ticks scroll past and **snap to the nearest whole hour** on release (data
+  is hourly) with a short spring.
+- The fixed centre cursor is `.primary` at "now" and turns **`.tideEbb` (amber)**
+  when offset. The "now" tick is drawn full-height in `brandAccent`. Midnight ticks
+  carry a date label + faint day divider; other 3-hour marks show the hour
+  (`hourTickLabel`, 12h/24h per `AppSettings.clockFormat`).
 
-**Time tape:** ±12 hour range, snaps to whole hours (data is hourly). The fixed
-centre cursor turns amber (`.tideEbb`) when offset from "now"; the **Now** button
-tints amber when not at the present. The `±12h` range covers one full tidal day
-in either direction. See `TapeSliderView`.
-- The `Now` button uses `.bordered` style — fine for MVP, but could become a secondary-action pill with `.tideFlood` tint
-- No haptic feedback on slider step or button press — add `UIImpactFeedbackGenerator` at step boundaries
+> No haptic feedback on tape snaps or the Now pill yet (§9).
 
 ### 5.3 Crosshair
 
-**Location:** Centered in map, non-interactive (`allowsHitTesting(false)`)  
-**Design:** 22 pt circle + 4 tick marks at 12/18 pt (gap + reach from center)  
-**Color:** `.white.opacity(0.75)`
+**Location:** centered in the map, non-interactive (`allowsHitTesting(false)`,
+`accessibilityHidden`). Rendered by `CrosshairView` in `ContentView`.
+**Design:** a Navionics-style reticle (`ReticleShape`) — a small centre "+"
+(±3 pt), then four arms (22 pt) extending outward past an 8 pt gap. Drawn as two
+strokes: an inverse `Color(.systemBackground)` halo (0.6 opacity, 3.5 pt) under a
+`.primary` reticle (0.9 opacity, 1.5 pt).
 
-**Open design issue:** Pure white at 75% opacity may wash out against light-colored map tiles (white water, ice). Consider a thin black shadow/stroke for contrast universality.
+**Why the inverse halo:** `systemBackground` is the opposite of `.primary`, so the
+reticle is dark-on-light in Day and light-on-dark in Night — legible on any tile in
+either theme, no per-tile tuning.
 
-### 5.4 Current Vector Arrows
+**Always present, emphasis on interaction:** the crosshair is faint at rest
+(opacity 0.5) and ramps to full contrast while panning/zooming or scrubbing, easing
+back a couple seconds after release (`CrosshairPresenter.isEmphasized`). There is no
+"hide crosshair" setting.
 
-Rendered by MapLibre, not SwiftUI. Color is controlled by `speedColorExpression()` in `MapLibreView.Coordinator`.
+### 5.4 Current Vector Arrows (fallback display)
 
-**Line weight by speed:**
+Rendered by MapLibre line/circle layers, not SwiftUI. Colour comes from
+`speedColorExpression(dark:)` → `UIColor.currentSpeedRamp` (§2.1).
+
+**Line weight by speed** (`shaft` / `barb` layers):
 | Speed | Shaft width | Barb width |
 |-------|-------------|------------|
-| < 1.5 kn | 1.0 pt | 0.8 pt |
+| < 1.5 kn | 1.4 pt | 1.1 pt |
 | 1.5–3.0 kn | 1.8 pt | 1.4 pt |
 | ≥ 3.0 kn | 3.0 pt | 2.5 pt |
 
-**Design intent:** Both color and weight encode speed (redundant encoding), which helps colorblind users and improves sunlight readability.
+**Slack dots:** where current is below the min-arrow threshold, a `slack` circle
+layer draws faint dots (calm-bucket colour, radius 1.4, opacity 0.5) — exactly how
+the print atlas marks slack — so weak areas read as "charted, slack" rather than
+missing data.
 
-**Arrow geometry:** ±25° barb spread, barb length = 70% of half-shaft. This is close to standard meteorological wind barb convention, which sailors recognize.
+**Arrow geometry:** ±25° barb spread (`±0.4363` rad), barb length = 70% of the
+reference half-shaft — close to meteorological wind-barb convention.
 
-**Role:** arrows are now the *fallback* current display — used when the user picks "Arrows" in Settings, or automatically under Reduce Motion / Low Power Mode. The default is the animated particle layer (§5.4a). The two are mutually exclusive: `MapLibreView.Coordinator.applyCurrentStyle(_:on:)` toggles the shaft/barb layers' visibility and the particle layer's active state from `AppSettings.effectiveCurrentStyle`.
+**Role:** arrows are the *fallback* current display — used when the user picks
+"Arrows" in Settings, or automatically under Reduce Motion / Low Power Mode. The
+default is the animated particle layer (§5.4a). The two are mutually exclusive:
+`applyCurrentStyle` toggles the shaft/barb/slack layers' visibility and the particle
+layer's active state from `AppSettings.effectiveCurrentStyle`.
 
 ### 5.4a Current Particles (default)
 
-The default current display is an animated GPU particle field — flowing "comet streaks" that convey both direction and speed (see `CurrentParticleLayer`, an `MLNCustomStyleLayer` Metal subclass). Particles are the headline; arrows (§5.4) are the static fallback.
+The default display is an animated GPU particle field — flowing "comet streaks"
+that convey direction and speed (`CurrentParticleLayer`, an `MLNCustomStyleLayer`
+Metal subclass). Particles are the headline; arrows (§5.4) are the static fallback.
 
 **Pipeline (30 fps, driven by a `CADisplayLink` → `setNeedsDisplay`):**
-1. **Velocity field.** `MapViewModel.loadVectors` builds a `VelocityField` (Sendable: bbox, grid dims, interleaved east/north m/s) from the *full-resolution* vectors over the visible viewport — denser and more directional than the thinned arrow set. It's uploaded to an `RG32Float` texture.
-2. **Advection (compute).** Each frame a kernel advects N≈6000 particles by bilinearly sampling the velocity texture, reseeding any that age out, stall (land / slack — the data has no slack vectors, so zero velocity means "no current"), or leave the field. Motion is exaggerated by `speedScale` for legibility.
-3. **Streaks (render).** Each particle draws as a 2-vertex line from a tail (offset back along the local flow, length ∝ speed) to a bright head, fading tail→head and over the particle's life. Drawn straight into MapLibre's render encoder with the live projection matrix, so streaks stay glued to the basemap through pan/zoom/rotate.
+1. **Velocity field.** `MapViewModel.loadVectors` builds a `VelocityField` (Sendable:
+   bbox, grid dims, interleaved east/north m/s) from the *full-resolution* vectors
+   over the viewport (denser than the thinned arrow set), uploaded to an `RG32Float`
+   texture (`fieldCellsAcross = 160`).
+2. **Advection (compute).** Each frame a kernel advects **≈2250** particles by
+   bilinearly sampling the velocity texture, reseeding any that age out, stall
+   (land / slack — zero velocity means "no current"), or leave the field. Motion is
+   exaggerated by `speedScale` for legibility.
+3. **Streaks (render).** Each particle draws as a line from a tail (offset back along
+   the flow, length ∝ speed) to a bright head, fading tail→head and over life. Drawn
+   into MapLibre's render encoder with the live projection matrix, so streaks stay
+   glued to the basemap through pan/zoom/rotate.
 
-**Why streaks, not an offscreen trail buffer:** keeping everything in the map's own render pass avoids offscreen textures, cross-queue GPU sync, and screen-space "swim" during pans. The tradeoff is shorter tails than an accumulation buffer; longer comet tails could be added later via a ground-locked trail texture.
+**Why streaks, not an offscreen trail buffer:** keeping everything in the map's own
+render pass avoids offscreen textures, cross-queue GPU sync, and screen-space "swim"
+during pans. The tradeoff is shorter tails.
 
-**Race-free buffering:** particle buffers ping-pong. The compute pass (own command queue) reads `current` → writes `next`; the render pass reads `current` (last frame's result, already complete). A 2-deep semaphore bounds frames in flight. Positions are one frame stale (invisible at 30 fps) but drawn with the current camera, so no swim.
+**Race-free buffering:** particle buffers ping-pong; compute reads `current` → writes
+`next`, render reads `current` (last frame's completed result). A 2-deep semaphore
+bounds frames in flight — positions are one frame stale (invisible at 30 fps) but
+drawn with the current camera, so no swim.
 
-**Per-theme color:** night = cool white-blue; day = deeper saturated blue so streaks read on the light basemap. Driven by `setDark(_:)` from the map color scheme, mirroring the arrow ramp's per-theme logic (§2.1).
+**Per-theme color** (`setDark`): night = cool white-blue; day = deeper saturated blue
+so streaks read on the light basemap — mirroring the arrow ramp's per-theme logic.
 
-**Performance / power:** the display link runs only while particles are the selected style *and* the app is foregrounded (`setActive` / `setForeground`), so the GPU is idle in arrows mode or in the background. 30 fps (not 60) halves the energy cost — chosen for an all-day on-the-water app.
+**Performance / power:** the display link runs only while particles are selected *and*
+the app is foregrounded (`setActive` / `setForeground`), so the GPU is idle in arrows
+mode or in the background. 30 fps (not 60) halves the energy cost for an all-day app.
 
-**Gotcha (recorded):** MapLibre leaves a cull mode set from its own draws; the custom layer must call `renderEncoder.setCullMode(.none)` or its geometry is silently culled by winding.
+**Gotcha (recorded):** MapLibre leaves a cull mode set from its own draws; the custom
+layer must call `renderEncoder.setCullMode(.none)` or its geometry is silently culled.
 
-### 5.5 Migration/Splash Screen
+### 5.5 Migration / Splash Screen
 
-**Background:** `.oceanDeep` (#1A3A5C)  
-**Icon:** `water.waves` at 48 pt, `.white.opacity(0.8)`  
-**Title:** "Salish Tides" in `.stDisplay` white  
-**Progress:** System `ProgressView(.linear)` tinted white, 280 pt wide  
-**Caption:** "Loading charts… N%" in `.stMono`-equivalent caption
+`MigrationView` **matches the static launch screen exactly** so the launch image
+hands off with no visible jump:
+- **Background:** `Color(.systemBackground)` (adapts white/black per appearance) —
+  the same surface `Info.plist`'s `UILaunchScreen` uses.
+- **Wordmark:** the `LaunchLogo` image set, centred at native size (~280 pt).
+- **Progress:** a bottom `ProgressView(.linear)` tinted `.primary`, 280 pt wide, with
+  a "Loading charts… N%" caption.
 
-**Note:** This screen shows only on first launch (migration). Second launch goes directly to the map. No need to optimize for repeat views.
+**Note:** shows only on first launch (migration populates the SQLite caches).
+Repeat launches go straight to the map.
 
 ### 5.6 Settings Button & Sheet
 
-**Entry point** (`SettingsButton`, in `ContentView`): a floating gear
-(`gearshape`) in the **top-left**, mirroring the phase panel top-right so the two
-upper corners read as a deliberate pair. Uses the shared `.floatingCard()`
-surface at `Radius.lg` and a fixed **44×44 pt** frame — meets the HIG minimum
-target. Inset `.padding(.leading)` + `Spacing.sm` from the safe area.
+**Entry point** (`SettingsButton` in `ContentView`): a floating gear (`gearshape`)
+in the **top-left**, using the shared `.floatingCard(cornerRadius: Radius.lg)`
+surface and a fixed **44×44 pt** frame. It sits atop a top-left control cluster:
+settings, a **compass** (shown only when the map is rotated, tap to reset north),
+and a **locate** button.
 
-**Sheet** (`SettingsView`): a standard grouped `Form` in a `NavigationStack`,
-following the iOS HIG settings pattern — sections of related controls, system
-`Picker`/`Toggle`, inline navigation title, single confirming **Done** button
-(`.confirmationAction`).
+**Sheet** (`SettingsView`): a grouped `Form` in a `NavigationStack`, with a single
+confirming **Done** button.
 
 ```
 Settings                                    Done
@@ -392,96 +455,111 @@ Settings                                    Done
 │  UNITS                                         │
 │   Current speed                      Knots ⌄   │
 │   Tide height                       Metres ⌄   │
+│   Clock                            24-hour ⌄   │
 │  MAP & DISPLAY                                  │
-│   Crosshair                               ●──  │
+│   Current        [ Particles | Arrows ]        │
 │  APPEARANCE                                     │
 │   [ System | Light | Dark ]                    │
+│  MAP STYLE                                      │
+│   Standard                              ✓      │
+│   Satellite                    (Online only)   │
+│  LIVE DATA                                      │
+│   Disable live data                       ○──  │
 │  ABOUT                                          │
 │   Version                          1.0 (1)     │
 │   Data Sources                            >    │
 └──────────────────────────────────────────────┘
 ```
 
-**Data Sources** (`DataSourcesView`, pushed from About): NOAA CO-OPS / CHS IWLS
-tide attribution, SalishSeaCast (UBC) current-model attribution, MapLibre basemap
-credit, and the "not for navigation" disclaimer. In-app provenance is expected at
-App Store review for a navigation aid.
+- **Current** and **Appearance** are segmented pickers. **Map Style** lists only
+  `Basemap.isAvailable` styles; each row is tappable with a checkmark, or greyed
+  with "Online only" / "Unavailable" when its network/key requirement isn't met.
+- **Disable live data** flips `AppSettings.offlineOnly` — the app then behaves like
+  a pure offline build (no fetching, cached live data not rendered).
+- There is **no crosshair toggle** — the crosshair is always shown (§5.3).
+
+**Data Sources** (`DataSourcesView`, pushed from About): the "not for navigation"
+disclaimer, SalishSeaCast (UBC) live-forecast and offline-model credit, NOAA
+CO-OPS / CHS IWLS tide attribution, and the MapLibre / OpenStreetMap / MapTiler
+basemap credits. In-app provenance is expected at App Store review for a
+navigation aid.
 
 ---
 
 ## 6. Accessibility
 
-### 6.1 Contrast Requirements
+### 6.1 Contrast
 
-Target: **WCAG AA** minimum everywhere, **AAA (7:1)** for map-overlaid text given outdoor use.
+Target: **WCAG AA** minimum everywhere, **AAA (7:1)** for map-overlaid text given
+outdoor use. Card text uses `.primary` / `.inkSecondary` on the glass material;
+`inkSecondary` is deliberately brighter than system `secondaryLabel` to hold
+legibility on the material. The moderate current bucket is the known weak spot on
+the light basemap — hence the Day amber override in `currentSpeedRamp` (§2.1). Arrow
+colour is decorative (redundant with line weight), so it is held to 3:1, not 4.5:1.
 
-| Element | Foreground | Background | Current ratio | Target |
-|---------|-----------|------------|---------------|--------|
-| Phase name | `.primary` (dark) | `.ultraThinMaterial` | ~varies | ≥ 4.5:1 |
-| Date/time | `.primary` | `.ultraThinMaterial` | ~varies | ≥ 4.5:1 |
-| Speed readout | `.primary` | `.ultraThinMaterial` | ~varies | ≥ 4.5:1 |
-| Migration title | white | `#1A3A5C` | ~12:1 ✓ | 7:1 |
-| Current: moderate | `#FAD95E` | white map | ~2.5:1 ⚠️ | 3:1 |
-
-> The moderate-current arrow color does not meet 3:1 on white. This is acceptable for non-text decorative elements under WCAG, but worth revisiting given outdoor use.
-
-### 6.2 VoiceOver Labels
-
-The overlay controls expose explicit labels (implemented):
+### 6.2 VoiceOver Labels (implemented)
 
 | Control | Treatment |
 |---------|-----------|
 | Time tape (`TapeSliderView`) | Adjustable element — label "Forecast time", value reads the offset ("2 hours ahead of now" / "Now"), swipe up/down steps ±1 hour |
-| Now button | Title + hint "Returns the timeline to the current time" |
-| Date/phase readout | Combined into one element ("Jun 24 at 3:00 PM, Medium Flood") |
-| Tide chart (`TideChartView` Canvas) | Single element labelled with the current tide ("Tide 2.4 metres at Bedwell Harbour, above chart datum") |
-| Phase row | Single element ("medium flood tide. 0.4 knots at crosshair.") |
+| Timeline readout | One element ("Now, Jun 24, 15:00" / the date-time); hint "Opens a date picker" |
+| "Now" pill | Label "Return to now", hint "Returns the timeline to the current time" |
+| Tide chart (`TideChartView`) | One element labelled with the current tide ("Tide 2.4 metres at Bedwell Harbour, above chart datum") |
+| Phase line | One element ("Flood tide." / "Ebb tide.") |
+| Speed card (`CurrentSpeedView`) | One element leading with speed + flow direction ("0.3 kn flowing north-east at crosshair") |
+| Compass / locate buttons | Labelled with hints ("Rotates the map back to north" / "Centers the map on your location") |
 | Crosshair | `.accessibilityHidden(true)` — decorative |
 
-Not automatable from CLI — verify with the Accessibility Inspector or an
-XCUITest before shipping (e.g. assert the "Forecast time" element is adjustable).
+Not automatable from CLI — verify reading order + the adjustable tape on-device with
+the Accessibility Inspector before shipping.
 
 ### 6.3 Dynamic Type
 
-All text uses semantic font styles → scales automatically. Verify at "Accessibility Extra Extra Extra Large" that the timeline bar doesn't clip. If it does, use `minimumScaleFactor(0.75)` on date/time labels before truncating.
+All body text uses semantic font styles → scales automatically. Verify at
+"Accessibility Extra Extra Extra Large" that the timeline bar doesn't clip; the speed
+readout already uses `minimumScaleFactor(0.6)`.
 
-### 6.4 Reduce Motion
+### 6.4 Reduce Motion / Low Power
 
-The animated current particles (§5.4a) are the one continuous animation in the app. Under **Reduce Motion** — and under **Low Power Mode** — `AppSettings.effectiveCurrentStyle` automatically falls back to the static arrows (§5.4), and the particle display link stops. `AppSettings` observes `UIAccessibility.reduceMotionStatusDidChangeNotification` and `NSProcessInfoPowerStateDidChange`, so the switch happens live without a relaunch. Any future SwiftUI animations should additionally gate on:
-```swift
-@Environment(\.accessibilityReduceMotion) var reduceMotion
-```
+The animated particles (§5.4a) are the one continuous animation. Under **Reduce
+Motion** *or* **Low Power Mode**, `AppSettings.effectiveCurrentStyle` falls back to
+the static arrows and the particle display link stops. `AppSettings` observes
+`UIAccessibility.reduceMotionStatusDidChangeNotification` and
+`NSProcessInfoPowerStateDidChange`, so the switch happens live without a relaunch.
+Any future SwiftUI animations should additionally gate on
+`@Environment(\.accessibilityReduceMotion)`.
 
 ---
 
 ## 7. iOS/iPadOS Platform Notes
 
 ### iPad-specific
-
-- The primary target is iPad — test all layouts on iPad Pro 12.9" and iPad 10th gen
-- Support both landscape and portrait (sailors may dock in portrait)
-- Consider `UISplitViewController`-equivalent for future detail panels (current info, legend)
-- Stage Manager / multitasking: the map should remain functional in 2/3 split view
+- Primary target is iPad — test on iPad Pro 12.9" and iPad 10th gen.
+- Support both landscape and portrait (sailors may dock in portrait).
+- Stage Manager / multitasking: the map should stay functional in 2/3 split view.
 
 ### Platform notes
-
-- `@Observable` (used via `MapViewModel`); GRDB over SwiftData for migration performance.
-- `.ultraThinMaterial` auto-gains the Liquid Glass appearance on iOS 26 — no code change needed; watch for visual regressions there.
+- State is `@Observable` stores (`MapViewModel`, `AppSettings`, …) injected via the
+  SwiftUI environment. GRDB over SwiftData for migration performance.
+- The Floating Card adopts native **Liquid Glass** (`.glassEffect`) on iOS 26+,
+  with the `.ultraThinMaterial` fallback on iOS 17–25 (§4.1b) — watch for visual
+  regressions across the boundary.
 
 ### Data bootstrap (before first build)
 
 `data/` is gitignored and **not** in a fresh clone, but the post-build script
 (`project.yml`) rsyncs it into the app bundle — a missing dir fails the build.
 Generate it first:
-
-- **Tide predictions** (`data/tides/tides_2026.json`): run `python3 dev/tides/fetch_tides.py`
-  (needs network — pulls NOAA + CHS). Re-curate the station set first with
+- **Tide predictions** (`data/tides/tides_2026.json`): `python3 dev/tides/fetch_tides.py`
+  (needs network — NOAA + CHS). Re-curate the station set first with
   `dev/tides/curate_stations.py` only if changing coverage/year.
-- **Offline basemap** (`data/basemap/`): see `dev/basemap/`.
+- **Basemap** (`data/basemap/`): the bundled Standard PMTiles + glyphs, built by
+  `dev/basemap/` (`build-pmtiles.sh`, `fetch-glyphs.sh`).
 
-(The print-atlas `data/maps*` directories and `dev/extraction/` tooling were
-retired when the harmonic current models replaced the atlas; offline currents
-now ship as committed `.b1` assets under `SalishTides/Resources/`.)
+The bundled offline current model (`Resources/current_model.b1`) is committed and
+needs no bootstrap. (The print-atlas `data/maps*` directories and
+`dev/extraction/` tooling were retired when the harmonic model replaced the
+atlas.)
 
 If `data/tides/` is absent the app builds with no tide data and the chart shows
 its "Tide data unavailable" placeholder.
@@ -490,42 +568,53 @@ its "Tide data unavailable" placeholder.
 
 ## 8. Settings & User Preferences
 
-User preferences live in `AppSettings` (`Models/AppSettings.swift`), an
-`@Observable` store persisted to `UserDefaults` and injected through the SwiftUI
-environment — the same pattern as `MapViewModel`, so both SwiftUI views and the
-`MapLibreView` representable react without prop-drilling.
+User preferences live in `AppSettings` (`Models/AppSettings.swift`), an `@Observable`
+store persisted to `UserDefaults` and injected through the environment — the same
+pattern as `MapViewModel`, so SwiftUI views and the `MapLibreView` representable react
+without prop-drilling.
 
 | Preference | Type | Default | Affects |
 |-----------|------|---------|---------|
-| `speedUnit` | knots / km·h / m·s | knots | Phase panel speed readout + VoiceOver |
-| `heightUnit` | metres / feet | metres | Tide chart cursor, y-axis, VoiceOver |
-| `showCrosshair` | Bool | on | `CrosshairView` visibility |
-| `appearance` | system / light / dark | system | `.preferredColorScheme` on the root → drives the full Day/Night theme (§2.3) |
+| `speedUnit` | knots / km·h / m·s | knots | Speed readout + VoiceOver |
+| `heightUnit` | metres / feet | metres | Tide chart cursor, axis, VoiceOver |
+| `clockFormat` | 24-hour / 12-hour | **24-hour** | Timeline readout, tape ticks, chart axis |
+| `currentStyle` | particles / arrows | particles | Map current rendering (see `effectiveCurrentStyle`) |
+| `appearance` | system / light / dark | **dark** | `.preferredColorScheme` → the whole Day/Night theme (§2.3) |
+| `basemap` | standard / satellite / (ocean) | standard | Map style (§2.4) |
+| `offlineOnly` | Bool | off | Disables all live SalishSeaCast fetching + rendering |
 
 **Canonical units never change in storage.** Currents are stored in knots
-(`CurrentVector.speedKnots`) and tide heights in metres (station datum);
-conversion happens only at the readout via `AppSettings.formatSpeed/​formatHeight`
-or the `SpeedUnit`/`HeightUnit` `value(from:)` helpers. Never persist a converted
-value — round-tripping loses precision.
+(`CurrentVector.speedKnots`), tide heights in metres (station datum). Conversion
+happens only at the readout (`formatSpeed` / `formatHeight`, or `value(from:)`
+helpers). Never persist a converted value — round-tripping loses precision.
 
-**Appearance default is `.system`.** Because `.preferredColorScheme` sets the
-`colorScheme` environment that every surface observes, the override switches the
-**whole** Day/Night theme — basemap, panels, chart/tape ink, crosshair, and the
-per-theme current-arrow ramp (§2.3) — not just the chrome.
+**Appearance default is `.dark`.** Because `.preferredColorScheme` drives the
+`colorScheme` environment every surface observes, the override switches the **whole**
+Day/Night theme — basemap, panels, chart/tape ink, crosshair, and the per-theme
+current ramp (§2.3). `.system` follows the device.
+
+**`effectiveCurrentStyle`** is the render decision: particles unless the user picked
+arrows *or* Reduce Motion / Low Power Mode forces the static fallback (§6.4).
+
+**Times display in `TimeZone.salish`** (America/Vancouver) via `Calendar.salish` —
+the app is region-specific, so times are "local to the water" regardless of the
+device timezone. Underlying data is UTC.
 
 ---
 
 ## 9. Open Design Backlog
 
-**Resolved in the settings/HIG-audit pass:**
-- ✅ Settings + About surface (§5.6) — data-source attribution now in-app
-- ✅ Non-standard `✛` speed suffix → `scope` SF Symbol (§5.1)
-- ✅ Unit preferences (speed / height) with a unit-agnostic tide-chart axis
+**Resolved:**
+- ✅ Real offline basemap — Standard now ships bundled Protomaps vector PMTiles (§2.4).
+- ✅ Settings + About surface with in-app data-source attribution (§5.6).
+- ✅ Unit preferences (speed / height / clock) with a unit-agnostic tide-chart axis.
+- ✅ Animated particle currents as the default, arrows as the accessible fallback.
 
 | Priority | Item | Notes |
 |----------|------|-------|
-| High | Real nautical basemap | CARTO raster (Day/Night) is a placeholder. Need PMTiles + a proper chart style with depth/seamark data. |
-| Medium | Speed legend | Users need a legend to understand the 5-color current scale (per-theme — see `currentSpeedRamp`) |
-| Low | VoiceOver audit | Labels are in place (§6.2); verify reading order + adjustable tape on-device with the Accessibility Inspector |
-| Low | Haptic feedback | Add impact feedback to tape hour-snaps and the return-to-now control |
-| Low | Portrait layout | Verify timeline + phase panel + settings button don't overlap in portrait on smaller iPads |
+| High | Chart-quality basemap | The vector basemap ships, but lacks depth contours / seamark data. Needs a proper nautical chart style. |
+| Medium | Re-expose the Ocean bathymetry style | Implemented but hidden (`isAvailable == false`) until it gets a legible current-arrow palette. |
+| Medium | Speed legend | Users need a legend for the 5-colour current scale (`currentSpeedRamp`). |
+| Low | Haptic feedback | Add impact feedback to tape hour-snaps and the return-to-now pill. |
+| Low | VoiceOver audit | Labels are in place (§6.2); verify reading order + adjustable tape on-device. |
+| Low | Portrait layout | Verify timeline + cards + corner buttons don't overlap in portrait on smaller iPads. |
