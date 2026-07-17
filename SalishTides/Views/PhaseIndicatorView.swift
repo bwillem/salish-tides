@@ -7,7 +7,10 @@ struct PhaseIndicatorView: View {
     @Environment(AppSettings.self) private var settings
 
     var body: some View {
-        if vm.tideStation != nil {
+        // Events can be empty with a station present (query failure, or a
+        // scrub past the bundled predictions' horizon) — hide the card rather
+        // than show an empty chart.
+        if vm.tideStation != nil, !vm.tideEvents.isEmpty {
             VStack(alignment: .leading, spacing: Spacing.xs) {
                 TideChartView(currentDate: vm.displayDate,
                               events: vm.tideEvents,
