@@ -7,7 +7,10 @@ struct PhaseIndicatorView: View {
     @Environment(AppSettings.self) private var settings
 
     var body: some View {
-        if let sel = vm.currentSelection {
+        // Events can be empty with a station present (query failure, or a
+        // scrub past the bundled predictions' horizon) — hide the card rather
+        // than show an empty chart.
+        if vm.tideStation != nil, !vm.tideEvents.isEmpty {
             VStack(alignment: .leading, spacing: Spacing.xs) {
                 TideChartView(currentDate: vm.displayDate,
                               events: vm.tideEvents,
@@ -26,7 +29,9 @@ struct PhaseIndicatorView: View {
                     if let station = vm.tideStation {
                         Text(station.name.stationDisplayName)
                     }
-                    Text("\(sel.tendency == .flood ? "↑" : "↓") \(phaseText(sel))")
+                    if let phase = vm.currentPhase {
+                        Text("\(phase.tendency == .flood ? "↑" : "↓") \(phaseText(phase))")
+                    }
                 }
                 .font(.stCaption)
                 .foregroundStyle(Color.inkSecondary)
@@ -38,7 +43,7 @@ struct PhaseIndicatorView: View {
                 .padding(.leading, TideChartView.plotLeftInset)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(phaseAccessibilityLabel(sel))
+                .accessibilityLabel(vm.currentPhase.map(phaseAccessibilityLabel) ?? "")
             }
             .padding(Spacing.md)
             .frame(width: 248)
@@ -62,13 +67,20 @@ struct PhaseIndicatorView: View {
 
     // Just the phase — the station name is already announced by the chart's
     // own a11y label (tideChartLabel), so repeating it here would double up.
-    private func phaseAccessibilityLabel(_ sel: ChartSelection) -> String {
-        "\(phaseText(sel)) tide."
+    private func phaseAccessibilityLabel(_ phase: CurrentPhase) -> String {
+        "\(phaseText(phase)) tide."
     }
 
-    /// Display name for the tide phase, e.g. "Small Flood".
-    private func phaseText(_ sel: ChartSelection) -> String {
-        sel.phase.replacingOccurrences(of: "_", with: " ").capitalized
+    /// Display name for the tide phase — "Flood"/"Ebb", strength-prefixed
+    /// ("Large Flood") if a strength ever ships.
+    private func phaseText(_ phase: CurrentPhase) -> String {
+        let base = phase.tendency == .flood ? "Flood" : "Ebb"
+        switch phase.strength {
+        case .small: return "Small \(base)"
+        case .medium: return "Medium \(base)"
+        case .large: return "Large \(base)"
+        case nil: return base
+        }
     }
 }
 
@@ -114,7 +126,7 @@ private extension String {
         TideEvent(time: base.addingTimeInterval(4 * 3600),  height: 2.6, isHigh: false),
         TideEvent(time: base.addingTimeInterval(9 * 3600),  height: 3.2, isHigh: true),
     ]
-    vm.currentSelections = [ChartSelection(volume: 1, chart: 3, phase: "small_ebb", tendency: .ebb)]
+    vm.currentPhase = CurrentPhase(tendency: .ebb, strength: nil, basis: .currentCorrelation)
 
     return PhaseIndicatorView()
         .environment(vm)

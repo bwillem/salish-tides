@@ -43,3 +43,4 @@ __pycache__/
 # grid. The compact packed grid that actually ships is tracked separately.
 /dev/model/b1_grid_full.parts/
 /dev/model/b1_grid_full.json
+/dev/model/webtide/

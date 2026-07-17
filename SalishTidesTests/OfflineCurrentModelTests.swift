@@ -132,6 +132,31 @@ struct OfflineCurrentModelTests {
         #expect((speeds.max()! - speeds.min()!) > 0.5)
     }
 
+    @Test func nearestWaterCellFindsAcrossLand() throws {
+        // 3×3 mesh, water only in the NE corner (cell 8). A query at the SW
+        // corner must ring-search across the dry cells to reach it — and a
+        // tight distance cap must refuse it.
+        var presence = [Bool](repeating: false, count: 9)
+        presence[8] = true
+        let asset = makeAsset(rows: 3, cols: 3, presence: presence, records: [record()])
+        let field = try OfflineCurrentModel.decode(asset)
+        // Cell 8 is at (48.02, -122.98); the mesh diagonal is ~3 km.
+        #expect(field.nearestWaterCell(lat: 48, lon: -123, maxDistanceKm: 5) == 8)
+        #expect(field.nearestWaterCell(lat: 48, lon: -123, maxDistanceKm: 1) == nil)
+        // A query right on the water cell finds it at ring zero.
+        #expect(field.nearestWaterCell(lat: 48.021, lon: -122.979, maxDistanceKm: 1) == 8)
+    }
+
+    @Test func nearestWaterCellPrefersTheCloserNode() throws {
+        // Water at opposite corners; the query sits just off the SW one.
+        var presence = [Bool](repeating: false, count: 9)
+        presence[0] = true; presence[8] = true
+        let asset = makeAsset(rows: 3, cols: 3, presence: presence,
+                              records: [record(), record()])
+        let field = try OfflineCurrentModel.decode(asset)
+        #expect(field.nearestWaterCell(lat: 48.004, lon: -122.996, maxDistanceKm: 5) == 0)
+    }
+
     @Test func dryShorelineBandsTheWater() throws {
         // 3×3 mesh, single water cell in the centre → all 8 neighbours masked.
         var presence = [Bool](repeating: false, count: 9)

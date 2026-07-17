@@ -86,6 +86,25 @@ actor OfflineCurrentModel {
         loadedField()?.coverage
     }
 
+    /// Velocity series at the water node nearest to (lat, lon) — one east/
+    /// north pair per date — plus that node's mesh cell index so callers can
+    /// key caches by location bucket. nil when no water lies within
+    /// `maxDistanceKm` (or the asset failed to load). Cheap: a ring search
+    /// plus |dates| single-node syntheses, microseconds against the per-load
+    /// full-field pass.
+    func velocitySeries(lat: Double, lon: Double, dates: [Date],
+                        maxDistanceKm: Double) -> (cell: Int, series: [(u: Double, v: Double)])? {
+        guard let field = loadedField(),
+              let cell = field.nearestWaterCell(lat: lat, lon: lon,
+                                                maxDistanceKm: maxDistanceKm)
+        else { return nil }
+        let node = Int(field.nodeIndex[cell])
+        let series = dates.map { date in
+            field.velocity(ofNode: node, terms: TidalHarmonics.synthesisTerms(at: date))
+        }
+        return (cell, series)
+    }
+
     /// Dry mesh cells 8-adjacent to water, as zero-speed vectors — the same
     /// coastline barrier band the live tier derives from NEMO dry cells
     /// (LiveDataService.dryShoreline), so the particle layer clips at the

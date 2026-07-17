@@ -43,6 +43,52 @@ struct TidalCurrentField: Sendable {
                     lon_min: lon0, lon_max: lon0 + Double(cols - 1) * dLon)
     }
 
+    /// Mesh cell index of the water node nearest to (lat, lon), or nil when
+    /// none lies within `maxDistanceKm`. Scans expanding square index rings
+    /// from the containing cell; the best candidate in the first non-empty
+    /// ring wins (exact enough at ring granularity for point lookups like the
+    /// phase indicator's).
+    func nearestWaterCell(lat: Double, lon: Double, maxDistanceKm: Double) -> Int? {
+        let r = Int(((lat - lat0) / dLat).rounded())
+        let c = Int(((lon - lon0) / dLon).rounded())
+        let cosLat = GeoMath.lonScale(atLat: lat)
+        // Ring reach in cells, from the smaller of the two cell edges so an
+        // anisotropic mesh can't stop the scan short of maxDistanceKm.
+        let cellDeg = min(dLat, dLon * cosLat)
+        guard cellDeg > 0, maxDistanceKm > 0 else { return nil }
+        let maxDistanceDeg = maxDistanceKm / 111.0
+        // Cap the walk at the grid's own span: a huge reach on a fine mesh
+        // must not turn an off-grid query into an O(reach²) scan.
+        let maxRing = min(Int((maxDistanceDeg / cellDeg).rounded(.up)),
+                          max(rows, cols))
+        for ring in 0...maxRing {
+            var best: (cell: Int, d2: Double)?
+            for dr in -ring...ring {
+                let rr = r + dr
+                guard (0..<rows).contains(rr) else { continue }
+                let onCap = abs(dr) == ring
+                var dc = -ring
+                while dc <= ring {
+                    defer { dc += onCap ? 1 : 2 * ring }   // caps: full row; sides: ±ring only
+                    let cc = c + dc
+                    guard (0..<cols).contains(cc) else { continue }
+                    let i = rr * cols + cc
+                    guard nodeIndex[i] >= 0 else { continue }
+                    let d2 = GeoMath.distanceSquared(
+                        fromLat: lat, fromLon: lon,
+                        toLat: lat0 + Double(rr) * dLat,
+                        toLon: lon0 + Double(cc) * dLon, cosLat: cosLat)
+                    if best == nil || d2 < best!.d2 { best = (i, d2) }
+                }
+                if ring == 0 { break }   // single cell; dc loop degenerates
+            }
+            if let best, best.d2 <= maxDistanceDeg * maxDistanceDeg {
+                return best.cell
+            }
+        }
+        return nil
+    }
+
     /// East/north velocity (m/s) of one water node at the instant captured by
     /// `terms`. Callers hoist `TidalHarmonics.synthesisTerms(at:)` ONCE per
     /// pass — the astronomy is date-only, and recomputing it per node is ~20×

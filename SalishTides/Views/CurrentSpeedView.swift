@@ -8,7 +8,9 @@ struct CurrentSpeedView: View {
     @Environment(AppSettings.self) private var settings
 
     var body: some View {
-        if vm.currentSelection != nil {
+        // Shown whenever any source is rendering currents in the viewport —
+        // the em-dash below covers a crosshair on land inside coverage.
+        if !vm.currentVectors.isEmpty {
             // Compass needle leads (a label for the reading), then the value.
             // Value + unit are baseline-aligned ("0.3 kn") and scale down
             // together rather than wrap.
