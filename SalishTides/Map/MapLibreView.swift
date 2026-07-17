@@ -80,11 +80,11 @@ struct MapLibreView: UIViewRepresentable {
         context.coordinator.setForeground(scenePhase == .active)
         // Marker for the station whose data the phase card is showing, with the
         // same tendency arrow the card renders. Read vm.tideStation and
-        // vm.currentSelection here so Observation re-runs updateUIView when the
+        // vm.currentPhase here so Observation re-runs updateUIView when the
         // nearest station or the scrubbed phase changes (the coordinator
         // change-detects both).
         context.coordinator.updateStation(vm.tideStation,
-                                          tendency: vm.currentSelection?.tendency,
+                                          tendency: vm.currentPhase?.tendency,
                                           on: mapView)
     }
 
@@ -244,7 +244,7 @@ struct MapLibreView: UIViewRepresentable {
         nonisolated(unsafe) private var stationAnnotation: TideStationAnnotation?
         // Latest tendency pushed from updateUIView; applied to the annotation
         // view on creation (viewFor) and on change (updateStation).
-        nonisolated(unsafe) private var lastTendency: Tendency?
+        nonisolated(unsafe) private var lastTendency: CurrentPhase.Tendency?
 
         // Screen-space radius (pt) around the map centre within which the
         // station label auto-reveals — matches the crosshair reticle's reach
@@ -255,7 +255,7 @@ struct MapLibreView: UIViewRepresentable {
         /// its tendency arrow in step with the phase card. Remove + re-add
         /// (rather than moving the annotation) keeps MapLibre's annotation
         /// tracking simple and gives the fade-in in didAdd.
-        func updateStation(_ station: TideStation?, tendency: Tendency?, on mapView: MLNMapView) {
+        func updateStation(_ station: TideStation?, tendency: CurrentPhase.Tendency?, on mapView: MLNMapView) {
             lastTendency = tendency
             guard station?.id != stationAnnotation?.stationID else {
                 // Same station — just refresh the glyph (cheap; the view
