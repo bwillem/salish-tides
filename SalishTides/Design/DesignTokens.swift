@@ -147,6 +147,18 @@ extension View {
                         y: Elevation.cardShadowYOffset)
         }
     }
+
+    /// Minimal readout tag pinned to the crosshair reticle (speed above,
+    /// bearing below). Deliberately NOT a floatingCard: no material, border,
+    /// or shadow — just a half-transparent theme-surface wash so the water
+    /// stays visible through it. systemBackground mirrors the reticle's own
+    /// inverse-halo convention (dark-on-light in Day, light-on-dark in Night).
+    func crosshairTag() -> some View {
+        self.padding(.horizontal, Spacing.sm)
+            .padding(.vertical, Spacing.xs)
+            .background(Color(.systemBackground).opacity(0.5),
+                        in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+    }
 }
 
 // MARK: - UIKit Mirrors (for MapLibre layers & annotation views)
