@@ -338,17 +338,22 @@ private struct MigrationView: View {
 
     var body: some View {
         ZStack {
-            Color.appBackground
+            // Match the launch screen exactly (Info.plist UILaunchScreen →
+            // LaunchLogo on the system background) so the static launch image
+            // hands off to this live view with no visible jump: same full
+            // wordmark, same centred position, same white/black surface.
+            Color(.systemBackground)
                 .ignoresSafeArea()
-            VStack(spacing: 24) {
-                Image("SplashEmblem")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 104)
-                    .foregroundStyle(.primary.opacity(0.8))
-                Text("Salish Tides")
-                    .font(.largeTitle.bold())
-                    .foregroundStyle(.primary)
+            // Centred at the launch screen's native size (~280 pt) — pinned dead
+            // centre, independent of the progress row below, so the logo sits
+            // right where the launch image left it.
+            Image("LaunchLogo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 280)
+            // Progress lives at the bottom so it doesn't push the logo off centre.
+            VStack {
+                Spacer()
                 VStack(spacing: 8) {
                     ProgressView(value: progress)
                         .progressViewStyle(.linear)
@@ -358,6 +363,7 @@ private struct MigrationView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                .padding(.bottom, 64)
             }
         }
     }
