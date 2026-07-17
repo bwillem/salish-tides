@@ -2,8 +2,8 @@ import Foundation
 
 /// A bundled grid of tidal-current harmonic constituents (one set per water
 /// node) plus the per-node synthesizer that turns them into an east/north
-/// velocity at any instant. This is the "Model" current source that fills the
-/// bays the print atlas doesn't chart; the grid is produced offline from
+/// velocity at any instant. This is the "Model" current source — offline
+/// currents at full mesh resolution; the grid is produced offline from
 /// SalishSeaCast (dev/model pipeline) and packed onto a regular lat/lon mesh.
 ///
 /// Storage is flat structure-of-arrays: one `Int32` per mesh cell mapping to a
@@ -36,8 +36,7 @@ struct TidalCurrentField: Sendable {
 
     static var coeffStride: Int { 2 + 4 * TidalHarmonics.constituents.count }
 
-    /// Geographic bounding box of the mesh (used to keep atlas coverage alive
-    /// outside the model domain).
+    /// Geographic bounding box of the mesh.
     var coverage: ChartBounds {
         ChartBounds(lat_min: lat0, lat_max: lat0 + Double(rows - 1) * dLat,
                     lon_min: lon0, lon_max: lon0 + Double(cols - 1) * dLon)

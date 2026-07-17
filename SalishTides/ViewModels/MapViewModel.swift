@@ -15,15 +15,10 @@ final class MapViewModel {
     // field raster — currentVectors is display-thinned for the arrows and
     // would starve/bias the field.
     var currentFieldVectors: [CurrentVector] = []
-    // Zero-speed "dry land" points bounding the live model's coastline,
+    // Zero-speed "dry land" points bounding the rendering tier's coastline,
     // culled (not thinned — it's a contiguous barrier band) like the vectors.
-    // Empty when the atlas renders (it has no land mask) — the particle layer
-    // treats an empty mask as all-water.
+    // The particle layer treats an empty mask as all-water.
     var currentLandMask: [CurrentVector] = []
-    // Atlas chart selections — internal only since the phase indicator went
-    // harmonic (currentPhase): they now exist solely to key the atlas vector
-    // query for volumes the model doesn't cover.
-    private var currentSelections: [ChartSelection] = []
     var isMigrating = false
     var migrationProgress: Double = 0
     var migrationError: String?
@@ -44,19 +39,17 @@ final class MapViewModel {
     var currentPhase: CurrentPhase?
 
     // Which source produced the rendered current field, in fallback order:
-    // live SalishSeaCast → bundled harmonic model → bundled atlas. The vectors
-    // themselves flow through the same currentVectors property; this only
-    // carries provenance for the UI.
-    enum CurrentSource { case live, model, atlas }
-    var currentSource: CurrentSource = .atlas
+    // live SalishSeaCast → bundled harmonic model. nil until a load completes
+    // (or when the viewport is off all coverage), so no badge shows. The
+    // vectors themselves flow through the same currentVectors property; this
+    // only carries provenance for the UI.
+    enum CurrentSource { case live, model }
+    var currentSource: CurrentSource?
     /// Live currents rendering right now — drives the "Online mode" badge.
     var isLiveCurrents: Bool { currentSource == .live }
     var liveTideSeries: LiveTideSeries?
 
     private let liveData: LiveDataService?
-    private let selectors: [(VolumeSpec, ChartSelector)]
-    // Per-volume region index for viewport culling, keyed by volume id.
-    private let atlasIndexes: [Int: AtlasIndex]
 
     // Monotonic token so a slow multi-volume load can't overwrite the results
     // of a newer request (rapid time-scrub / pan). Incremented on the main
@@ -88,39 +81,10 @@ final class MapViewModel {
 
     init(liveData: LiveDataService? = nil) {
         self.liveData = liveData
-        // Build one selector per unique lookup resource — Vol 1 and Vol 3 share a file,
-        // so we load it once and reuse it for both volume IDs.
-        var loaded: [String: AtlasLookupTable] = [:]
-        var built: [(VolumeSpec, ChartSelector)] = []
-        for spec in atlasVolumes {
-            let table: AtlasLookupTable
-            if let cached = loaded[spec.lookupResource] {
-                table = cached
-            } else if let url = Bundle.main.url(forResource: spec.lookupResource, withExtension: "json"),
-                      let data = try? Data(contentsOf: url),
-                      let decoded = try? JSONDecoder().decode(AtlasLookupTable.self, from: data) {
-                table = decoded
-                loaded[spec.lookupResource] = decoded
-            } else {
-                continue
-            }
-            built.append((spec, ChartSelector(volume: spec.id, table: table)))
-        }
-        self.selectors = built
-
-        var indexes: [Int: AtlasIndex] = [:]
-        for spec in atlasVolumes {
-            guard let resource = spec.atlasIndexResource else { continue }
-            if let index = try? AtlasIndex.load(resource: resource) {
-                indexes[spec.id] = index
-            }
-        }
-        self.atlasIndexes = indexes
     }
 
     func initialize() async {
         do {
-            try await VectorDatabase.shared.setup()
             try await TideDatabase.shared.setup()
 
             if await DatabaseMigrator.shared.needsMigration {
@@ -226,10 +190,8 @@ final class MapViewModel {
 
         // Cull the whole-domain live field to the viewport (with margin, so
         // pans don't immediately hit empty edges) BEFORE choosing the source:
-        // an empty result means the viewport is outside the model's coverage
-        // (or all land at this resolution), and the atlas must take over —
-        // its charts extend beyond the NEMO domain (e.g. Queen Charlotte
-        // Strait in Vol 4).
+        // an empty result means the viewport is outside the live coverage
+        // (or all land at this resolution), and the harmonic model takes over.
         var liveVectors: [CurrentVector]? = liveField.flatMap { field in
             let culled = viewportFiltered(field)
             return culled.isEmpty ? nil : culled
@@ -246,95 +208,23 @@ final class MapViewModel {
             if !culled.isEmpty { liveVectors = culled }
         }
 
-        // Middle tier: the bundled harmonic model. Synthesized on device from
-        // packed SalishSeaCast constituents, so anywhere the live field would
-        // render but can't (offline, cold cache, forecast horizon) still gets
-        // full-resolution model water instead of the atlas's sparse arrows.
-        // nil when the viewport is off the model domain → atlas takes over.
+        // Fallback tier: the bundled harmonic model. Synthesized on device
+        // from packed constituents, so anywhere the live field would render
+        // but can't (offline, cold cache, forecast horizon) still gets
+        // full-resolution model water. nil when the viewport is off the
+        // model's domain — the map simply shows no current data there.
         var modelVectors: [CurrentVector]?
-        var modelCoverage: ChartBounds?
         if liveVectors == nil {
             modelVectors = await OfflineCurrentModel.shared.currents(for: date,
                                                                      viewport: visibleViewport)
             guard generation == loadGeneration else { return }
-            if modelVectors != nil {
-                // The atlas charts water beyond the model domain (Queen
-                // Charlotte Strait in Vol 4): a straddling viewport keeps its
-                // atlas arrows outside this box, model water inside —
-                // otherwise the out-of-domain half goes blank offline.
-                modelCoverage = await OfflineCurrentModel.shared.coverage()
-                guard generation == loadGeneration else { return }
-            }
         }
 
-        // Find all volumes whose geographic bounds intersect the current viewport.
-        // If no viewport yet, include all volumes so any initial chart load works.
-        // Rank volumes containing the viewport center first, so currentSelection
-        // (.first) reflects the water the user is actually looking at.
-        let center = visibleViewport.map {
-            (lat: ($0.lat_min + $0.lat_max) / 2, lon: ($0.lon_min + $0.lon_max) / 2)
-        }
-        let activeSelectors = selectors
-            .filter { spec, _ in
-                guard let vp = visibleViewport else { return true }
-                return spec.bounds.intersects(vp)
-            }
-            .sorted { lhs, rhs in
-                rank(lhs.0, center: center) < rank(rhs.0, center: center)
-            }
+        let vectors = liveVectors ?? modelVectors ?? []
 
-        var selections: [ChartSelection] = []
-        var vectors: [CurrentVector] = []
-
-        // Chart selections are always computed — they drive the flood/ebb phase
-        // indicator regardless of which source renders the vectors. The atlas
-        // DB is only queried when there's no live or model field to show.
-        for (spec, selector) in activeSelectors {
-            guard let sel = selector.selection(for: date) else { continue }
-            selections.append(sel)
-            guard liveVectors == nil else { continue }
-            // With the model rendering, only volumes extending beyond the
-            // model domain still contribute (their out-of-domain arrows).
-            if modelVectors != nil, let cov = modelCoverage, cov.contains(spec.bounds) { continue }
-
-            // Use the volume's index for viewport-based region culling when
-            // available; fall back to all regions if the index failed to load.
-            let regions: [String]
-            if let index = atlasIndexes[spec.id] {
-                regions = index.regions(forChart: sel.chart, intersecting: visibleViewport)
-            } else {
-                regions = spec.regions
-            }
-            guard !regions.isEmpty else { continue }
-
-            do {
-                var vecs = try await VectorDatabase.shared.vectors(volume: spec.id, chart: sel.chart, regions: regions)
-                // A newer load started while we were awaiting — drop these stale results.
-                guard generation == loadGeneration else { return }
-                if modelVectors != nil, let cov = modelCoverage {
-                    // Model water renders inside the domain; keep only the
-                    // arrows the model can't cover.
-                    vecs.removeAll { cov.contains(lat: $0.lat, lon: $0.lon) }
-                }
-                vectors.append(contentsOf: vecs)
-            } catch {
-                // Non-fatal: one volume failing doesn't hide the others
-                Log.map.error("atlas vectors failed (vol \(spec.id), chart \(sel.chart)): \(error, privacy: .public)")
-            }
-        }
-
-        if let liveVectors {
-            vectors = liveVectors
-        } else if let modelVectors {
-            // Any atlas arrows outside the model domain are already in
-            // `vectors`; the model fills everything inside.
-            vectors.append(contentsOf: modelVectors)
-        }
-
-        // The coastline mask, culled like the vectors. Both NEMO-derived
-        // tiers provide one (live from cached wet cells, model from its own
-        // mesh) so particles clip at the shoreline; the atlas has no dry
-        // cells to mask with.
+        // The coastline mask, culled like the vectors. Both tiers provide one
+        // (live from cached wet cells, model from its own mesh) so particles
+        // clip at the shoreline.
         var landMask: [CurrentVector] = []
         if liveVectors != nil, let mask = await liveData?.landMask() {
             landMask = viewportFiltered(mask)
@@ -345,8 +235,7 @@ final class MapViewModel {
         guard generation == loadGeneration else { return }
         // Provenance reflects what is actually rendered: a tier is nil (and
         // the next one populated `vectors`) whenever its cull came up empty.
-        currentSource = liveVectors != nil ? .live : modelVectors != nil ? .model : .atlas
-        currentSelections = selections
+        currentSource = liveVectors != nil ? .live : modelVectors != nil ? .model : nil
         // Crosshair readout uses the full-resolution set; only the rendered
         // layer is down-sampled.
         let crosshairVector = nearestVector(in: vectors, viewport: visibleViewport)
@@ -550,15 +439,8 @@ final class MapViewModel {
         return pow(2, (log2(size) / step).rounded() * step)
     }
 
-    // 0 if the volume's bounds contain the viewport center, else 1 — used only
-    // to order active volumes; ties keep their original (volume-id) order.
-    private func rank(_ spec: VolumeSpec, center: (lat: Double, lon: Double)?) -> Int {
-        guard let c = center else { return 0 }
-        return spec.bounds.contains(lat: c.lat, lon: c.lon) ? 0 : 1
-    }
-
     // Beyond this, the nearest current vector is too far to be "under" the
-    // crosshair — i.e. it's on land or off the atlas coverage, so report no speed
+    // crosshair — i.e. it's on land or off coverage, so report no speed
     // (the data has no slack vectors; current exists only where there's flow).
     private let crosshairMaxDistanceDeg = 0.015  // ≈ 1.6 km
 

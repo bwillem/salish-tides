@@ -293,7 +293,7 @@ The upper-right cluster is **two stacked floating cards**, not one:
 ╭──────────────────────────────╮
 │  [TideChartView — 108 pt]     │  ← curve + cursor height, station a11y label
 │  Station Name                 │  ← .stCaption / .inkSecondary, inset to plot edge
-│  ↑ Small Flood                │  ← text arrow (↑ flood / ↓ ebb) + phase, no colour
+│  ↑ Flood                      │  ← text arrow (↑ flood / ↓ ebb) + phase, no colour
 ╰──────────────────────────────╯
 ```
 Station name and phase are left-aligned and inset by `TideChartView.plotLeftInset`
@@ -479,9 +479,9 @@ Settings                                    Done
 - There is **no crosshair toggle** — the crosshair is always shown (§5.3).
 
 **Data Sources** (`DataSourcesView`, pushed from About): the "not for navigation"
-disclaimer, SalishSeaCast (UBC) live-forecast credit, the Salish Sea Tidal Current
-Atlas, NOAA CO-OPS / CHS IWLS tide attribution, and the MapLibre / OpenStreetMap /
-MapTiler basemap credits. In-app provenance is expected at App Store review for a
+disclaimer, SalishSeaCast (UBC) live-forecast and offline-model credit, NOAA
+CO-OPS / CHS IWLS tide attribution, and the MapLibre / OpenStreetMap / MapTiler
+basemap credits. In-app provenance is expected at App Store review for a
 navigation aid.
 
 ---
@@ -505,7 +505,7 @@ colour is decorative (redundant with line weight), so it is held to 3:1, not 4.5
 | Timeline readout | One element ("Now, Jun 24, 15:00" / the date-time); hint "Opens a date picker" |
 | "Now" pill | Label "Return to now", hint "Returns the timeline to the current time" |
 | Tide chart (`TideChartView`) | One element labelled with the current tide ("Tide 2.4 metres at Bedwell Harbour, above chart datum") |
-| Phase line | One element ("Small Flood tide.") |
+| Phase line | One element ("Flood tide." / "Ebb tide.") |
 | Speed card (`CurrentSpeedView`) | One element leading with speed + flow direction ("0.3 kn flowing north-east at crosshair") |
 | Compass / locate buttons | Labelled with hints ("Rotates the map back to north" / "Centers the map on your location") |
 | Crosshair | `.accessibilityHidden(true)` — decorative |
@@ -550,14 +550,19 @@ Any future SwiftUI animations should additionally gate on
 `data/` is gitignored and **not** in a fresh clone, but the post-build script
 (`project.yml`) rsyncs it into the app bundle — a missing dir fails the build.
 Generate it first:
-- **Atlas currents** (`data/maps*`): the extraction tooling in `dev/extraction/`.
 - **Tide predictions** (`data/tides/tides_2026.json`): `python3 dev/tides/fetch_tides.py`
-  (needs network — NOAA + CHS).
+  (needs network — NOAA + CHS). Re-curate the station set first with
+  `dev/tides/curate_stations.py` only if changing coverage/year.
 - **Basemap** (`data/basemap/`): the bundled Standard PMTiles + glyphs, built by
   `dev/basemap/` (`build-pmtiles.sh`, `fetch-glyphs.sh`).
 
 The bundled offline current model (`Resources/current_model.b1`) is committed and
-needs no bootstrap.
+needs no bootstrap. (The print-atlas `data/maps*` directories and
+`dev/extraction/` tooling were retired when the harmonic model replaced the
+atlas.)
+
+If `data/tides/` is absent the app builds with no tide data and the chart shows
+its "Tide data unavailable" placeholder.
 
 ---
 

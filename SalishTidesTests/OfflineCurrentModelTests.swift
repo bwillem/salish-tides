@@ -4,7 +4,7 @@ import Testing
 
 /// Builds synthetic `.b1` assets byte-by-byte (the packer's format) so the
 /// decoder's guards are pinned: a corrupt header or renamed constituent must
-/// fail into the atlas fallback, never trap or silently mis-render.
+/// fail cleanly (no offline render), never trap or silently mis-render.
 struct OfflineCurrentModelTests {
 
     private static let engineNames = TidalHarmonics.constituents.map(\.name)

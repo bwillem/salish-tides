@@ -409,7 +409,7 @@ struct MapLibreView: UIViewRepresentable {
             barbLayer.predicate = NSPredicate(format: "arrow_type == 'barb'")
 
             // Slack/weak grid points (speed 0, no direction) render as small
-            // faint dots — exactly how the atlas draws them — so weak-current
+            // faint dots — the print-atlas convention — so weak-current
             // areas read as "charted, slack" rather than missing data.
             let slackLayer = MLNCircleStyleLayer(identifier: slackLayerID, source: source)
             slackLayer.circleColor = NSExpression(forConstantValue: UIColor.currentSpeedRamp(dark: dark)[0])
@@ -434,7 +434,7 @@ struct MapLibreView: UIViewRepresentable {
             // the land fills — see standard-{light,dark}.json), so land paints
             // over the particles: pixel-perfect clipping at the drawn
             // coastline, which the source data can't provide (NEMO widens
-            // narrow passes ~1–3 cells; the atlas has no land mask at all).
+            // narrow passes ~1–3 cells).
             // Styles without an "earth" layer (Ocean/Satellite, the flat
             // fallback) keep the old draw-on-top behavior.
             let particleLayer = CurrentParticleLayer(identifier: particleLayerID)

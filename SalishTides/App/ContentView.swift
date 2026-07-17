@@ -96,8 +96,8 @@ struct ContentView: View {
                 // basemap (Satellite) is selected and the network is unreachable,
                 // noting that *new* imagery can't load (cached tiles keep showing;
                 // it clears itself once back online) — and the currents-source
-                // tier on the right ("Online mode" / "Offline model"; the sparse
-                // atlas gets none). Full attribution: Settings → Data Sources.
+                // tier on the right ("Online mode" / "Offline model"; none until
+                // a load completes). Full attribution: Settings → Data Sources.
                 //
                 // The animation lives on the always-present Group, not on the
                 // conditional row: when the Offline pill is the *only* pill,
@@ -227,21 +227,21 @@ private struct LocateButton: View {
 /// Currents-source status pill — a coloured dot + label in its own small glass
 /// container, shown bottom-right to say which tier the rendered current field is
 /// drawn from. "Online mode" (live SalishSeaCast) uses the brand accent; the
-/// "Offline model" harmonic tier uses a muted dot. The sparse atlas tier shows
-/// nothing — charted arrows read as themselves.
+/// "Offline model" harmonic tier uses a muted dot.
 private struct SourceBadge: View {
     let content: Content
 
-    /// The presentable states of `MapViewModel.CurrentSource`. `.atlas` maps to
-    /// nil (no badge), so the call site can `if let` it away entirely.
+    /// The presentable states of `MapViewModel.CurrentSource`. nil source
+    /// (nothing rendered yet / off coverage) maps to nil, so the call site can
+    /// `if let` it away entirely.
     enum Content {
         case online, model
 
-        init?(_ source: MapViewModel.CurrentSource) {
+        init?(_ source: MapViewModel.CurrentSource?) {
             switch source {
             case .live:  self = .online
             case .model: self = .model
-            case .atlas: return nil
+            case nil:    return nil
             }
         }
 

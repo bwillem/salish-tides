@@ -3,9 +3,8 @@ import Foundation
 /// The bundled offline current source: decodes `current_model.b1` — harmonic
 /// constituents for every water node of the SalishSeaCast domain, packed onto
 /// a regular lat/lon mesh — and synthesizes current vectors for any hour with
-/// no network at all. Sits between live SalishSeaCast (which it reproduces at
-/// ~0.98 out-of-sample correlation) and the print atlas in MapViewModel's
-/// fallback chain.
+/// no network at all. The fallback tier below live SalishSeaCast (which it
+/// reproduces at ~0.98 out-of-sample correlation) in MapViewModel's chain.
 ///
 /// Binary layout (little-endian; producer is dev/model/b1_pack_grid.py and
 /// the byte-level spec is dev/model/b1_verify_pack.py):
@@ -35,7 +34,7 @@ actor OfflineCurrentModel {
     /// empty edges), at the mesh's native resolution. No viewport yet → the
     /// whole domain, mirroring the live source's whole-domain field. Returns
     /// nil when the viewport doesn't overlap the model's water (or the asset
-    /// failed to load) — callers fall through to the atlas.
+    /// failed to load) — the map shows no current data there.
     func currents(for date: Date, viewport: ChartBounds?) -> [CurrentVector]? {
         guard let field = loadedField() else { return nil }
 
@@ -81,7 +80,7 @@ actor OfflineCurrentModel {
     }
 
     /// Geographic bounding box of the model mesh, or nil when the asset
-    /// didn't load. MapViewModel keeps atlas arrows alive outside it.
+    /// didn't load.
     func coverage() -> ChartBounds? {
         loadedField()?.coverage
     }
@@ -163,7 +162,7 @@ actor OfflineCurrentModel {
                 }
                 field = decoded
             } catch {
-                // Non-fatal: the atlas tier still renders everywhere it charts.
+                // Non-fatal: the map simply shows no offline currents.
                 Log.map.error("offline current model failed to load: \(error, privacy: .public)")
             }
         }
@@ -187,7 +186,7 @@ actor OfflineCurrentModel {
         let dLon = try cursor.float64()
         // Header sanity: the window math divides by dLat/dLon and converts
         // the result with Int(Double), which TRAPS on non-finite input — a
-        // corrupt header must fail here, into the atlas fallback, not there.
+        // corrupt header must fail decode here, not trap there.
         guard rows > 0, cols > 0, rows * cols <= 4_000_000,
               lat0.isFinite, lon0.isFinite,
               dLat.isFinite, dLat > 0, dLon.isFinite, dLon > 0
@@ -201,8 +200,8 @@ actor OfflineCurrentModel {
             names.append(String(decoding: try cursor.bytes(len), as: UTF8.self))
         }
         // The synthesizer is keyed to TidalHarmonics' fixed constituent set;
-        // a mismatch (renamed constituent, added overtide) must fail loudly
-        // into the atlas tier, not silently drop tidal energy.
+        // a mismatch (renamed constituent, added overtide) must fail loudly,
+        // not silently drop tidal energy.
         guard names == TidalHarmonics.constituents.map(\.name) else {
             throw DecodeError.constituentMismatch
         }

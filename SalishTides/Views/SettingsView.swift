@@ -150,8 +150,8 @@ private struct DataSourcesView: View {
             }
 
             Section("Tidal Currents") {
-                LabeledContent("Atlas", value: "Salish Sea Tidal Current Atlas")
-                Text("Current vectors are extracted from the four-volume Salish Sea Tidal Current Atlas, covering tidal currents across the Salish Sea (BC / WA).")
+                LabeledContent("Offline Model", value: "SalishSeaCast · UBC")
+                Text("Offline currents are synthesized on device from tidal harmonic constituents fitted to a year of the SalishSeaCast NEMO model (UBC Earth, Ocean & Atmospheric Sciences) — tide-driven flow only, without weather effects.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
