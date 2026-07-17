@@ -20,7 +20,10 @@ final class MapViewModel {
     // Empty when the atlas renders (it has no land mask) — the particle layer
     // treats an empty mask as all-water.
     var currentLandMask: [CurrentVector] = []
-    var currentSelections: [ChartSelection] = []
+    // Atlas chart selections — internal only since the phase indicator went
+    // harmonic (currentPhase): they now exist solely to key the atlas vector
+    // query for volumes the model doesn't cover.
+    private var currentSelections: [ChartSelection] = []
     var isMigrating = false
     var migrationProgress: Double = 0
     var migrationError: String?
@@ -35,6 +38,11 @@ final class MapViewModel {
     var tideStation: TideStation?
     var tideEvents: [TideEvent] = []
 
+    // Flood/ebb state of the current around the viewport centre, rederived
+    // every load from the harmonic model + tide curve (CurrentPhaseEstimator).
+    // nil (row hidden) when neither the model nor the tide curve can say.
+    var currentPhase: CurrentPhase?
+
     // Which source produced the rendered current field, in fallback order:
     // live SalishSeaCast → bundled harmonic model → bundled atlas. The vectors
     // themselves flow through the same currentVectors property; this only
@@ -44,9 +52,6 @@ final class MapViewModel {
     /// Live currents rendering right now — drives the "Online mode" badge.
     var isLiveCurrents: Bool { currentSource == .live }
     var liveTideSeries: LiveTideSeries?
-
-    // Convenience for views that only need one selection (e.g. phase indicator)
-    var currentSelection: ChartSelection? { currentSelections.first }
 
     private let liveData: LiveDataService?
     private let selectors: [(VolumeSpec, ChartSelector)]
@@ -377,14 +382,23 @@ final class MapViewModel {
     // vector path so a slow fetch can't overwrite a newer scrub/pan's result.
     private func updateTides(for date: Date, generation: Int) async {
         guard let vp = visibleViewport else {
-            tideStation = nil; tideEvents = []; liveTideSeries = nil
+            tideStation = nil; tideEvents = []; liveTideSeries = nil; currentPhase = nil
             return
         }
         let cLat = (vp.lat_min + vp.lat_max) / 2
         let cLon = (vp.lon_min + vp.lon_max) / 2
-        guard let station = await TideDatabase.shared.nearestStation(lat: cLat, lon: cLon) else {
+        // nearestStation is unbounded, and the station registry thins out fast
+        // north of the Salish Sea — beyond the cap, a "nearest" station's curve
+        // and phase are simply wrong for the viewport, so show no tide card
+        // rather than a misleading one.
+        guard let station = await TideDatabase.shared.nearestStation(lat: cLat, lon: cLon),
+              GeoMath.distanceSquared(fromLat: cLat, fromLon: cLon,
+                                      toLat: station.lat, toLon: station.lon,
+                                      cosLat: cos(cLat * .pi / 180))
+                <= Self.stationMaxDistanceDeg * Self.stationMaxDistanceDeg
+        else {
             guard generation == loadGeneration else { return }
-            tideStation = nil; tideEvents = []; liveTideSeries = nil
+            tideStation = nil; tideEvents = []; liveTideSeries = nil; currentPhase = nil
             return
         }
         // Wide enough to cover the live scrub: the chart centre (displayDate) can
@@ -400,6 +414,77 @@ final class MapViewModel {
         tideStation = station
         tideEvents = events
         liveTideSeries = live
+        await updatePhase(for: date, generation: generation)
+    }
+
+    // MARK: - Flood/ebb phase
+
+    /// No model water within this range of the viewport centre → the phase
+    /// falls back to the tide curve alone.
+    private static let phaseMaxDistanceKm = 3.0
+    /// Tide stations farther than this (≈100 km) from the viewport centre are
+    /// ignored entirely — see updateTides.
+    private static let stationMaxDistanceDeg = 0.9
+    /// Hourly samples spanning ±12 h — a full tidal day, so both flood and ebb
+    /// phases of both inequal cycles contribute to the learned axis.
+    private static let floodDirWindow = Array(-12...12)
+
+    /// Cache key for a learned flood axis: it's a property of (place, tide
+    /// curve, spring/neap state), so bucket by model cell + station + UTC day.
+    private struct FloodDirKey: Hashable {
+        let cell: Int
+        let stationID: String
+        let day: Int
+    }
+    private var floodDirCache = LRUCache<FloodDirKey, CurrentPhaseEstimator.FloodDirection>(limit: 64)
+
+    /// Rederive `currentPhase` at the viewport centre for the loaded hour.
+    /// Always harmonic-model-based (never the live field), so the indicator is
+    /// deterministic and identical online and offline. Runs after updateTides
+    /// because it needs the freshly loaded station + events.
+    private func updatePhase(for date: Date, generation: Int) async {
+        guard let vp = visibleViewport, let station = tideStation, !tideEvents.isEmpty else {
+            if generation == loadGeneration { currentPhase = nil }
+            return
+        }
+        let cLat = (vp.lat_min + vp.lat_max) / 2
+        let cLon = (vp.lon_min + vp.lon_max) / 2
+        let events = tideEvents
+        let heightAt: (Date) -> Double? = { TideCurve.height(at: $0, events: events) }
+
+        guard let now = await OfflineCurrentModel.shared.velocitySeries(
+            lat: cLat, lon: cLon, dates: [date],
+            maxDistanceKm: Self.phaseMaxDistanceKm)
+        else {
+            // Off the model's water (open ocean, far north): the tide curve
+            // alone still gives a defensible rising/falling answer.
+            guard generation == loadGeneration else { return }
+            currentPhase = CurrentPhaseEstimator.phase(u: 0, v: 0, at: date,
+                                                       floodDirection: nil,
+                                                       heightAt: heightAt)
+            return
+        }
+
+        let key = FloodDirKey(cell: now.cell, stationID: station.id,
+                              day: Int(date.timeIntervalSince1970 / 86_400))
+        var floodDir = floodDirCache.value(for: key)
+        if floodDir == nil {
+            let dates = Self.floodDirWindow.map { date.addingTimeInterval(Double($0) * 3600) }
+            if let day = await OfflineCurrentModel.shared.velocitySeries(
+                lat: cLat, lon: cLon, dates: dates,
+                maxDistanceKm: Self.phaseMaxDistanceKm) {
+                let samples = zip(dates, day.series).map {
+                    CurrentPhaseEstimator.Sample(t: $0, u: $1.u, v: $1.v)
+                }
+                floodDir = CurrentPhaseEstimator.floodDirection(samples: samples,
+                                                                heightAt: heightAt)
+                if let floodDir { floodDirCache.insert(floodDir, for: key) }
+            }
+        }
+        guard generation == loadGeneration else { return }
+        currentPhase = CurrentPhaseEstimator.phase(u: now.series[0].u, v: now.series[0].v,
+                                                   at: date, floodDirection: floodDir,
+                                                   heightAt: heightAt)
     }
 
     private struct Cell: Hashable { let x: Int; let y: Int }

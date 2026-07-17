@@ -22,6 +22,7 @@
 		28CEED760DB3C36FC29C60ED /* PhaseIndicatorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF78D89E101E6B88EB6D487E /* PhaseIndicatorView.swift */; };
 		2C6DCF8F97E181783A106DBC /* VectorDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = A89FE39742D2A11DF361182D /* VectorDatabase.swift */; };
 		2F421A2B2CBF0CAB8F0B8A52 /* LiveDataStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB7F5692AE18799CAFFCA75E /* LiveDataStore.swift */; };
+		3000DAD2EE859A38D2752CF4 /* CurrentPhaseEstimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111F059C707D7FB549B00EE7 /* CurrentPhaseEstimator.swift */; };
 		3002DAB5B09EDAE4506050FB /* atlas_lookup_2026.json in Resources */ = {isa = PBXBuildFile; fileRef = 1E2E5511446438A2D163BF38 /* atlas_lookup_2026.json */; };
 		41162347ABE1FEA0F4DD421B /* atlas_index_vol2.json in Resources */ = {isa = PBXBuildFile; fileRef = EA075EE14D6DD086954E95E5 /* atlas_index_vol2.json */; };
 		43B3B2114729025A2887B1A7 /* LRUCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = B430D515B3053CB1308FC171 /* LRUCache.swift */; };
@@ -31,6 +32,7 @@
 		570A422AFA165A8582E8CC3E /* CurrentVector.swift in Sources */ = {isa = PBXBuildFile; fileRef = B534466B629735C3AFD88226 /* CurrentVector.swift */; };
 		5DB2319BABC9FB829D843F6A /* TideChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E02E5CB168CDB0660201216E /* TideChartView.swift */; };
 		5FECA4D7D218CCCFA6B36A93 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DDA2FAF2D0189860F478A7C /* AppSettings.swift */; };
+		650F7FE452876746C629AA78 /* CurrentPhaseEstimatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC1102E5F68419EC85F05430 /* CurrentPhaseEstimatorTests.swift */; };
 		674193FB48B28EB47DDE9EF9 /* MapLibreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 705E9152F8BEA1FA75608D3F /* MapLibreView.swift */; };
 		79DB6E5EBB8738AF5B7CECFE /* MapController.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC0C2E94595CF5DDCD144C35 /* MapController.swift */; };
 		7E0271059E302369E9B87F7B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 2BB7C4074365FDAFA91601A1 /* PrivacyInfo.xcprivacy */; };
@@ -54,6 +56,7 @@
 		D02F6CEBAD38ED7BCD07D911 /* MapLibre in Frameworks */ = {isa = PBXBuildFile; productRef = 42B0127065AEDC608BD0C4A4 /* MapLibre */; };
 		D14AD78CBA4B0066C42F056B /* atlas_lookup_vol4_2026.json in Resources */ = {isa = PBXBuildFile; fileRef = 2DB51EF67918D47D54D0733D /* atlas_lookup_vol4_2026.json */; };
 		D7B586A7ED13970C8F267F1A /* SalishSeaCastClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A81CE1B298B64CEDF727ACF4 /* SalishSeaCastClient.swift */; };
+		D8860EEF5F47286C0F504784 /* CurrentPhase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81EB316AD168CB2F9A704957 /* CurrentPhase.swift */; };
 		DA90180CAF28E691D0B6F0AE /* CurrentParticleLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB02102BE8D3A61DEB2FB722 /* CurrentParticleLayer.swift */; };
 		DB1DA594128D65FAE7F67967 /* standard-light.json in Resources */ = {isa = PBXBuildFile; fileRef = 727BC113893557DFF4A9C2AF /* standard-light.json */; };
 		DEEA37D4F253B7A4E151C3EB /* AtlasLookupTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33F90FC333D8D0174AF1A089 /* AtlasLookupTable.swift */; };
@@ -79,6 +82,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		111F059C707D7FB549B00EE7 /* CurrentPhaseEstimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrentPhaseEstimator.swift; sourceTree = "<group>"; };
 		174AD48AFB6611FDE9777B62 /* TidalHarmonics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TidalHarmonics.swift; sourceTree = "<group>"; };
 		190464A173F749BB0A3B786E /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		1E2E5511446438A2D163BF38 /* atlas_lookup_2026.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = atlas_lookup_2026.json; sourceTree = "<group>"; };
@@ -107,6 +111,7 @@
 		7747E5C99D5D557F3C3E89BE /* BackgroundRefresh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundRefresh.swift; sourceTree = "<group>"; };
 		7DFE8DC52452666E434AA9D7 /* SalishTides.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = SalishTides.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		808EEF6FA5FE567E488AA3D5 /* DesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
+		81EB316AD168CB2F9A704957 /* CurrentPhase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrentPhase.swift; sourceTree = "<group>"; };
 		83BD3EE7B3E3404AA899666B /* atlas_index_vol4.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = atlas_index_vol4.json; sourceTree = "<group>"; };
 		89B5A3FF117EF3148984AFA7 /* AtlasIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtlasIndex.swift; sourceTree = "<group>"; };
 		89BC3EF0433987C4491BE1F2 /* current_model.b1 */ = {isa = PBXFileReference; path = current_model.b1; sourceTree = "<group>"; };
@@ -118,6 +123,7 @@
 		A89FE39742D2A11DF361182D /* VectorDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VectorDatabase.swift; sourceTree = "<group>"; };
 		AA074DF096B9F67F83B4959E /* MapStyleLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapStyleLoader.swift; sourceTree = "<group>"; };
 		AB02102BE8D3A61DEB2FB722 /* CurrentParticleLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrentParticleLayer.swift; sourceTree = "<group>"; };
+		AC1102E5F68419EC85F05430 /* CurrentPhaseEstimatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrentPhaseEstimatorTests.swift; sourceTree = "<group>"; };
 		B430D515B3053CB1308FC171 /* LRUCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LRUCache.swift; sourceTree = "<group>"; };
 		B460FF242F858B027A672B40 /* TimelineControlView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineControlView.swift; sourceTree = "<group>"; };
 		B534466B629735C3AFD88226 /* CurrentVector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrentVector.swift; sourceTree = "<group>"; };
@@ -250,6 +256,7 @@
 				89B5A3FF117EF3148984AFA7 /* AtlasIndex.swift */,
 				33F90FC333D8D0174AF1A089 /* AtlasLookupTable.swift */,
 				34E23098B238D68AE7C4E0CA /* AtlasVolume.swift */,
+				81EB316AD168CB2F9A704957 /* CurrentPhase.swift */,
 				B534466B629735C3AFD88226 /* CurrentVector.swift */,
 				93190E060F93A0A5D06991E7 /* GeoMath.swift */,
 				3B718AE48715B4E7020D1029 /* Log.swift */,
@@ -294,6 +301,7 @@
 		9B971C945C0B8A7AE924BA9A /* CurrentModel */ = {
 			isa = PBXGroup;
 			children = (
+				111F059C707D7FB549B00EE7 /* CurrentPhaseEstimator.swift */,
 				5B151297D28F1A4591936554 /* OfflineCurrentModel.swift */,
 				D674FD1F00E257735CAA9F7D /* TidalCurrentField.swift */,
 				174AD48AFB6611FDE9777B62 /* TidalHarmonics.swift */,
@@ -333,6 +341,7 @@
 			isa = PBXGroup;
 			children = (
 				F6F5E873682C9E4992BD4487 /* ChartSelectorTests.swift */,
+				AC1102E5F68419EC85F05430 /* CurrentPhaseEstimatorTests.swift */,
 				4725F47676631EBF5824A138 /* EpochUTCTests.swift */,
 				E7B240886F13A107F45EA941 /* HelperTests.swift */,
 				59FDAF7820C92D47A610A686 /* OfflineCurrentModelTests.swift */,
@@ -476,6 +485,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F54CE6A9CA91DD3F433A69F2 /* ChartSelectorTests.swift in Sources */,
+				650F7FE452876746C629AA78 /* CurrentPhaseEstimatorTests.swift in Sources */,
 				FF28886D72C0D9078739DC3D /* EpochUTCTests.swift in Sources */,
 				49E216D8D042D5603CFDA76D /* HelperTests.swift in Sources */,
 				A8762D5675981B3B04E5896F /* OfflineCurrentModelTests.swift in Sources */,
@@ -496,6 +506,8 @@
 				A5373274BBC15D93DDE7A47B /* Basemap.swift in Sources */,
 				1F1918795868670251164A0C /* ContentView.swift in Sources */,
 				DA90180CAF28E691D0B6F0AE /* CurrentParticleLayer.swift in Sources */,
+				D8860EEF5F47286C0F504784 /* CurrentPhase.swift in Sources */,
+				3000DAD2EE859A38D2752CF4 /* CurrentPhaseEstimator.swift in Sources */,
 				E6FE100509920528EC7D2D3D /* CurrentSpeedView.swift in Sources */,
 				570A422AFA165A8582E8CC3E /* CurrentVector.swift in Sources */,
 				5447EAD323169BC3E88B2FF6 /* DatabaseMigrator.swift in Sources */,
