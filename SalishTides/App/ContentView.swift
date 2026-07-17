@@ -171,7 +171,7 @@ private struct SettingsButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: "gearshape")
-                .font(.system(size: 18, weight: .medium))
+                .font(.stControlIcon)
                 .foregroundStyle(.primary)
                 .frame(width: 44, height: 44)
         }
@@ -196,7 +196,7 @@ private struct CompassButton: View {
                     .foregroundStyle(.secondary)
                     .offset(y: 4.5)
             }
-            .font(.system(size: 9))
+            .font(.stCompassNeedle)
             .rotationEffect(.degrees(-bearing))
             .frame(width: 44, height: 44)
         }
@@ -214,7 +214,7 @@ private struct LocateButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: "location.fill")
-                .font(.system(size: 16, weight: .medium))
+                .font(.stControlIconSmall)
                 .foregroundStyle(.primary)
                 .frame(width: 44, height: 44)
         }

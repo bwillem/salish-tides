@@ -66,6 +66,23 @@ extension Font {
 
     // Secondary labels (chart number, phase in timeline)
     static let stCaption  = Font.system(.caption,     design: .monospaced)
+
+    // Map-control button glyphs (the floating gear / locate / compass
+    // cluster). SF Symbols size like text, but no semantic text style lands
+    // on these design sizes (body is 17 pt, caption2 11), so each scales its
+    // exact base size along the .body Dynamic Type curve via UIFontMetrics —
+    // same accessibility behavior as a text style, pixel-identical to the
+    // designed size at the default setting. Computed (not stored) so every
+    // body re-evaluation re-resolves against the live content size category,
+    // like UIFont.stCaption below.
+    static var stControlIcon: Font { bodyScaled(size: 18, weight: .medium) }       // gear
+    static var stControlIconSmall: Font { bodyScaled(size: 16, weight: .medium) }  // locate
+    static var stCompassNeedle: Font { bodyScaled(size: 9, weight: .regular) }     // needle triangles
+
+    private static func bodyScaled(size: CGFloat, weight: UIFont.Weight) -> Font {
+        Font(UIFontMetrics(forTextStyle: .body)
+            .scaledFont(for: .systemFont(ofSize: size, weight: weight)))
+    }
 }
 
 // MARK: - Spacing Scale
