@@ -25,6 +25,7 @@
 		5447EAD323169BC3E88B2FF6 /* DatabaseMigrator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F7E80F4511F77B96813E4D3 /* DatabaseMigrator.swift */; };
 		570A422AFA165A8582E8CC3E /* CurrentVector.swift in Sources */ = {isa = PBXBuildFile; fileRef = B534466B629735C3AFD88226 /* CurrentVector.swift */; };
 		5DB2319BABC9FB829D843F6A /* TideChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E02E5CB168CDB0660201216E /* TideChartView.swift */; };
+		5ECB3ACF5E354698777E214E /* TidalHarmonicsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8081DA114D0FC66D04441D6 /* TidalHarmonicsTests.swift */; };
 		5FECA4D7D218CCCFA6B36A93 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DDA2FAF2D0189860F478A7C /* AppSettings.swift */; };
 		650F7FE452876746C629AA78 /* CurrentPhaseEstimatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC1102E5F68419EC85F05430 /* CurrentPhaseEstimatorTests.swift */; };
 		674193FB48B28EB47DDE9EF9 /* MapLibreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 705E9152F8BEA1FA75608D3F /* MapLibreView.swift */; };
@@ -121,6 +122,7 @@
 		D674FD1F00E257735CAA9F7D /* TidalCurrentField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TidalCurrentField.swift; sourceTree = "<group>"; };
 		E02E5CB168CDB0660201216E /* TideChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TideChartView.swift; sourceTree = "<group>"; };
 		E7B240886F13A107F45EA941 /* HelperTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperTests.swift; sourceTree = "<group>"; };
+		E8081DA114D0FC66D04441D6 /* TidalHarmonicsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TidalHarmonicsTests.swift; sourceTree = "<group>"; };
 		E86394BD809E58805BD80D76 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		EAF782A61DF2A6526A1F9E0C /* SalishTidesTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SalishTidesTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F307CA789E16F706F269165F /* ChartBounds.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChartBounds.swift; sourceTree = "<group>"; };
@@ -319,6 +321,7 @@
 				E7B240886F13A107F45EA941 /* HelperTests.swift */,
 				59FDAF7820C92D47A610A686 /* OfflineCurrentModelTests.swift */,
 				C0F9A23CCE026670B01978ED /* SalishSeaCastAPITests.swift */,
+				E8081DA114D0FC66D04441D6 /* TidalHarmonicsTests.swift */,
 				97D8B5FD71DD4180933BD278 /* TideInterpolationTests.swift */,
 			);
 			path = SalishTidesTests;
@@ -456,6 +459,7 @@
 				49E216D8D042D5603CFDA76D /* HelperTests.swift in Sources */,
 				A8762D5675981B3B04E5896F /* OfflineCurrentModelTests.swift in Sources */,
 				913ECCC1C28E4590C0F6C1F2 /* SalishSeaCastAPITests.swift in Sources */,
+				5ECB3ACF5E354698777E214E /* TidalHarmonicsTests.swift in Sources */,
 				8045C849BD33CF92358F1076 /* TideInterpolationTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
