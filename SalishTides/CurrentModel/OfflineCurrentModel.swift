@@ -1,24 +1,42 @@
 import Foundation
 
-/// The bundled offline current source: decodes `current_model.b1` — harmonic
-/// constituents for every water node of the SalishSeaCast domain, packed onto
-/// a regular lat/lon mesh — and synthesizes current vectors for any hour with
-/// no network at all. The fallback tier below live SalishSeaCast (which it
-/// reproduces at ~0.98 out-of-sample correlation) in MapViewModel's chain.
+/// A bundled offline current source: decodes one `.b1` asset — harmonic
+/// constituents for every water node of a model domain, packed onto a regular
+/// lat/lon mesh — and synthesizes current vectors for any hour with no
+/// network at all. The fallback tier below live SalishSeaCast in
+/// MapViewModel's chain.
 ///
-/// Binary layout (little-endian; producer is dev/model/b1_pack_grid.py and
-/// the byte-level spec is dev/model/b1_verify_pack.py):
+/// Two instances ship: `salishSea` (SalishSeaCast constituents, native
+/// ~500 m, ~0.98 out-of-sample correlation with the live field) and `webTide`
+/// (DFO WebTide ne_pac4 at ~4 km, WA coast → SE Alaska). Their packers make
+/// the domains spatially DISJOINT — every WebTide cell near SalishSeaCast
+/// water is dropped at pack time — so rendering both is plain concatenation,
+/// and `all`'s order expresses priority for point queries only.
+///
+/// Binary layout (little-endian; producers are dev/model/b1_pack_grid.py and
+/// dev/model/webtide_pack.py; byte-level spec dev/model/b1_verify_pack.py):
 ///   "SCTF1" · rows,cols UInt16 · lat0,lon0,dLat,dLon Float64 ·
 ///   nConst UInt8 + length-prefixed ascii names · row-major presence bitmap
 ///   (bit i = cell i is water) · per present cell: uMean,vMean Float32 then
 ///   per constituent uAmp,uPhase°,vAmp,vPhase° Float32. Components are
-///   geographic east/north (the packer rotates NEMO's grid-aligned u/v).
+///   geographic east/north (the packers rotate/emit accordingly).
 ///
-/// An actor so the ~20k-node decode and the per-hour synthesis both run off
-/// the main actor (MapViewModel awaits across the hop, like LiveDataService).
+/// An actor so the decode and the per-hour synthesis both run off the main
+/// actor (MapViewModel awaits across the hop, like LiveDataService).
 actor OfflineCurrentModel {
 
-    static let shared = OfflineCurrentModel()
+    static let salishSea = OfflineCurrentModel(resource: "current_model")
+    static let webTide = OfflineCurrentModel(resource: "webtide_nepac")
+    /// Priority order for point queries (first covering model wins) and the
+    /// render iteration order. Adding a future source = one asset + one line.
+    static let all: [OfflineCurrentModel] = [.salishSea, .webTide]
+
+    /// Bundle resource name of the packed asset (without ".b1").
+    let resourceName: String
+
+    init(resource: String) {
+        self.resourceName = resource
+    }
 
     private var field: TidalCurrentField?
     private var loadAttempted = false
@@ -104,15 +122,36 @@ actor OfflineCurrentModel {
         return (cell, series)
     }
 
+    /// The decoded field, for cross-model coordination (seam filtering,
+    /// coverage checks). nil when the asset failed to load.
+    func loadedFieldIfAvailable() -> TidalCurrentField? {
+        loadedField()
+    }
+
     /// Dry mesh cells 8-adjacent to water, as zero-speed vectors — the same
     /// coastline barrier band the live tier derives from NEMO dry cells
     /// (LiveDataService.dryShoreline), so the particle layer clips at the
-    /// shoreline when the model renders. The mesh is time-invariant, so this
-    /// is computed once and cached for the app's lifetime.
-    func landMask() -> [CurrentVector]? {
+    /// shoreline when the model renders.
+    ///
+    /// `excludingShorelineNear`: dryShoreline treats ABSENT cells as land,
+    /// but this model's pack-time mask carves out the water another model
+    /// covers — along that seam the "shoreline" is open water, and rendering
+    /// it would kill particles mid-strait. Points with `others`' water nearby
+    /// are dropped. The mesh and the exclusion set are both fixed per app
+    /// run, so the result is computed once and cached.
+    func landMask(excludingShorelineNear others: [TidalCurrentField] = []) -> [CurrentVector]? {
         guard let field = loadedField() else { return nil }
         if let cached = landMaskCache { return cached }
-        let mask = Self.dryShoreline(of: field)
+        var mask = Self.dryShoreline(of: field)
+        if !others.isEmpty {
+            // "Near" = within ~2 of the OTHER model's cells: the pack-time
+            // mask radius is sub-cell relative to this mesh, so any dry cell
+            // that close to foreign water is seam, not coast.
+            mask.removeAll { point in
+                others.contains { $0.hasWater(lat: point.lat, lon: point.lon,
+                                              withinCells: 2) }
+            }
+        }
         landMaskCache = mask
         return mask
     }
@@ -150,7 +189,7 @@ actor OfflineCurrentModel {
         if field == nil, !loadAttempted {
             loadAttempted = true
             do {
-                guard let url = Bundle.main.url(forResource: "current_model",
+                guard let url = Bundle.main.url(forResource: resourceName,
                                                 withExtension: "b1") else {
                     throw CocoaError(.fileNoSuchFile)
                 }
@@ -158,12 +197,12 @@ actor OfflineCurrentModel {
                 if decoded.droppedNodes > 0 {
                     // The packer asserts finiteness, so any drop here means a
                     // packing bug slipped through — render the rest, but say so.
-                    Log.map.error("offline current model: dropped \(decoded.droppedNodes) non-finite nodes")
+                    Log.map.error("offline model \(self.resourceName): dropped \(decoded.droppedNodes) non-finite nodes")
                 }
                 field = decoded
             } catch {
-                // Non-fatal: the map simply shows no offline currents.
-                Log.map.error("offline current model failed to load: \(error, privacy: .public)")
+                // Non-fatal: the map simply shows no offline currents here.
+                Log.map.error("offline model \(self.resourceName) failed to load: \(error, privacy: .public)")
             }
         }
         return field

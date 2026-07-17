@@ -15,6 +15,7 @@
 		1D5038B1FFB6DE1A54FE8E25 /* MapViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F6AC464A41AEC5AA01D5BB8 /* MapViewModel.swift */; };
 		1F1918795868670251164A0C /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC4BE54595E9CB5FA8F715B3 /* ContentView.swift */; };
 		2661E10F8D3818C0463D0501 /* standard-dark.json in Resources */ = {isa = PBXBuildFile; fileRef = 529E7D505F4A804C9AC32942 /* standard-dark.json */; };
+		273E3178A9A276125A4A628D /* webtide_nepac.b1 in Resources */ = {isa = PBXBuildFile; fileRef = 7723CD53D2DFE8ED88D864D5 /* webtide_nepac.b1 */; };
 		282F6B976E8F3E57BACC0CF9 /* GeoMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93190E060F93A0A5D06991E7 /* GeoMath.swift */; };
 		28CEED760DB3C36FC29C60ED /* PhaseIndicatorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF78D89E101E6B88EB6D487E /* PhaseIndicatorView.swift */; };
 		2F421A2B2CBF0CAB8F0B8A52 /* LiveDataStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB7F5692AE18799CAFFCA75E /* LiveDataStore.swift */; };
@@ -92,6 +93,7 @@
 		6F8AC975A9DE6B660C38E780 /* SalishTidesApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SalishTidesApp.swift; sourceTree = "<group>"; };
 		705E9152F8BEA1FA75608D3F /* MapLibreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapLibreView.swift; sourceTree = "<group>"; };
 		727BC113893557DFF4A9C2AF /* standard-light.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "standard-light.json"; sourceTree = "<group>"; };
+		7723CD53D2DFE8ED88D864D5 /* webtide_nepac.b1 */ = {isa = PBXFileReference; path = webtide_nepac.b1; sourceTree = "<group>"; };
 		7747E5C99D5D557F3C3E89BE /* BackgroundRefresh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundRefresh.swift; sourceTree = "<group>"; };
 		7DFE8DC52452666E434AA9D7 /* SalishTides.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = SalishTides.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		808EEF6FA5FE567E488AA3D5 /* DesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
@@ -248,6 +250,7 @@
 				89BC3EF0433987C4491BE1F2 /* current_model.b1 */,
 				529E7D505F4A804C9AC32942 /* standard-dark.json */,
 				727BC113893557DFF4A9C2AF /* standard-light.json */,
+				7723CD53D2DFE8ED88D864D5 /* webtide_nepac.b1 */,
 				496B88DF779A28478CDB2D85 /* styles */,
 			);
 			path = Resources;
@@ -413,6 +416,7 @@
 				A5343BB0E832A96634DF63E2 /* satellite.json in Resources */,
 				2661E10F8D3818C0463D0501 /* standard-dark.json in Resources */,
 				DB1DA594128D65FAE7F67967 /* standard-light.json in Resources */,
+				273E3178A9A276125A4A628D /* webtide_nepac.b1 in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -157,6 +157,63 @@ struct OfflineCurrentModelTests {
         #expect(field.nearestWaterCell(lat: 48.004, lon: -122.996, maxDistanceKm: 5) == 0)
     }
 
+    @Test func bundledAssetsDecodeAndAreHealthy() throws {
+        // Both shipped models must decode with zero dropped nodes and sit in
+        // their expected boxes (tests are app-hosted, so Bundle.main works).
+        let expected: [(resource: String, lat: ClosedRange<Double>, lon: ClosedRange<Double>)] = [
+            ("current_model", 46...52, -128 ... -121),   // Salish Sea, native 500 m
+            ("webtide_nepac", 45...61, -141 ... -121),   // WA coast → SE Alaska
+        ]
+        for spec in expected {
+            let url = try #require(Bundle.main.url(forResource: spec.resource,
+                                                   withExtension: "b1"),
+                                   "missing bundled asset \(spec.resource).b1")
+            let field = try OfflineCurrentModel.decode(try Data(contentsOf: url))
+            #expect(field.droppedNodes == 0, "\(spec.resource): dropped nodes")
+            #expect(field.nodeCount > 10_000, "\(spec.resource): suspiciously few nodes")
+            #expect(spec.lat.contains(field.coverage.lat_min)
+                    && spec.lat.contains(field.coverage.lat_max), "\(spec.resource): lat box")
+            #expect(spec.lon.contains(field.coverage.lon_min)
+                    && spec.lon.contains(field.coverage.lon_max), "\(spec.resource): lon box")
+        }
+    }
+
+    @Test func landMaskSeamFilterDropsForeignWaterEdge() throws {
+        // A 3×3 "coarse" field with water only in the west column: its dry
+        // shoreline includes the middle column. A "fine" field occupying the
+        // east half plays the higher-priority model — the shoreline points
+        // adjacent to its water are seam, not coast, and must be filtered.
+        var coarse = [Bool](repeating: false, count: 9)
+        coarse[0] = true; coarse[3] = true; coarse[6] = true      // west column
+        let coarseField = try OfflineCurrentModel.decode(
+            makeAsset(rows: 3, cols: 3, presence: coarse,
+                      records: [record(), record(), record()]))
+
+        // Fine field: same geographic area, offset east; all water.
+        let fineField = try OfflineCurrentModel.decode(
+            makeAsset(rows: 3, cols: 3, lat0: 48, lon0: -122.99,
+                      presence: [Bool](repeating: true, count: 9),
+                      records: (0..<9).map { _ in record() }))
+
+        let unfiltered = OfflineCurrentModel.dryShoreline(of: coarseField)
+        let filtered = unfiltered.filter { point in
+            !fineField.hasWater(lat: point.lat, lon: point.lon, withinCells: 2)
+        }
+        // Every coarse dry cell lies within 2 fine cells of fine water here,
+        // so the filter must remove the entire band — while the same filter
+        // against a far-away field removes nothing.
+        #expect(!unfiltered.isEmpty)
+        #expect(filtered.isEmpty)
+        let farField = try OfflineCurrentModel.decode(
+            makeAsset(rows: 3, cols: 3, lat0: 50, lon0: -130,
+                      presence: [Bool](repeating: true, count: 9),
+                      records: (0..<9).map { _ in record() }))
+        let unaffected = unfiltered.filter { point in
+            !farField.hasWater(lat: point.lat, lon: point.lon, withinCells: 2)
+        }
+        #expect(unaffected.count == unfiltered.count)
+    }
+
     @Test func dryShorelineBandsTheWater() throws {
         // 3×3 mesh, single water cell in the centre → all 8 neighbours masked.
         var presence = [Bool](repeating: false, count: 9)

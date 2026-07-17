@@ -42,6 +42,22 @@ struct TidalCurrentField: Sendable {
                     lon_min: lon0, lon_max: lon0 + Double(cols - 1) * dLon)
     }
 
+    /// Whether any water node lies within `withinCells` mesh cells of the
+    /// point — a cheap O(radius²) grid probe, used to tell a genuine
+    /// coastline from the seam another model's pack-time mask carved out.
+    func hasWater(lat: Double, lon: Double, withinCells radius: Int) -> Bool {
+        let r = Int(((lat - lat0) / dLat).rounded())
+        let c = Int(((lon - lon0) / dLon).rounded())
+        guard r >= -radius, r < rows + radius,
+              c >= -radius, c < cols + radius else { return false }
+        for rr in max(0, r - radius)...min(rows - 1, r + radius) {
+            for cc in max(0, c - radius)...min(cols - 1, c + radius) {
+                if nodeIndex[rr * cols + cc] >= 0 { return true }
+            }
+        }
+        return false
+    }
+
     /// Mesh cell index of the water node nearest to (lat, lon), or nil when
     /// none lies within `maxDistanceKm`. Scans expanding square index rings
     /// from the containing cell; the best candidate in the first non-empty

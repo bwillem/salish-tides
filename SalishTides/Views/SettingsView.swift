@@ -150,8 +150,9 @@ private struct DataSourcesView: View {
             }
 
             Section("Tidal Currents") {
-                LabeledContent("Offline Model", value: "SalishSeaCast · UBC")
-                Text("Offline currents are synthesized on device from tidal harmonic constituents fitted to a year of the SalishSeaCast NEMO model (UBC Earth, Ocean & Atmospheric Sciences) — tide-driven flow only, without weather effects.")
+                LabeledContent("Salish Sea", value: "SalishSeaCast · UBC")
+                LabeledContent("North Coast", value: "WebTide · DFO")
+                Text("Offline currents are synthesized on device from tidal harmonic constituents: the Salish Sea from a year of the SalishSeaCast NEMO model (UBC Earth, Ocean & Atmospheric Sciences), and the outer coast north to Southeast Alaska from the WebTide ne_pac4 model (Fisheries and Oceans Canada). Tide-driven flow only, without weather effects.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

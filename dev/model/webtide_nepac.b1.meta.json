@@ -1,0 +1,32 @@
+{
+  "rows": 390,
+  "cols": 303,
+  "lat0": 45.98198198198198,
+  "lon0": -140.0568032463239,
+  "dLat": 0.036036036036036036,
+  "dLon": 0.05987892400441381,
+  "constituents": [
+    "M2",
+    "S2",
+    "N2",
+    "K2",
+    "K1",
+    "O1",
+    "P1",
+    "Q1"
+  ],
+  "nodes": 63958,
+  "masked_cells": 602,
+  "km": 4.0,
+  "mask_km": 2.4,
+  "clip": [
+    -140.0,
+    46.0,
+    -122.0,
+    60.0
+  ],
+  "source": "DFO WebTide ne_pac4 (barotropic)",
+  "frame": "geographic",
+  "ssc_file_sha256": "cb172ab22010e42494e1a19832d30f736685dc12c69b3b6d22b2e3bb6f850910",
+  "bytes": 8713126
+}
