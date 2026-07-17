@@ -16,26 +16,51 @@ Binary format (little-endian), magic 'SCTF1':
           then per present node in row-major order:
             uMean f32, vMean f32, then per const: uAmp,uPhase,vAmp,vPhase f32
 """
-import json, struct, math, os, sys
+import json, struct, math, os, sys, argparse
 import numpy as np
 from scipy.spatial import cKDTree
 sys.path.insert(0, "dev/model")
 from tidepredict import CONSTITUENTS
 
-SRC = "dev/model/b1_grid_full.json"
+# Mesh resolution is a knob: 1.0 km matches the stride-2 NEMO whole-domain
+# slice (the live tier's coarse fallback), 0.5 km matches NEMO's native cell
+# and the live tier's nav-zoom native window — pack at 0.5 so offline renders
+# at the same density live does where a boater is actually looking. The source
+# analysis grid is at native ~0.5 km, so a finer mesh recovers real detail, not
+# interpolation. The Swift decoder is header-driven (reads rows/cols/dLat/dLon),
+# so a finer mesh needs NO app change.
+#
+# Run-only CLI script (no importable API): guard against an accidental
+# `import b1_pack_grid`, which would otherwise parse the importer's argv and
+# pack/write files as an import side effect.
+if __name__ != "__main__":
+    raise ImportError("b1_pack_grid.py is a CLI script — run it, don't import it")
+
+ap = argparse.ArgumentParser()
+ap.add_argument("--km", type=float, default=1.0,
+                help="mesh spacing in km (1.0 = legacy stride-2, 0.5 = native)")
+ap.add_argument("--src", default="dev/model/b1_grid_full.json")
+ap.add_argument("--out", default="SalishTides/Resources/current_model.b1")
+ap.add_argument("--allow-any-frame", action="store_true",
+                help="skip the geographic-frame guard (prototyping only)")
+A = ap.parse_args()
+KM = A.km
+SRC = A.src
 # The shipped asset lives with the app's other bundled resources, NOT under
 # dev/ — dev/model is scratch tooling with gitignored siblings, and a
 # load-bearing asset there fails only at runtime (decode falls through to the
 # atlas silently). Meta stays here beside the pipeline.
-OUT = "SalishTides/Resources/current_model.b1"
-META = "dev/model/current_model.b1.meta.json"
+OUT = A.out
+# Meta tracks the output basename so a scratch/proto pack can't clobber the
+# shipped asset's meta (default OUT -> dev/model/current_model.b1.meta.json).
+META = "dev/model/" + os.path.basename(OUT) + ".meta.json"
 K = list(CONSTITUENTS)                       # constituent order in the file
 
 g = json.load(open(SRC))
 # The app renders the packed components as geographic east/north; packing a
 # grid-frame (unrotated) solve skews every direction ~29°. b1_analyze_full's
 # merge step rotates and tags the frame — refuse anything else.
-assert g.get("frame") == "geographic", (
+assert A.allow_any_frame or g.get("frame") == "geographic", (
     "b1_grid_full.json is not in the geographic frame — re-run "
     "dev/model/b1_analyze_full.py (its merge step rotates grid-frame u/v).")
 nodes = g["nodes"]
@@ -52,22 +77,28 @@ lon = np.array([n["lon"] for n in nodes])
 print(f"source: {len(nodes)} curvilinear water nodes")
 print(f"  lat {lat.min():.3f}..{lat.max():.3f}  lon {lon.min():.3f}..{lon.max():.3f}")
 
-# --- regular mesh at ~1 km (matches the stride-2 NEMO spacing) --------------
+# --- regular mesh at the requested spacing (default ~1 km) ------------------
 latmid = float(np.median(lat))
-DLAT = 1.0 / 111.0                            # ~1 km in latitude
-DLON = 1.0 / (111.0 * math.cos(math.radians(latmid)))   # ~1 km in longitude
+DLAT = KM / 111.0                             # KM km in latitude
+DLON = KM / (111.0 * math.cos(math.radians(latmid)))   # KM km in longitude
 lat0 = math.floor(lat.min() / DLAT) * DLAT
 lon0 = math.floor(lon.min() / DLON) * DLON
 rows = int(math.ceil((lat.max() - lat0) / DLAT)) + 1
 cols = int(math.ceil((lon.max() - lon0) / DLON)) + 1
-print(f"mesh: {rows}x{cols} = {rows*cols} cells, dLat {DLAT:.5f} dLon {DLON:.5f}")
+assert rows <= 65535 and cols <= 65535, "mesh exceeds u16 header fields"
+print(f"mesh @ {KM:.2f} km: {rows}x{cols} = {rows*cols} cells, "
+      f"dLat {DLAT:.5f} dLon {DLON:.5f}")
 
 # KD-tree in km-scaled coords so 'nearest' is true distance, not raw degrees.
 def scale(la, lo):
     return np.column_stack([(la - latmid) * 111.0,
                             (lo - lon0) * 111.0 * math.cos(math.radians(latmid))])
 tree = cKDTree(scale(lat, lon))
-THRESH_KM = 1.2                              # assign if a NEMO node is within this
+# Assign a mesh cell to a NEMO node only if one is within 1.2 mesh-widths — the
+# same 1.2 km the legacy 1 km pack used, now scaled with KM so the KM=1.0
+# default reproduces it exactly, while a 0.5 km mesh tightens to 0.6 km and
+# keeps a crisp coastline instead of pulling water inland.
+THRESH_KM = KM * 1.2
 
 # mesh cell centers
 mr, mc = np.meshgrid(np.arange(rows), np.arange(cols), indexing="ij")
