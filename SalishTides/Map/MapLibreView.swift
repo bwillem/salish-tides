@@ -7,6 +7,7 @@ struct MapLibreView: UIViewRepresentable {
     @Environment(AppSettings.self) private var settings
     @Environment(MapController.self) private var mapController
     @Environment(CrosshairPresenter.self) private var crosshair
+    @Environment(StationMarkerPresenter.self) private var stationMarker
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
 
@@ -90,6 +91,7 @@ struct MapLibreView: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator {
         Coordinator(
+            stationMarker: stationMarker,
             onViewportChange: { [vm] bounds in
                 Task { await vm.updateViewport(bounds) }
             },
@@ -140,11 +142,19 @@ struct MapLibreView: UIViewRepresentable {
         private let onCentreChange: (Double, Double) -> Void
         // Signals the start (true) / end (false) of a user pan/zoom/rotate.
         private let onInteraction: (Bool) -> Void
+        // Drives the SwiftUI station-marker overlay: the coordinator projects the
+        // station's coordinate to a screen point each camera frame and writes it
+        // here (touched only inside MainActor.assumeIsolated, on the main thread
+        // where every MLN callback runs). @MainActor @Observable classes are
+        // Sendable, so this needs no nonisolated(unsafe).
+        private let stationMarker: StationMarkerPresenter
 
-        init(onViewportChange: @escaping (ChartBounds) -> Void,
+        init(stationMarker: StationMarkerPresenter,
+             onViewportChange: @escaping (ChartBounds) -> Void,
              onBearingChange: @escaping (Double) -> Void,
              onCentreChange: @escaping (Double, Double) -> Void,
              onInteraction: @escaping (Bool) -> Void) {
+            self.stationMarker = stationMarker
             self.onViewportChange = onViewportChange
             self.onBearingChange = onBearingChange
             self.onCentreChange = onCentreChange
@@ -208,9 +218,9 @@ struct MapLibreView: UIViewRepresentable {
             onViewportChange(viewport)
             onBearingChange(mapView.direction)
             // Instant camera moves (recenter-on-user, initial framing) can land
-            // without a single regionIsChanging tick, so re-check the station
-            // label's crosshair proximity on settle as well.
-            updateStationProximity(on: mapView)
+            // without a single regionIsChanging tick, so re-project the station
+            // marker (position + crosshair proximity) on settle as well.
+            projectStation(on: mapView)
             // Rescale the arrows when the zoom changes: a pure zoom-in-place
             // keeps the same vectors, so the viewport-driven data reload may
             // not rebuild the shapes — re-apply here so the arrows track the
@@ -242,103 +252,86 @@ struct MapLibreView: UIViewRepresentable {
             }
         }
 
-        // Live updates while the user rotates, so the compass tracks smoothly.
-        // The station-label proximity check also lives here so the name pill
-        // reveals the moment the crosshair reaches the station, not after the
-        // camera settles (it's one point conversion — cheap per frame).
+        // Live updates while the user pans/rotates, so the compass tracks
+        // smoothly and — crucially — the station marker follows the map every
+        // frame instead of lagging behind to the settle. It's one point
+        // conversion plus a change-gated write: cheap per frame.
         func mapViewRegionIsChanging(_ mapView: MLNMapView) {
             onBearingChange(mapView.direction)
             let centre = mapView.centerCoordinate
             onCentreChange(centre.latitude, centre.longitude)
-            updateStationProximity(on: mapView)
+            projectStation(on: mapView)
         }
 
         // MARK: Tide-station marker
+        //
+        // The marker is a SwiftUI glass overlay (StationMarkerView in
+        // ContentView), NOT an MLNAnnotationView — glass hosted inside MapLibre's
+        // view hierarchy composites flat, so it lives above the map instead and
+        // we drive its position ourselves. This survives style reloads untouched
+        // (the presenter state is independent of the style).
 
-        // The annotation for the station the phase card is showing (nil until
-        // the first tide lookup lands). Annotations live outside the style, so
-        // unlike the layers above this survives style reloads untouched.
-        nonisolated(unsafe) private var stationAnnotation: TideStationAnnotation?
-        // Latest tendency pushed from updateUIView; applied to the annotation
-        // view on creation (viewFor) and on change (updateStation).
-        nonisolated(unsafe) private var lastTendency: CurrentPhase.Tendency?
+        // The station the phase card is showing (nil until the first tide lookup
+        // lands), kept as plain Sendable fields so projectStation can run without
+        // touching the map's annotation store.
+        nonisolated(unsafe) private var stationID: String?
+        nonisolated(unsafe) private var stationCoordinate: CLLocationCoordinate2D?
 
         // Screen-space radius (pt) around the map centre within which the
         // station label auto-reveals — matches the crosshair reticle's reach
         // (gap 8 + arm 22, see ReticleShape).
         private static let stationLabelRadius: CGFloat = 30
 
-        /// Swaps the station marker when the nearest station changes, and keeps
-        /// its tendency arrow in step with the phase card. Remove + re-add
-        /// (rather than moving the annotation) keeps MapLibre's annotation
-        /// tracking simple and gives the fade-in in didAdd.
+        // Hide the marker once it drifts this far (pt) outside the viewport —
+        // only happens briefly, before the nearest-to-centre station recomputes
+        // after a fast pan; the marker otherwise tracks the map centre.
+        private static let stationVisibilityMargin: CGFloat = 120
+
+        /// Swaps the marker when the nearest station changes and keeps its
+        /// tendency arrow in step with the phase card. Only the Sendable station
+        /// fields are stored here; the overlay's name/glyph/position are pushed
+        /// to the presenter (main-thread — every MLN callback is).
         func updateStation(_ station: TideStation?, tendency: CurrentPhase.Tendency?, on mapView: MLNMapView) {
-            lastTendency = tendency
-            guard station?.id != stationAnnotation?.stationID else {
-                // Same station — just refresh the glyph (cheap; the view
-                // change-detects, so scrub-driven repeats are no-ops).
-                if let annotation = stationAnnotation {
-                    MainActor.assumeIsolated {
-                        (mapView.view(for: annotation) as? TideStationAnnotationView)?
-                            .setTendency(tendency)
-                    }
-                }
-                return
-            }
-            if let old = stationAnnotation { mapView.removeAnnotation(old) }
-            stationAnnotation = nil
-            guard let station else { return }
-            let annotation = TideStationAnnotation(station: station)
-            stationAnnotation = annotation
-            mapView.addAnnotation(annotation)
-        }
-
-        func mapView(_ mapView: MLNMapView, viewFor annotation: MLNAnnotation) -> MLNAnnotationView? {
-            // Anything else (the user-location dot) keeps MapLibre's default.
-            guard let station = annotation as? TideStationAnnotation else { return nil }
-            // Only Sendable values cross into the isolated closure — the
-            // annotation object itself must not, per region-based isolation.
-            let name = station.name
-            let tendency = lastTendency
-            return MainActor.assumeIsolated {
-                let view = mapView.dequeueReusableAnnotationView(
-                    withIdentifier: TideStationAnnotationView.reuseIdentifier
-                ) as? TideStationAnnotationView
-                    ?? TideStationAnnotationView(reuseIdentifier: TideStationAnnotationView.reuseIdentifier)
-                view.configure(name: name)
-                view.setTendency(tendency)
-                return view
-            }
-        }
-
-        // Fade the marker in when it (re)appears — the nearest station changing
-        // mid-pan would otherwise pop between locations.
-        func mapView(_ mapView: MLNMapView, didAdd annotationViews: [MLNAnnotationView]) {
             MainActor.assumeIsolated {
-                for view in annotationViews where view is TideStationAnnotationView {
-                    view.alpha = 0
-                    UIView.animate(withDuration: 0.25) { view.alpha = 1 }
-                }
+                if stationMarker.tendency != tendency { stationMarker.tendency = tendency }
             }
-            updateStationProximity(on: mapView)
+            guard station?.id != stationID else { return }   // glyph already synced above
+            stationID = station?.id
+            stationCoordinate = station.map {
+                CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lon)
+            }
+            let name = station?.name.stationDisplayName ?? ""
+            MainActor.assumeIsolated {
+                if stationMarker.name != name { stationMarker.name = name }
+            }
+            projectStation(on: mapView)
         }
 
-        /// Auto-reveals the station's name pill while the crosshair (the map
-        /// centre) sits within the reticle of the station marker.
-        private func updateStationProximity(on mapView: MLNMapView) {
-            guard let annotation = stationAnnotation else { return }
+        /// Projects the station coordinate to a screen point and pushes it (plus
+        /// the crosshair-proximity flag that auto-reveals the name pill) to the
+        /// presenter. Called on every camera frame and on settle; each write is
+        /// change-gated so an unmoved marker costs one comparison.
+        private func projectStation(on mapView: MLNMapView) {
             MainActor.assumeIsolated {
-                guard let view = mapView.view(for: annotation) as? TideStationAnnotationView else { return }
-                // Mid-layout (zero-size) bounds make the distance meaningless —
-                // report "not near" rather than skipping, so a stale reveal
-                // can't survive; the idle re-check restores the true state.
-                guard mapView.bounds.width > 0, mapView.bounds.height > 0 else {
-                    view.setNearCrosshair(false)
+                // No station, or mid-layout (zero-size) bounds make the point
+                // meaningless: clear rather than leave a stale marker behind.
+                guard let coord = stationCoordinate,
+                      mapView.bounds.width > 0, mapView.bounds.height > 0 else {
+                    if stationMarker.screenPoint != nil { stationMarker.screenPoint = nil }
+                    if stationMarker.nearCrosshair { stationMarker.nearCrosshair = false }
                     return
                 }
-                let p = mapView.convert(annotation.coordinate, toPointTo: mapView)
+                let p = mapView.convert(coord, toPointTo: mapView)
+                let m = Self.stationVisibilityMargin
+                let inside = p.x.isFinite && p.y.isFinite
+                    && p.x > -m && p.y > -m
+                    && p.x < mapView.bounds.width + m && p.y < mapView.bounds.height + m
+                let newPoint: CGPoint? = inside ? p : nil
+                if stationMarker.screenPoint != newPoint { stationMarker.screenPoint = newPoint }
+
                 let dx = p.x - mapView.bounds.midX, dy = p.y - mapView.bounds.midY
-                view.setNearCrosshair(hypot(dx, dy) <= Self.stationLabelRadius)
+                let near = inside && hypot(dx, dy) <= Self.stationLabelRadius
+                if stationMarker.nearCrosshair != near { stationMarker.nearCrosshair = near }
             }
         }
 
@@ -394,11 +387,11 @@ struct MapLibreView: UIViewRepresentable {
         /// areas and after style reloads — a snapshot taken mid-load misses
         /// land whose tiles hadn't arrived yet.
         func mapViewDidBecomeIdle(_ mapView: MLNMapView) {
-            // Re-check the station label's proximity once the map is truly at
-            // rest: on first launch the annotation can land while the view is
-            // still mid-layout (zero/interim bounds), and a pure layout change
-            // fires no region callback to correct a stale near-crosshair state.
-            updateStationProximity(on: mapView)
+            // Re-project the station marker once the map is truly at rest: on
+            // first launch the map can settle while the view is still mid-layout
+            // (zero/interim bounds), and a pure layout change fires no region
+            // callback to correct a stale marker position/proximity.
+            projectStation(on: mapView)
             let fresh = landPolygons(from: mapView)
             landPolygonsValid = true
             guard fresh != lastLandPolygons else { return }

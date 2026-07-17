@@ -365,32 +365,43 @@ back a couple seconds after release (`CrosshairPresenter.isEmphasized`). There i
 
 ### 5.3a Tide Station Marker
 
-**What:** a map annotation marking the tide station whose predictions the phase
-card is currently charting — the nearest station to the crosshair
+**What:** a marker over the tide station whose predictions the phase card is
+currently charting — the nearest station to the crosshair
 (`MapViewModel.tideStation`). Exactly one exists at a time; when panning moves
-the nearest-station result, the marker swaps to the new location with a fade.
-Rendered by `TideStationAnnotationView` (a `MLNAnnotationView`,
-`SalishTides/Map/`), fed by the `MapLibreView` coordinator.
+the nearest-station result, the marker cross-fades to the new location.
 
-**Design:** a 26 pt circular badge in `UIColor.stationMarker` — a deliberately
-**neutral** adaptive fill, the inverse of the theme's ink (white in Day, black
-in Night; see DesignTokens), *not* `.brandAccent`: the marker is wayfinding, not
-the screen's focus, so it carries no hue that would compete with the accent
-chrome or read as a value on the current-speed ramp. The glyph is a `.label`-ink
-tendency arrow matching the phase card's — `arrow.up` on flood, `arrow.down` on
-ebb, a neutral `arrow.up.and.down` before the first selection — kept in step by
-the coordinator as the user scrubs; against the inverted fill it lands at full
-contrast in either theme. Rim is `.label` at 40%; behind it the same neutral
-fill pulses slowly (scale 1 → 2.2, fade 0.5 → 0, 2.6 s ease-out loop). The glyph
-+ shape keep it distinct from the plain blue user-location dot. Hit target is
-the full 44 pt view (§4.3).
+**Why a SwiftUI overlay, not an `MLNAnnotationView`:** the badge is real Liquid
+Glass, and glass hosted *inside* MapLibre's view hierarchy (an annotation view)
+composites flat — a `UIVisualEffectView` there can't sample the Metal-rendered
+map behind it. So the marker is a SwiftUI view (`StationMarkerView`,
+`SalishTides/Views/`) in `ContentView`'s ZStack, a sibling *above* the map like
+the phase card and timeline bar, where its `.floatingCard()` glass samples the
+map through it. The `MapLibreView` coordinator projects the station coordinate
+to a screen point every camera frame (`projectStation`, via
+`mapView.convert(_:toPointTo:)`) and publishes it — plus the tendency, name, and
+crosshair-proximity flag — through `StationMarkerPresenter`; the overlay follows
+with `.position` (no implicit animation, so it tracks the map per-frame).
+
+**Design:** a 26 pt circular badge that *is* the shared `.floatingCard()` glass
+surface (native `.glassEffect` on iOS 26+, `.ultraThinMaterial` + hairline +
+shadow below), clipped to a circle — so it carries the same translucency and
+edge highlight as every other floating surface, with no hue to compete with the
+accent chrome or read as a value on the current-speed ramp: the marker is
+wayfinding, not the screen's focus. The glyph is a `.primary`-ink tendency arrow
+matching the phase card's — `arrow.up` on flood, `arrow.down` on ebb, a neutral
+`arrow.up.and.down` before the first reading — kept in step by the coordinator as
+the user scrubs; it reads against the translucent glass in either theme. Behind
+it a neutral halo (`UIColor.stationMarker`, the inverse of the theme's ink)
+pulses slowly (scale 1 → 2.2, fade 0.5 → 0, 2.6 s ease-out loop), holding still
+as a faint static halo under Reduce Motion. The glyph + shape keep it distinct
+from the plain blue user-location dot. Hit target is the full 44 pt view (§4.3).
 
 **Name pill:** the station's `stationDisplayName` in a small glass capsule
-above the badge — `.ultraThinMaterial`, `.stCaption` type, the `Elevation`
-hairline, status-pill insets (`Spacing.sm` / `Spacing.xs`). Hidden at rest;
-revealed while either trigger holds:
-- **Tap** — MapLibre annotation selection (tap the badge to show, tap open
-  water to dismiss), or
+above the badge — the same `.floatingCard()` glass, `.stCaption` type,
+status-pill insets (`Spacing.sm` / `Spacing.xs`), floated above the badge with an
+`alignmentGuide` (no height measurement). Hidden at rest; revealed while either
+trigger holds:
+- **Tap** — a SwiftUI tap on the badge toggles it, or
 - **Crosshair proximity** — the map centre sits within 30 pt of the station
   (the reticle's reach: 8 pt gap + 22 pt arm), checked per-frame while the
   camera moves.

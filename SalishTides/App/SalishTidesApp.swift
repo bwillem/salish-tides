@@ -7,6 +7,7 @@ struct SalishTidesApp: App {
     @State private var network: NetworkMonitor
     @State private var mapController = MapController()
     @State private var crosshair = CrosshairPresenter()
+    @State private var stationMarker = StationMarkerPresenter()
     // One-shot cleanup of any offline map packs left by earlier builds; no
     // basemap downloads packs anymore, so it just reclaims that disk once.
     @State private var packCleaner = LegacyOfflinePackCleaner()
@@ -33,6 +34,7 @@ struct SalishTidesApp: App {
                 .environment(network)
                 .environment(mapController)
                 .environment(crosshair)
+                .environment(stationMarker)
                 .environment(liveData)
                 .tint(.brandAccent)
                 .preferredColorScheme(settings.appearance.colorScheme)

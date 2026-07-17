@@ -6,6 +6,7 @@ struct ContentView: View {
     @Environment(NetworkMonitor.self) private var network
     @Environment(MapController.self) private var mapController
     @Environment(CrosshairPresenter.self) private var crosshair
+    @Environment(StationMarkerPresenter.self) private var stationMarker
     @Environment(LiveDataService.self) private var liveData
     @Environment(\.scenePhase) private var scenePhase
     @State private var showingSettings = false
@@ -74,6 +75,25 @@ struct ContentView: View {
                 .animation(crosshair.isEmphasized ? .easeOut(duration: 0.18)
                                                   : .easeOut(duration: 0.5),
                            value: crosshair.isEmphasized)
+            // Tide-station marker: a SwiftUI glass overlay pinned over the map at
+            // the station's projected screen point (the coordinator writes it
+            // every camera frame). It lives here — above the map, below the
+            // controls/timeline — precisely so its glass samples the map, unlike
+            // a MapLibre annotation. Position tracks per-frame (no implicit
+            // animation); only a station change (`name`) or on/off-screen edge
+            // cross-fades. `.id(name)` re-seeds the pulse on a station swap.
+            Group {
+                if let point = stationMarker.screenPoint {
+                    StationMarkerView(tendency: stationMarker.tendency,
+                                      name: stationMarker.name,
+                                      nearCrosshair: stationMarker.nearCrosshair)
+                        .id(stationMarker.name)
+                        .position(point)
+                        .transition(.opacity)
+                }
+            }
+            .animation(.easeOut(duration: 0.22), value: stationMarker.name)
+            .animation(.easeOut(duration: 0.22), value: stationMarker.screenPoint == nil)
             VStack(spacing: 0) {
                 HStack(alignment: .top) {
                     // Top-left control cluster: settings, compass (only when

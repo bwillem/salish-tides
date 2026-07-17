@@ -1,3 +1,4 @@
+import CoreGraphics
 import CoreLocation
 import MapLibre
 import Observation
@@ -84,6 +85,38 @@ final class CrosshairPresenter {
             self?.isEmphasized = false
         }
     }
+}
+
+// MARK: - Station marker presentation
+
+/// Publishes the tide-station marker's live screen position so a SwiftUI glass
+/// overlay can render it *over* the map. An `MLNAnnotationView` is parented
+/// inside MapLibre's own view hierarchy, where a `UIVisualEffectView`/glass
+/// composites flat (it can't sample the map behind it). A SwiftUI overlay in
+/// `ContentView`'s ZStack is a sibling *above* the map, so its `.floatingCard()`
+/// glass samples the map through it — the same real Liquid Glass as the phase
+/// card and timeline bar. The `MapLibreView` coordinator projects the station's
+/// coordinate to a screen point on every camera frame and pushes it here; the
+/// overlay follows with `.position`.
+@MainActor
+@Observable
+final class StationMarkerPresenter {
+    /// Marker centre in the map's (full-screen) coordinate space, or nil when
+    /// there's no station driving the phase card. The overlay renders only when
+    /// this is non-nil. Written every camera frame during a pan/zoom, so the
+    /// coordinator gates on an actual change before writing.
+    var screenPoint: CGPoint?
+
+    /// Tendency for the badge glyph (↑ flood / ↓ ebb / neutral) — kept in step
+    /// with the phase card's arrow.
+    var tendency: CurrentPhase.Tendency?
+
+    /// Display-normalised station name, shown in the reveal pill.
+    var name: String = ""
+
+    /// True while the crosshair (the map centre) sits within the reticle of the
+    /// station marker — auto-reveals the name pill, matching the old annotation.
+    var nearCrosshair = false
 }
 
 // MARK: - Legacy offline-pack cleanup

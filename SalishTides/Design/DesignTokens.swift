@@ -78,6 +78,7 @@ extension Font {
     static var stControlIcon: Font { bodyScaled(size: 18, weight: .medium) }       // gear
     static var stControlIconSmall: Font { bodyScaled(size: 16, weight: .medium) }  // locate
     static var stCompassNeedle: Font { bodyScaled(size: 9, weight: .regular) }     // needle triangles
+    static var stStationGlyph: Font { bodyScaled(size: 11, weight: .semibold) }    // tide-station marker arrow
 
     private static func bodyScaled(size: CGFloat, weight: UIFont.Weight) -> Font {
         Font(UIFontMetrics(forTextStyle: .body)
@@ -168,11 +169,11 @@ extension View {
 // values as the SwiftUI chrome.
 
 extension UIColor {
-    /// Tide-station marker fill (badge + pulse ring). Deliberately NEUTRAL, not
+    /// Tide-station marker pulse-ring fill. Deliberately NEUTRAL, not
     /// `brandAccent`: the marker is wayfinding, not the screen's focus, so it
-    /// carries no hue that would compete with the current-speed ramp. It's the
-    /// inverse of the theme's ink — white in Day, black in Night — which pairs
-    /// with the `.label` glyph and rim for full contrast in either theme.
+    /// carries no hue that would compete with the current-speed ramp. The badge
+    /// itself is native glass; this is the inverse of the theme's ink — white in
+    /// Day, black in Night — for the halo that pulses out from behind it.
     static let stationMarker = UIColor { trait in
         trait.userInterfaceStyle == .dark ? .black : .white
     }
