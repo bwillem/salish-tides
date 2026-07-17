@@ -137,7 +137,7 @@ def main():
             results.append({
                 "key": key, "src": s["src"], "id": s["id"], "name": s["name"],
                 "lat": s["lat"], "lon": s["lon"], "datum": s["datum"],
-                "vols": s["vols"], "events": events,
+                "events": events,
             })
             print(f"[{i:3d}/{len(stations)}] {key:14s} {len(events):4d} events  {s['name']}")
         except Exception as e:  # noqa: BLE001 — record and continue
@@ -145,7 +145,8 @@ def main():
             print(f"[{i:3d}/{len(stations)}] {key:14s} FAILED: {e}")
         time.sleep(0.2)  # be polite
 
-    results.sort(key=lambda r: (r["vols"][0], r["src"], r["name"] or ""))
+    # Deterministic output order: source, then station id.
+    results.sort(key=lambda r: (r["src"], r["id"] or ""))
     json.dump({
         "year": args.year,
         "generated": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),

@@ -2,7 +2,7 @@
 """WebTide ne_pac4 → webtide_nepac.b1: the NE Pacific offline current model,
 packed as a SECOND SCTF1 asset alongside current_model.b1.
 
-Why a separate file (vs webtide_merge_pack.py's single merged asset): the two
+Why a separate file (vs merging both sources into one asset): the two
 sources want different grid resolutions — SalishSeaCast is native ~500 m,
 WebTide's finite-element mesh is 2–12 km — and one regular grid can't serve
 both without either gigabytes of oversampling or degrading the Salish Sea.
@@ -15,8 +15,7 @@ current_model.b1) is dropped, so the two assets are spatially disjoint and the
 app needs zero overlap logic. Re-run this packer whenever current_model.b1 is
 repacked — the meta json records the SSC file's sha256 to catch a mismatch.
 
-Interpolation (from webtide_merge_pack.py, which see): barycentric over
-WebTide's own FE triangulation, per-constituent u/v as COMPLEX phasors
+Interpolation: barycentric over WebTide's own FE triangulation, per-constituent u/v as COMPLEX phasors
 A·e^{-i g} (never raw amplitude/degrees, which would wrap), water-masked for
 free because the mesh only triangulates water. uMean/vMean are 0 — WebTide is
 pure tidal, no residual.

@@ -7,7 +7,7 @@ directory, so `unzip` can't read it). We download the Unix installer and pull
 the `data/ne_pac4/*` members out directly by walking the PK\\x03\\x04 headers.
 
 This is the source of the offline current constituents north of the
-SalishSeaCast domain (see dev/model/webtide_extract.py). LICENSE NOTE: WebTide's
+SalishSeaCast domain (packed by dev/model/webtide_pack.py). LICENSE NOTE: WebTide's
 commercial-redistribution terms are unconfirmed pending DFO/BIO sign-off — this
 script is for development/evaluation; do not ship the derived data until the
 license question is resolved.

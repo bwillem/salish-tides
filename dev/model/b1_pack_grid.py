@@ -19,7 +19,12 @@ Binary format (little-endian), magic 'SCTF1':
 import json, struct, math, os, sys, argparse
 import numpy as np
 from scipy.spatial import cKDTree
-sys.path.insert(0, "dev/model")
+
+# Anchor every path on this file's location so the script runs from anywhere,
+# not just the repo root.
+HERE = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.normpath(os.path.join(HERE, "..", ".."))
+sys.path.insert(0, HERE)
 from tidepredict import CONSTITUENTS
 
 # Mesh resolution is a knob: 1.0 km matches the stride-2 NEMO whole-domain
@@ -39,8 +44,9 @@ if __name__ != "__main__":
 ap = argparse.ArgumentParser()
 ap.add_argument("--km", type=float, default=1.0,
                 help="mesh spacing in km (1.0 = legacy stride-2, 0.5 = native)")
-ap.add_argument("--src", default="dev/model/b1_grid_full.json")
-ap.add_argument("--out", default="SalishTides/Resources/current_model.b1")
+ap.add_argument("--src", default=os.path.join(HERE, "b1_grid_full.json"))
+ap.add_argument("--out", default=os.path.join(REPO, "SalishTides", "Resources",
+                                              "current_model.b1"))
 ap.add_argument("--allow-any-frame", action="store_true",
                 help="skip the geographic-frame guard (prototyping only)")
 A = ap.parse_args()
@@ -48,12 +54,13 @@ KM = A.km
 SRC = A.src
 # The shipped asset lives with the app's other bundled resources, NOT under
 # dev/ — dev/model is scratch tooling with gitignored siblings, and a
-# load-bearing asset there fails only at runtime (decode falls through to the
-# atlas silently). Meta stays here beside the pipeline.
+# load-bearing asset there fails only at runtime (a failed decode simply means
+# no offline currents for that model's domain). Meta stays here beside the
+# pipeline.
 OUT = A.out
 # Meta tracks the output basename so a scratch/proto pack can't clobber the
 # shipped asset's meta (default OUT -> dev/model/current_model.b1.meta.json).
-META = "dev/model/" + os.path.basename(OUT) + ".meta.json"
+META = os.path.join(HERE, os.path.basename(OUT) + ".meta.json")
 K = list(CONSTITUENTS)                       # constituent order in the file
 
 g = json.load(open(SRC))
