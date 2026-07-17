@@ -12,6 +12,32 @@ struct TideStation: Sendable, Identifiable {
     let source: String      // "NOAA" | "CHS"
 }
 
+extension String {
+    /// Display form of a raw tide-station name (shared by the phase card and
+    /// the on-map station marker). Two normalisations:
+    /// 1. Keep only the first comma-separated component — some stations bundle a
+    ///    location hierarchy ("Hanbury Point, Mosquito Pass, San Juan I."); the
+    ///    first part is the specific spot and all we want to show.
+    /// 2. Case: sources arrive inconsistently, so Title-Case the ALL-CAPS ones;
+    ///    names that already contain a lowercase letter are assumed correct and
+    ///    left untouched (so `.capitalized` doesn't mangle "McNeill"/"Fisher's").
+    ///    Short (≤2-letter) tokens keep their caps, so directionals/abbreviations
+    ///    survive — "NW ROCK" → "NW Rock", not "Nw Rock".
+    var stationDisplayName: String {
+        let first = split(separator: ",", maxSplits: 1).first.map(String.init) ?? self
+        let trimmed = first.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.contains(where: \.isLowercase) else { return trimmed }
+        return trimmed
+            .split(separator: " ", omittingEmptySubsequences: false)
+            .map { word in
+                guard word.filter(\.isLetter).count > 2 else { return String(word) }
+                let lower = word.lowercased()
+                return lower.prefix(1).uppercased() + lower.dropFirst()
+            }
+            .joined(separator: " ")
+    }
+}
+
 // A single high- or low-water extremum.
 struct TideEvent: Sendable {
     let time: Date

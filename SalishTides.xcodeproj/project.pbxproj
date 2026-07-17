@@ -47,6 +47,7 @@
 		C768CFA66D7E07064485173C /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D191057D343E390CB41EAF3B /* NetworkMonitor.swift */; };
 		CC1DE4A9F7C994DD5459CB22 /* TapeSliderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28E631FED305377F6178516B /* TapeSliderView.swift */; };
 		CD10BDF599A8B4DC91FC583E /* TideStation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EE458C039CC8A1CCE1AD9D9 /* TideStation.swift */; };
+		CD8117E2EC8DDCFA72F0F749 /* TideStationAnnotationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44643342F4806E02274A663E /* TideStationAnnotationView.swift */; };
 		D02F6CEBAD38ED7BCD07D911 /* MapLibre in Frameworks */ = {isa = PBXBuildFile; productRef = 42B0127065AEDC608BD0C4A4 /* MapLibre */; };
 		D7B586A7ED13970C8F267F1A /* SalishSeaCastClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A81CE1B298B64CEDF727ACF4 /* SalishSeaCastClient.swift */; };
 		D8860EEF5F47286C0F504784 /* CurrentPhase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81EB316AD168CB2F9A704957 /* CurrentPhase.swift */; };
@@ -81,6 +82,7 @@
 		2BB7C4074365FDAFA91601A1 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		3B718AE48715B4E7020D1029 /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
 		3DDA2FAF2D0189860F478A7C /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
+		44643342F4806E02274A663E /* TideStationAnnotationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TideStationAnnotationView.swift; sourceTree = "<group>"; };
 		4725F47676631EBF5824A138 /* EpochUTCTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EpochUTCTests.swift; sourceTree = "<group>"; };
 		4FA576D80059DF72E4354E26 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		529E7D505F4A804C9AC32942 /* standard-dark.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "standard-dark.json"; sourceTree = "<group>"; };
@@ -296,6 +298,7 @@
 				BC0C2E94595CF5DDCD144C35 /* MapController.swift */,
 				705E9152F8BEA1FA75608D3F /* MapLibreView.swift */,
 				AA074DF096B9F67F83B4959E /* MapStyleLoader.swift */,
+				44643342F4806E02274A663E /* TideStationAnnotationView.swift */,
 			);
 			path = Map;
 			sourceTree = "<group>";
@@ -495,6 +498,7 @@
 				5DB2319BABC9FB829D843F6A /* TideChartView.swift in Sources */,
 				9CEBBFBDEB99CD300FC775BF /* TideDatabase.swift in Sources */,
 				CD10BDF599A8B4DC91FC583E /* TideStation.swift in Sources */,
+				CD8117E2EC8DDCFA72F0F749 /* TideStationAnnotationView.swift in Sources */,
 				E1217A140CE89A8A73B3C4A6 /* TimelineControlView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

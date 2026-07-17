@@ -360,6 +360,38 @@ either theme, no per-tile tuning.
 back a couple seconds after release (`CrosshairPresenter.isEmphasized`). There is no
 "hide crosshair" setting.
 
+### 5.3a Tide Station Marker
+
+**What:** a map annotation marking the tide station whose predictions the phase
+card is currently charting — the nearest station to the crosshair
+(`MapViewModel.tideStation`). Exactly one exists at a time; when panning moves
+the nearest-station result, the marker swaps to the new location with a fade.
+Rendered by `TideStationAnnotationView` (a `MLNAnnotationView`,
+`SalishTides/Map/`), fed by the `MapLibreView` coordinator.
+
+**Design:** a 26 pt circular badge in `UIColor.stationMarker` — a deliberately
+**neutral** adaptive fill, the inverse of the theme's ink (white in Day, black
+in Night; see DesignTokens), *not* `.brandAccent`: the marker is wayfinding, not
+the screen's focus, so it carries no hue that would compete with the accent
+chrome or read as a value on the current-speed ramp. The glyph is a `.label`-ink
+tendency arrow matching the phase card's — `arrow.up` on flood, `arrow.down` on
+ebb, a neutral `arrow.up.and.down` before the first selection — kept in step by
+the coordinator as the user scrubs; against the inverted fill it lands at full
+contrast in either theme. Rim is `.label` at 40%; behind it the same neutral
+fill pulses slowly (scale 1 → 2.2, fade 0.5 → 0, 2.6 s ease-out loop). The glyph
++ shape keep it distinct from the plain blue user-location dot. Hit target is
+the full 44 pt view (§4.3).
+
+**Name pill:** the station's `stationDisplayName` in a small glass capsule
+above the badge — `.ultraThinMaterial`, `.stCaption` type, the `Elevation`
+hairline, status-pill insets (`Spacing.sm` / `Spacing.xs`). Hidden at rest;
+revealed while either trigger holds:
+- **Tap** — MapLibre annotation selection (tap the badge to show, tap open
+  water to dismiss), or
+- **Crosshair proximity** — the map centre sits within 30 pt of the station
+  (the reticle's reach: 8 pt gap + 22 pt arm), checked per-frame while the
+  camera moves.
+
 ### 5.4 Current Vector Arrows (fallback display)
 
 Rendered by MapLibre line/circle layers, not SwiftUI. Colour comes from
@@ -509,6 +541,7 @@ colour is decorative (redundant with line weight), so it is held to 3:1, not 4.5
 | Speed card (`CurrentSpeedView`) | One element leading with speed + flow direction ("0.3 kn flowing north-east at crosshair") |
 | Compass / locate buttons | Labelled with hints ("Rotates the map back to north" / "Centers the map on your location") |
 | Crosshair | `.accessibilityHidden(true)` — decorative |
+| Tide station marker | Button — label "Tide station: Bedwell Harbour", hint "The tide chart shows predictions for this station." |
 
 Not automatable from CLI — verify reading order + the adjustable tape on-device with
 the Accessibility Inspector before shipping.
@@ -521,13 +554,16 @@ readout already uses `minimumScaleFactor(0.6)`.
 
 ### 6.4 Reduce Motion / Low Power
 
-The animated particles (§5.4a) are the one continuous animation. Under **Reduce
-Motion** *or* **Low Power Mode**, `AppSettings.effectiveCurrentStyle` falls back to
-the static arrows and the particle display link stops. `AppSettings` observes
+The animated particles (§5.4a) and the station-marker pulse (§5.3a) are the
+continuous animations. Under **Reduce Motion** *or* **Low Power Mode**,
+`AppSettings.effectiveCurrentStyle` falls back to the static arrows and the
+particle display link stops. `AppSettings` observes
 `UIAccessibility.reduceMotionStatusDidChangeNotification` and
 `NSProcessInfoPowerStateDidChange`, so the switch happens live without a relaunch.
-Any future SwiftUI animations should additionally gate on
-`@Environment(\.accessibilityReduceMotion)`.
+The station marker observes the same Reduce-Motion notification and swaps its
+pulse for a static faint halo (Low Power is left alone — a repeating CA
+animation is far cheaper than the particle display link). Any future SwiftUI
+animations should additionally gate on `@Environment(\.accessibilityReduceMotion)`.
 
 ---
 
