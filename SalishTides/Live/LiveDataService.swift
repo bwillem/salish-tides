@@ -126,6 +126,11 @@ final class LiveDataService {
         LRUCache<String, (vectors: [CurrentVector], fetchedAt: Date)>(limit: LiveDataService.nativeCacheLimit)
     private var nativeRetryAfter: [String: Date] = [:]
     private var nativesInFlight: Set<String> = []
+    // Bumped on every successful native-slice save; the strided path uses
+    // sliceIndex's per-hour fetch stamp for the same freshness token, but the
+    // native path has no in-memory index, so a global counter stands in
+    // (conservative: a save for any window invalidates in-progress inserts).
+    private var nativeSaveGeneration = 0
 
     init(settings: AppSettings, network: NetworkMonitor) {
         self.settings = settings
@@ -253,9 +258,17 @@ final class LiveDataService {
 
         // Grid geometry first — without lon/lat nothing else renders.
         if grid == nil {
-            guard let fetched = try? await client.fetchGrid() else { return }
-            try? await store.saveGrid(fetched)
-            grid = fetched
+            do {
+                let fetched = try await client.fetchGrid()
+                try? await store.saveGrid(fetched)
+                grid = fetched
+            } catch {
+                // The one failure that blocks all live rendering; the
+                // periodic loop retries. Logged at error (vs the per-slice
+                // info) for exactly that reason.
+                Log.live.error("grid fetch failed: \(error, privacy: .public)")
+                return
+            }
         }
 
         await refreshSSHIfStale()
@@ -278,6 +291,16 @@ final class LiveDataService {
         try? await store.deleteSlices(before: cutoff)
         try? await store.deleteNativeSlices(before: cutoff)
         sliceIndex = sliceIndex.filter { $0.key >= cutoff }
+        // Retry stamps are pure back-off state: once the date passes (or the
+        // hour ages out of retention) an entry is indistinguishable from an
+        // absent one, so prune alongside sliceIndex — otherwise a long
+        // session accretes one entry per ever-failed hour/window forever.
+        let now = Date()
+        sliceRetryAfter = sliceRetryAfter.filter { $0.key >= cutoff && $0.value > now }
+        nativeRetryAfter = nativeRetryAfter.filter { key, retryAt in
+            guard retryAt > now else { return false }
+            return (Int(key.prefix(while: { $0 != "|" })) ?? .min) >= cutoff
+        }
     }
 
     private func refreshSSHIfStale() async {
@@ -360,10 +383,22 @@ final class LiveDataService {
 
         let hourKey = Self.hourKey(for: date)
         if let cached = vectorCache.value(for: hourKey) {
+            // Serve-stale-while-revalidate, mirroring the native path: only
+            // refresh()'s wanted window (now−2h…+36h) refetches on age, so a
+            // warm hour scrubbed to outside it would otherwise serve its
+            // original model run for the whole session. A nil index entry
+            // means retention pruned the slice out from under the cache —
+            // stale by definition.
+            if sliceIndex[hourKey].map({ Date().timeIntervalSince($0) >= Self.sliceMaxAge }) ?? true {
+                kickSliceFetch(hourKey: hourKey)
+            }
             return cached
         }
 
-        if sliceIndex[hourKey] != nil,
+        // The index stamp doubles as the freshness token for the insert
+        // below: fetchSlice rewrites it right after saving newer points and
+        // evicting this hour's cache entry.
+        if let fetchStamp = sliceIndex[hourKey],
            let points = try? await store.loadSlicePoints(hourKey: hourKey) {
             // Re-check after the suspension: an interleaved call for the same
             // hour (scrub tick vs. data-generation refresh) may have already
@@ -376,16 +411,34 @@ final class LiveDataService {
             let vectors = await Task.detached(priority: .userInitiated) {
                 Self.vectors(from: points, grid: grid)
             }.value
-            vectorCache.insert(vectors, for: hourKey)
+            // Insert only if no fetch landed while we were suspended (store
+            // load or conversion): fetchSlice's save → cache-evict →
+            // generation-bump sequence would otherwise be silently overwritten
+            // here, and the generation-triggered reload would then find a
+            // "fresh" index stamp over superseded vectors — pinning the old
+            // run until LRU eviction. On a mismatch, still return the vectors
+            // (the caller's loadGeneration discard handles display); the next
+            // call rebuilds from the newly saved points.
+            if sliceIndex[hourKey] == fetchStamp {
+                vectorCache.insert(vectors, for: hourKey)
+                // Same serve-stale-while-revalidate as the warm path above.
+                if Date().timeIntervalSince(fetchStamp) >= Self.sliceMaxAge {
+                    kickSliceFetch(hourKey: hourKey)
+                }
+            }
             return vectors
         }
 
-        let offset = TimeInterval(hourKey) - Date().timeIntervalSince1970
-        if fetchingAllowed, offset > Self.onDemandPast, offset < Self.onDemandFuture,
-           sliceRetryAfter[hourKey].map({ $0 <= Date() }) ?? true {
-            Task { await fetchSlice(hourKey: hourKey) }
-        }
+        kickSliceFetch(hourKey: hourKey)
         return nil
+    }
+
+    private func kickSliceFetch(hourKey: Int) {
+        let offset = TimeInterval(hourKey) - Date().timeIntervalSince1970
+        guard fetchingAllowed, offset > Self.onDemandPast, offset < Self.onDemandFuture,
+              sliceRetryAfter[hourKey].map({ $0 <= Date() }) ?? true
+        else { return }
+        Task { await fetchSlice(hourKey: hourKey) }
     }
 
     /// Full-resolution current vectors for the hour containing `date` over
@@ -428,6 +481,7 @@ final class LiveDataService {
             return cached.vectors
         }
 
+        let saveStamp = nativeSaveGeneration
         if let row = try? await store.loadNativeSlice(hourKey: hourKey, containing: window) {
             // Re-check after the suspension (same double-insert hazard as the
             // strided path).
@@ -437,11 +491,18 @@ final class LiveDataService {
             let vectors = await Task.detached(priority: .userInitiated) {
                 Self.vectors(from: row.points, grid: grid)
             }.value
-            nativeCache.insert((vectors, row.fetchedAt), for: key)
-            // Serve the cached window but refresh it if a newer model run
-            // should be available by now.
-            if Date().timeIntervalSince(row.fetchedAt) >= Self.sliceMaxAge {
-                kickNativeFetch(hourKey: hourKey, window: window, key: key)
+            // Same superseded-run hazard as the strided path: a fetch
+            // completing during the store load or conversion has already
+            // saved newer points and evicted this key — inserting the old
+            // row would pin its run behind a warm cache entry. Serve the old
+            // vectors uncached instead; the next call reloads the fresh row.
+            if nativeSaveGeneration == saveStamp {
+                nativeCache.insert((vectors, row.fetchedAt), for: key)
+                // Serve the cached window but refresh it if a newer model run
+                // should be available by now.
+                if Date().timeIntervalSince(row.fetchedAt) >= Self.sliceMaxAge {
+                    kickNativeFetch(hourKey: hourKey, window: window, key: key)
+                }
             }
             return vectors
         }
@@ -473,6 +534,7 @@ final class LiveDataService {
             }
             try await store.saveNativeSlice(hourKey: hourKey, window: window,
                                             points: points, fetchedAt: Date())
+            nativeSaveGeneration += 1
             nativeRetryAfter[key] = nil
             nativeCache.removeValue(for: key)
             if hourKey == displayedHourKey { dataGeneration += 1 }
