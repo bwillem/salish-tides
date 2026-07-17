@@ -254,15 +254,28 @@ final class MapViewModel {
             }
         }
 
+        // Crosshair acceptance radius scales with the source under the
+        // CENTRE, not just whatever contributes somewhere in the viewport:
+        // on the ~4 km WebTide mesh the default ~1.6 km radius would miss
+        // every node and read "—" over open water, but widening it while the
+        // centre sits in the dense Salish Sea field would let a crosshair on
+        // land report a channel's current from 3.7 km away. Resolved BEFORE
+        // the final guard so every published property below updates in one
+        // uninterrupted main-actor stretch.
+        var coarse = contributing.contains { $0 === OfflineCurrentModel.webTide }
+        if coarse, let vp = visibleViewport,
+           let fine = await OfflineCurrentModel.salishSea.coverage(),
+           fine.contains(lat: (vp.lat_min + vp.lat_max) / 2,
+                         lon: (vp.lon_min + vp.lon_max) / 2) {
+            coarse = false
+        }
+
         guard generation == loadGeneration else { return }
         // Provenance reflects what is actually rendered: a tier is nil (and
         // the next one populated `vectors`) whenever its cull came up empty.
         currentSource = liveVectors != nil ? .live : !modelVectors.isEmpty ? .model : nil
         // Crosshair readout uses the full-resolution set; only the rendered
-        // layer is down-sampled. The acceptance radius scales with the
-        // coarsest contributing source: on the ~4 km WebTide mesh the default
-        // ~1.6 km radius would miss every node and read "—" over open water.
-        let coarse = contributing.contains { $0 === OfflineCurrentModel.webTide }
+        // layer is down-sampled.
         let crosshairVector = nearestVector(in: vectors, viewport: visibleViewport,
                                             maxDistanceDeg: coarse
                                                 ? Self.crosshairMaxDistanceCoarseDeg

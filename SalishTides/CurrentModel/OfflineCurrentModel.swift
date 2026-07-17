@@ -133,23 +133,31 @@ actor OfflineCurrentModel {
     /// (LiveDataService.dryShoreline), so the particle layer clips at the
     /// shoreline when the model renders.
     ///
+    /// Seam dry cells sit anywhere from 0 to the packer's mask distance
+    /// (2.4 km, webtide_pack.py --mask-km) from the other model's water, so
+    /// the exclusion probe must reach past that — in KM, not in the other
+    /// mesh's cells (a 2-cell probe on the 500 m SalishSea mesh is only
+    /// 1 km and leaves an intermittent barrier along the seam).
+    private static let seamExclusionKm = 3.0
+
     /// `excludingShorelineNear`: dryShoreline treats ABSENT cells as land,
     /// but this model's pack-time mask carves out the water another model
     /// covers — along that seam the "shoreline" is open water, and rendering
-    /// it would kill particles mid-strait. Points with `others`' water nearby
-    /// are dropped. The mesh and the exclusion set are both fixed per app
-    /// run, so the result is computed once and cached.
+    /// it would kill particles mid-strait. Points within `seamExclusionKm`
+    /// of `others`' water are dropped.
+    ///
+    /// The result is computed once and cached — valid because each instance
+    /// is only ever called with ONE `others` value (MapViewModel passes the
+    /// fixed higher-priority prefix of `all`). A second call site with a
+    /// different exclusion set would silently get the first one's mask.
     func landMask(excludingShorelineNear others: [TidalCurrentField] = []) -> [CurrentVector]? {
         guard let field = loadedField() else { return nil }
         if let cached = landMaskCache { return cached }
         var mask = Self.dryShoreline(of: field)
         if !others.isEmpty {
-            // "Near" = within ~2 of the OTHER model's cells: the pack-time
-            // mask radius is sub-cell relative to this mesh, so any dry cell
-            // that close to foreign water is seam, not coast.
             mask.removeAll { point in
                 others.contains { $0.hasWater(lat: point.lat, lon: point.lon,
-                                              withinCells: 2) }
+                                              withinKm: Self.seamExclusionKm) }
             }
         }
         landMaskCache = mask

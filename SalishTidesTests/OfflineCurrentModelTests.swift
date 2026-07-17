@@ -178,40 +178,36 @@ struct OfflineCurrentModelTests {
         }
     }
 
-    @Test func landMaskSeamFilterDropsForeignWaterEdge() throws {
-        // A 3×3 "coarse" field with water only in the west column: its dry
-        // shoreline includes the middle column. A "fine" field occupying the
-        // east half plays the higher-priority model — the shoreline points
-        // adjacent to its water are seam, not coast, and must be filtered.
-        var coarse = [Bool](repeating: false, count: 9)
-        coarse[0] = true; coarse[3] = true; coarse[6] = true      // west column
-        let coarseField = try OfflineCurrentModel.decode(
-            makeAsset(rows: 3, cols: 3, presence: coarse,
-                      records: [record(), record(), record()]))
-
-        // Fine field: same geographic area, offset east; all water.
-        let fineField = try OfflineCurrentModel.decode(
-            makeAsset(rows: 3, cols: 3, lat0: 48, lon0: -122.99,
+    @Test func seamProbeReachIsDistanceBasedNotCellBased() throws {
+        // Real seam geometry: the foreign (higher-priority) field is the
+        // 500 m SalishSea mesh, and the packer's mask leaves this model's
+        // seam dry cells up to ~2.4 km from foreign water. The probe must
+        // reach in KM — a fixed 2-cell probe on a 500 m mesh (~1 km) misses
+        // and leaves a zero-speed barrier along the seam in open water.
+        let fine = try OfflineCurrentModel.decode(
+            makeAsset(rows: 3, cols: 3, lat0: 48, lon0: -123,
+                      dLat: 0.0045, dLon: 0.0045,   // ≈ 500 m cells
                       presence: [Bool](repeating: true, count: 9),
                       records: (0..<9).map { _ in record() }))
+        // A seam point ~2.4 km east of the fine field's easternmost water.
+        let seamLat = 48.0045
+        let seamLon = -122.991 + 2.4 / (111.0 * cos(48 * Double.pi / 180))
+        #expect(fine.hasWater(lat: seamLat, lon: seamLon, withinKm: 3.0))
+        #expect(!fine.hasWater(lat: seamLat, lon: seamLon, withinKm: 1.0))
 
-        let unfiltered = OfflineCurrentModel.dryShoreline(of: coarseField)
-        let filtered = unfiltered.filter { point in
-            !fineField.hasWater(lat: point.lat, lon: point.lon, withinCells: 2)
+        // Genuine coastline far from any foreign water stays unfiltered.
+        #expect(!fine.hasWater(lat: 50, lon: -130, withinKm: 3.0))
+
+        // And the filter built on it clears a realistic seam band: 4 km-mesh
+        // dry points 0–2.4 km from fine water are all dropped at 3 km reach.
+        let seamPoints = [
+            CurrentVector(lat: seamLat, lon: seamLon, speed_ms: 0, direction_deg: 0),
+            CurrentVector(lat: 48.0045, lon: -122.9905, speed_ms: 0, direction_deg: 0),
+        ]
+        let survivors = seamPoints.filter {
+            !fine.hasWater(lat: $0.lat, lon: $0.lon, withinKm: 3.0)
         }
-        // Every coarse dry cell lies within 2 fine cells of fine water here,
-        // so the filter must remove the entire band — while the same filter
-        // against a far-away field removes nothing.
-        #expect(!unfiltered.isEmpty)
-        #expect(filtered.isEmpty)
-        let farField = try OfflineCurrentModel.decode(
-            makeAsset(rows: 3, cols: 3, lat0: 50, lon0: -130,
-                      presence: [Bool](repeating: true, count: 9),
-                      records: (0..<9).map { _ in record() }))
-        let unaffected = unfiltered.filter { point in
-            !farField.hasWater(lat: point.lat, lon: point.lon, withinCells: 2)
-        }
-        #expect(unaffected.count == unfiltered.count)
+        #expect(survivors.isEmpty)
     }
 
     @Test func dryShorelineBandsTheWater() throws {
