@@ -173,7 +173,7 @@ struct TimelineControlView: View {
     // MARK: - Actions
 
     private func jumpToNow() {
-        sessionAnchor = Self.topOfCurrentHour()
+        sessionAnchor = Self.nearestHour()
         offsetHours = 0
         Task { await vm.setTime(sessionAnchor) }
     }
@@ -207,7 +207,7 @@ struct TimelineControlView: View {
         // the tape and commits a time unrelated to the finger. The next tick
         // catches up after the commit.
         guard !isScrubbing else { return }
-        let top = Self.topOfCurrentHour()
+        let top = Self.nearestHour()
         guard top != sessionAnchor else { return }
         // Branch on the committed offset, not displayDate proximity — the
         // readout's isNow can be transiently true as a scrub passes the tick.
@@ -226,11 +226,20 @@ struct TimelineControlView: View {
         }
     }
 
-    // The tape steps in whole hours, so "now" is the top of the current Salish
-    // hour — the actual hourly chart being shown — not the live wall-clock
-    // minute. Flooring in Salish time keeps it aligned with the tape ticks.
-    private static func topOfCurrentHour() -> Date {
+    // The tape steps in whole hours, so "now" is the whole Salish hour nearest
+    // the live wall-clock minute — the actual hourly chart being shown. Rounding
+    // (not flooring) keeps it aligned with the tape ticks while following the
+    // hand the user would read: once the clock passes the half hour (e.g.
+    // 12:31) "now" leads to the next hour (13:00) rather than lagging at 12:00.
+    private static func nearestHour() -> Date {
         let cal = Calendar.salish
-        return cal.date(from: cal.dateComponents([.year, .month, .day, .hour], from: .now)) ?? .now
+        let now = Date.now
+        guard let floored = cal.date(
+            from: cal.dateComponents([.year, .month, .day, .hour], from: now)
+        ) else { return now }
+        // Round up to the next hour once we're at or past its midpoint.
+        return now.timeIntervalSince(floored) >= 1800
+            ? floored.addingTimeInterval(3600)
+            : floored
     }
 }
