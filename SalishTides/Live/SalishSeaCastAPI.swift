@@ -13,6 +13,11 @@ enum SalishSeaCastAPI {
     // The NEMO grid is 898×398 curvilinear cells (~500 m). Requests subsample
     // by `gridStride` in both axes (~1 km spacing): full resolution is ~4× the
     // bytes for marginal visual gain at the app's zoom levels.
+    // WARNING: reads as tunable, but stride 2 is baked in beyond the
+    // `LiveDataStore.schemaVersion` cache key: `nativeLatLon`'s midpoint
+    // averaging only interpolates correctly between *adjacent* strided cells,
+    // and `stridedSpacingDeg`'s 0.005°-per-native-cell figure pairs with it —
+    // a stride change must revisit both together.
     static let gridStride = 2
     static let nativeRows = 898   // gridY
     static let nativeCols = 398   // gridX

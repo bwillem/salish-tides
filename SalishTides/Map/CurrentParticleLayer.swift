@@ -178,11 +178,36 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
         fieldTexture = nil
         waterCellBuffer = nil
         appliedField = nil
+        // The GPU field is gone, so the inputs are no longer "applied" — leave
+        // this set and didMove's rebuild-from-lastInputs would dedupe against
+        // a field that no longer exists.
+        appliedInputs = nil
         queue = nil
         device = nil
     }
 
-    fileprivate func step() { setNeedsDisplay() }
+    // MapLibre normally pairs willMove(from:) with teardown, but nothing
+    // contractually guarantees it runs before the layer is released. The weak
+    // proxy already prevents a retain cycle, but an un-invalidated link would
+    // keep a 30 fps timer ticking a dead proxy on the main run loop. deinit is
+    // nonisolated; CADisplayLink.invalidate() is documented thread-safe, so
+    // this backstop is fine under strict concurrency.
+    deinit {
+        displayLink?.invalidate()
+    }
+
+    fileprivate func step() {
+        // With no field applied (viewport off all coverage — e.g. offline
+        // outside the model domains), invalidating would still force MapLibre
+        // into a full-map re-render 30×/s with nothing to draw: pure battery
+        // burn in exactly the offline-at-sea case. Skip the invalidation
+        // rather than pausing the link — an empty tick is ~free next to a map
+        // render, and the next applyField revives this path with no resume
+        // bookkeeping to get wrong.
+        guard fieldTexture != nil else { return }
+        setNeedsDisplay()
+    }
+
     private func syncDisplayLink() { animating ? startDisplayLink() : stopDisplayLink() }
 
     private func startDisplayLink() {
@@ -249,8 +274,14 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
             // (Swift 6 region isolation); the layer is main-thread-only anyway.
             await MainActor.run { [weak self] in
                 guard let self else { return }
-                self.applyField(field)
-                self.appliedInputs = inputs
+                // Mark applied only when the GPU resources actually swapped
+                // in: after a failed apply the old texture keeps rendering,
+                // and recording these inputs as applied would dedupe every
+                // identical future push against a field that never landed —
+                // leaving the stale run on screen with no repair path.
+                if self.applyField(field) {
+                    self.appliedInputs = inputs
+                }
                 if let next = self.pendingBuild {
                     self.pendingBuild = nil
                     if next != inputs {
@@ -263,20 +294,28 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
         }
     }
 
-    private func applyField(_ field: Field?) {
-        guard let device, let field, field.cols > 0, field.rows > 0 else {
+    /// Swaps the built field's GPU resources in. Returns false when a Metal
+    /// allocation failed (or the device is gone) and the previous field is
+    /// still what renders — the caller must then leave `appliedInputs` alone
+    /// so a repeat push retries rather than deduplicating.
+    private func applyField(_ field: Field?) -> Bool {
+        guard let field, field.cols > 0, field.rows > 0 else {
+            // A nil/degenerate field is a deliberate clear, not a failure.
             fieldTexture = nil
             waterCellBuffer = nil
             appliedField = nil
-            return
+            return true
         }
+        // No device: the build outlived willMove's teardown. didMove rebuilds
+        // from lastInputs, which must not be marked applied here.
+        guard let device else { return false }
         // Always a fresh texture/buffer: in-place writes would race in-flight
         // GPU frames; the old ones are retained by those frames until done.
         let desc = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: .rgba32Float, width: field.cols, height: field.rows, mipmapped: false)
         desc.usage = .shaderRead
         desc.storageMode = .shared
-        guard let tex = device.makeTexture(descriptor: desc) else { return }
+        guard let tex = device.makeTexture(descriptor: desc) else { return false }
         tex.replace(region: MTLRegionMake2D(0, 0, field.cols, field.rows),
                     mipmapLevel: 0, withBytes: field.rgba,
                     bytesPerRow: field.cols * 4 * MemoryLayout<Float>.size)
@@ -285,10 +324,11 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
         let cells: [UInt32] = field.waterCells.isEmpty ? [0] : field.waterCells
         guard let cellBuf = device.makeBuffer(bytes: cells,
                                               length: cells.count * MemoryLayout<UInt32>.stride,
-                                              options: .storageModeShared) else { return }
+                                              options: .storageModeShared) else { return false }
         fieldTexture = tex
         waterCellBuffer = cellBuf
         appliedField = field
+        return true
     }
 
     // MARK: - Field construction (pure, off-main)
@@ -682,12 +722,25 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
     }
 
     private func buildPipelines(device: MTLDevice, colorPixelFormat: MTLPixelFormat) {
-        guard let library = try? device.makeLibrary(source: Self.shaderSource, options: nil) else {
+        // Failures here degrade gracefully (draw() bails, arrows still work) —
+        // but that also means a release build where particles never appear has
+        // no symptom besides their absence, so each is logged.
+        let library: MTLLibrary
+        do {
+            library = try device.makeLibrary(source: Self.shaderSource, options: nil)
+        } catch {
+            Log.map.error("particle shader compile failed: \(error, privacy: .public)")
             assertionFailure("CurrentParticleLayer: failed to compile shaders")
             return
         }
         if let advect = library.makeFunction(name: "advect") {
-            advectPipeline = try? device.makeComputePipelineState(function: advect)
+            do {
+                advectPipeline = try device.makeComputePipelineState(function: advect)
+            } catch {
+                Log.map.error("particle advect pipeline failed: \(error, privacy: .public)")
+            }
+        } else {
+            Log.map.error("particle advect function missing from compiled library")
         }
         let desc = MTLRenderPipelineDescriptor()
         desc.label = "CurrentParticle.field"
@@ -703,7 +756,11 @@ final class CurrentParticleLayer: MLNCustomStyleLayer, @unchecked Sendable {
         desc.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
         desc.depthAttachmentPixelFormat = .depth32Float_stencil8
         desc.stencilAttachmentPixelFormat = .depth32Float_stencil8
-        renderPipeline = try? device.makeRenderPipelineState(descriptor: desc)
+        do {
+            renderPipeline = try device.makeRenderPipelineState(descriptor: desc)
+        } catch {
+            Log.map.error("particle render pipeline failed: \(error, privacy: .public)")
+        }
 
         let depthDesc = MTLDepthStencilDescriptor()
         depthDesc.depthCompareFunction = .always
