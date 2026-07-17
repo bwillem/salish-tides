@@ -130,4 +130,63 @@ struct MapViewModelLogicTests {
         #expect(MapViewModel.centreIsWater(fields: [],
                                            lat: 48.0, lon: -123.0) == nil)
     }
+
+    // MARK: - VectorSpatialIndex (per-frame crosshair lookup)
+
+    private func makeVector(lat: Double, lon: Double,
+                            speed: Double = 0.5) -> CurrentVector {
+        CurrentVector(lat: lat, lon: lon, speed_ms: speed, direction_deg: 90)
+    }
+
+    /// Deterministic pseudo-scatter (no RNG — reproducible), spanning several
+    /// bins around a Salish-Sea-like centre.
+    private func scatter(_ n: Int) -> [CurrentVector] {
+        (0..<n).map { i in
+            let f = Double(i)
+            return makeVector(lat: 48.5 + sin(f * 0.7) * 0.08,
+                              lon: -123.3 + cos(f * 1.3) * 0.12,
+                              speed: 0.1 + Double(i % 7) * 0.1)
+        }
+    }
+
+    @Test func indexAgreesWithBruteForceScan() {
+        let vectors = scatter(200)
+        let index = VectorSpatialIndex(vectors: vectors, binDeg: 0.033)
+        let queries: [(Double, Double)] = [(48.5, -123.3), (48.56, -123.21),
+                                           (48.44, -123.4), (48.58, -123.42)]
+        for (lat, lon) in queries {
+            for radius in [0.015, 0.033] {
+                let cosLat = cos(lat * .pi / 180)
+                func d2(_ v: CurrentVector) -> Double {
+                    GeoMath.distanceSquared(fromLat: lat, fromLon: lon,
+                                            toLat: v.lat, toLon: v.lon, cosLat: cosLat)
+                }
+                let brute = vectors.min { d2($0) < d2($1) }
+                    .flatMap { d2($0) <= radius * radius ? $0 : nil }
+                #expect(index.nearest(lat: lat, lon: lon,
+                                      maxDistanceDeg: radius) == brute)
+            }
+        }
+    }
+
+    @Test func indexLongitudinalReachIsCosScaled() {
+        // The radius metric cos-scales longitude, so a vector nearly
+        // radius/cos(lat) away in RAW longitude degrees is still in range —
+        // more than one square bin over. A fixed 3×3 probe would miss it.
+        let lat = 48.5, cosLat = cos(lat * .pi / 180)
+        let radius = 0.033
+        let v = makeVector(lat: lat, lon: -123.0 + (radius * 0.95) / cosLat)
+        let index = VectorSpatialIndex(vectors: [v], binDeg: radius)
+        #expect(index.nearest(lat: lat, lon: -123.0, maxDistanceDeg: radius) == v)
+    }
+
+    @Test func indexRespectsRadiusAndEmptiness() {
+        let v = makeVector(lat: 48.5, lon: -123.3)
+        let index = VectorSpatialIndex(vectors: [v], binDeg: 0.033)
+        // Just out of range latitudinally → nil, not the nearest-anyway.
+        #expect(index.nearest(lat: 48.5 + 0.04, lon: -123.3,
+                              maxDistanceDeg: 0.033) == nil)
+        let empty = VectorSpatialIndex(vectors: [], binDeg: 0.033)
+        #expect(empty.nearest(lat: 48.5, lon: -123.3, maxDistanceDeg: 0.033) == nil)
+    }
 }

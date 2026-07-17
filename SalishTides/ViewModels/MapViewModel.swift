@@ -315,38 +315,26 @@ final class MapViewModel {
             ? await OfflineCurrentModel.salishSea.loadedFieldIfAvailable() : nil
 
         guard generation == loadGeneration, !Task.isCancelled else { return }
-        let centre = visibleViewport.map { (lat: ($0.lat_min + $0.lat_max) / 2,
-                                            lon: ($0.lon_min + $0.lon_max) / 2) }
-        let coarse = Self.crosshairUsesCoarseRadius(
-            webTideContributes: webTideContributes,
-            centre: centre,
-            fineField: fineField)
         // Provenance reflects what is actually rendered: a tier is nil (and
         // the next one populated `vectors`) whenever its cull came up empty.
         currentSource = liveVectors != nil ? .live : !modelVectors.isEmpty ? .model : nil
-        // A crosshair parked ON land must read "—" even when water (and its
-        // nodes) sit inside the acceptance radius — quoting the channel next
-        // to the beach makes no sense. The models' own grids are the arbiter
-        // (500 m in the Salish Sea): if some field's containing cell is wet
-        // the point is water; if every covering field says dry it's land; if
-        // no grid covers it at all, the radius search stays the only judge.
-        let onLand = centre.map {
-            Self.centreIsWater(fields: loadedFields, lat: $0.lat, lon: $0.lon) == false
-        } ?? false
-        // Crosshair readout uses the full-resolution set; only the rendered
-        // layer is down-sampled.
-        let crosshairVector = onLand ? nil
-            : nearestVector(in: vectors, viewport: visibleViewport,
-                            maxDistanceDeg: coarse
-                                ? Self.crosshairMaxDistanceCoarseDeg
-                                : Self.crosshairMaxDistanceDeg)
-        crosshairSpeed = crosshairVector?.speedKnots
-        // Speed publishes even at slack ("0.0 kn" over water is information;
-        // "—" is reserved for land / off coverage), but a sub-significance
-        // vector's bearing is numerical noise — the card falls back to its
-        // reticle glyph when direction is nil.
-        crosshairDirection = (crosshairVector?.isSignificant ?? false)
-            ? crosshairVector?.direction_deg : nil
+        // The crosshair readout answers PER FRAME while the map pans (see
+        // panCentreChanged), so everything it needs is cached here: a spatial
+        // bin index over the full-resolution set — a nearest lookup probes a
+        // handful of bins instead of scanning every vector — plus the loaded
+        // fields for the land/water verdict and the coarse-radius inputs.
+        // Rebuilt only on a completed load; a pan between loads answers from
+        // this snapshot until the debounced reload refreshes it.
+        crosshairIndex = VectorSpatialIndex(vectors: vectors,
+                                            binDeg: Self.crosshairMaxDistanceCoarseDeg)
+        crosshairFields = loadedFields
+        crosshairWebTideContributes = webTideContributes
+        crosshairFineField = fineField
+        if let vp = visibleViewport {
+            crosshairCentre = (lat: (vp.lat_min + vp.lat_max) / 2,
+                               lon: (vp.lon_min + vp.lon_max) / 2)
+        }
+        refreshCrosshairReadout()
         // Arrows get the display-density thinned set; the particle field gets
         // full-resolution data (the raster does its own averaging — feeding it
         // the fastest-per-bin thinned picks would bias speeds and starve its
@@ -621,26 +609,106 @@ final class MapViewModel {
         return covered ? false : nil
     }
 
-    private func nearestVector(in vectors: [CurrentVector], viewport: ChartBounds?,
-                               maxDistanceDeg: Double = crosshairMaxDistanceDeg) -> CurrentVector? {
-        guard let vp = viewport else { return nil }
-        let cLat = (vp.lat_min + vp.lat_max) / 2
-        let cLon = (vp.lon_min + vp.lon_max) / 2
-        // Hoisted: min(by:) evaluates dist2 ~2× per element over the full-
-        // resolution set on the main actor during scrubs.
-        let cosLat = cos(cLat * .pi / 180)
-        func dist2(_ v: CurrentVector) -> Double {
-            GeoMath.distanceSquared(fromLat: cLat, fromLon: cLon,
-                                    toLat: v.lat, toLon: v.lon, cosLat: cosLat)
+    // MARK: Crosshair readout (per-frame)
+
+    // Snapshot the per-frame readout answers from, refreshed by each
+    // completed load (see loadVectors). All main-actor; the per-frame path
+    // never awaits.
+    private var crosshairIndex: VectorSpatialIndex?
+    private var crosshairFields: [TidalCurrentField] = []
+    private var crosshairWebTideContributes = false
+    private var crosshairFineField: TidalCurrentField?
+    private var crosshairCentre: (lat: Double, lon: Double)?
+
+    /// Per-frame entry point while the map pans/zooms (MapLibre's
+    /// regionIsChanging): recompute the crosshair readout against the cached
+    /// snapshot — no synthesis, no culling, no awaits — so the reticle tags
+    /// and the corner card track the water sliding under the crosshair in
+    /// real time. Published values assign only on change, so Observation
+    /// re-renders exactly when a displayed number would differ.
+    func panCentreChanged(lat: Double, lon: Double) {
+        if let c = crosshairCentre, c.lat == lat, c.lon == lon { return }
+        crosshairCentre = (lat: lat, lon: lon)
+        refreshCrosshairReadout()
+    }
+
+    private func refreshCrosshairReadout() {
+        guard let centre = crosshairCentre else { return }
+        // A crosshair parked ON land must read "—" even when water (and its
+        // nodes) sit inside the acceptance radius — quoting the channel next
+        // to the beach makes no sense. The models' own grids are the arbiter
+        // (500 m in the Salish Sea): if some field's containing cell is wet
+        // the point is water; if every covering field says dry it's land; if
+        // no grid covers it at all, the radius search stays the only judge.
+        var vector: CurrentVector?
+        if Self.centreIsWater(fields: crosshairFields,
+                              lat: centre.lat, lon: centre.lon) != false {
+            let coarse = Self.crosshairUsesCoarseRadius(
+                webTideContributes: crosshairWebTideContributes,
+                centre: centre, fineField: crosshairFineField)
+            vector = crosshairIndex?.nearest(
+                lat: centre.lat, lon: centre.lon,
+                maxDistanceDeg: coarse ? Self.crosshairMaxDistanceCoarseDeg
+                                       : Self.crosshairMaxDistanceDeg)
         }
-        // No significance filter: the harmonic model emits real slack-water
-        // speeds, and "0.0 kn" over water is information (slack!) while "—"
-        // means off coverage / on land. The caller suppresses the DIRECTION
-        // below the significance threshold instead — a near-zero vector's
-        // bearing is numerical noise, but its magnitude is an honest zero.
-        guard let nearest = vectors.min(by: { dist2($0) < dist2($1) }),
-              dist2(nearest) <= maxDistanceDeg * maxDistanceDeg
-        else { return nil }
-        return nearest
+        // No significance filter on the SPEED: the harmonic model emits real
+        // slack-water speeds, and "0.0 kn" over water is information (slack!)
+        // while "—" means off coverage / on land. The DIRECTION suppresses
+        // below the threshold instead — a near-zero vector's bearing is
+        // numerical noise, but its magnitude is an honest zero.
+        let speed = vector?.speedKnots
+        let direction = (vector?.isSignificant ?? false) ? vector?.direction_deg : nil
+        if crosshairSpeed != speed { crosshairSpeed = speed }
+        if crosshairDirection != direction { crosshairDirection = direction }
+    }
+}
+
+/// Nearest-vector lookup fast enough to run every frame of a pan: vectors
+/// bin onto a fixed degree grid at construction (one O(n) pass per load),
+/// and a query probes only the bins within reach of the point — a few dozen
+/// distance checks instead of a linear scan of the whole viewport set.
+struct VectorSpatialIndex: Sendable {
+    private struct Bin: Hashable { let x: Int; let y: Int }
+    private let binDeg: Double
+    private let bins: [Bin: [CurrentVector]]
+
+    /// `binDeg` must be ≥ any radius later passed to `nearest(...)`; the
+    /// query's bin reach is derived from the radius, so a bigger bin only
+    /// costs scan width, never correctness.
+    init(vectors: [CurrentVector], binDeg: Double) {
+        self.binDeg = binDeg
+        var bins: [Bin: [CurrentVector]] = [:]
+        for v in vectors {
+            let bin = Bin(x: Int((v.lon / binDeg).rounded(.down)),
+                          y: Int((v.lat / binDeg).rounded(.down)))
+            bins[bin, default: []].append(v)
+        }
+        self.bins = bins
+    }
+
+    /// Nearest vector within `maxDistanceDeg` (lat-degree metric, longitude
+    /// cos-scaled — the same GeoMath distance the rest of the app uses), or
+    /// nil. The longitudinal bin reach widens by 1/cos(lat) because bins are
+    /// square in RAW degrees while the radius is not.
+    func nearest(lat: Double, lon: Double, maxDistanceDeg: Double) -> CurrentVector? {
+        let cosLat = cos(lat * .pi / 180)
+        let bx = Int((lon / binDeg).rounded(.down))
+        let by = Int((lat / binDeg).rounded(.down))
+        let yReach = Int((maxDistanceDeg / binDeg).rounded(.up))
+        let xReach = Int((maxDistanceDeg / (binDeg * max(cosLat, 0.01))).rounded(.up))
+        var best: (v: CurrentVector, d2: Double)?
+        for dy in -yReach...yReach {
+            for dx in -xReach...xReach {
+                guard let cell = bins[Bin(x: bx + dx, y: by + dy)] else { continue }
+                for v in cell {
+                    let d2 = GeoMath.distanceSquared(fromLat: lat, fromLon: lon,
+                                                     toLat: v.lat, toLon: v.lon,
+                                                     cosLat: cosLat)
+                    if best == nil || d2 < best!.d2 { best = (v, d2) }
+                }
+            }
+        }
+        guard let best, best.d2 <= maxDistanceDeg * maxDistanceDeg else { return nil }
+        return best.v
     }
 }

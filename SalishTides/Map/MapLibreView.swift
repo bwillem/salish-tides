@@ -102,6 +102,12 @@ struct MapLibreView: UIViewRepresentable {
                     if mapController.bearing != bearing { mapController.bearing = bearing }
                 }
             },
+            onCentreChange: { [vm] lat, lon in
+                // Per-frame during pan/zoom; the VM answers from its cached
+                // spatial index and change-gates its published values, so the
+                // steady-state cost of an unmoved centre is one comparison.
+                Task { @MainActor in vm.panCentreChanged(lat: lat, lon: lon) }
+            },
             onInteraction: { [crosshair] active in
                 Task { @MainActor in
                     active ? crosshair.interactionBegan() : crosshair.interactionEnded()
@@ -130,14 +136,18 @@ struct MapLibreView: UIViewRepresentable {
         nonisolated(unsafe) var appliedBasemap: Basemap?
         private let onViewportChange: (ChartBounds) -> Void
         private let onBearingChange: (Double) -> Void
+        // Per-frame map-centre stream (lat, lon) for the live crosshair readout.
+        private let onCentreChange: (Double, Double) -> Void
         // Signals the start (true) / end (false) of a user pan/zoom/rotate.
         private let onInteraction: (Bool) -> Void
 
         init(onViewportChange: @escaping (ChartBounds) -> Void,
              onBearingChange: @escaping (Double) -> Void,
+             onCentreChange: @escaping (Double, Double) -> Void,
              onInteraction: @escaping (Bool) -> Void) {
             self.onViewportChange = onViewportChange
             self.onBearingChange = onBearingChange
+            self.onCentreChange = onCentreChange
             self.onInteraction = onInteraction
         }
 
@@ -161,6 +171,11 @@ struct MapLibreView: UIViewRepresentable {
 
         func mapView(_ mapView: MLNMapView, regionDidChangeWith reason: MLNCameraChangeReason, animated: Bool) {
             if !reason.isDisjoint(with: Self.gestureMask) { onInteraction(false) }
+            // The final resting centre: an animated move can end between
+            // regionIsChanging ticks, and the readout must settle on the
+            // exact final position, not the last frame's.
+            let centre = mapView.centerCoordinate
+            onCentreChange(centre.latitude, centre.longitude)
             regionDidSettle(mapView)
         }
 
@@ -233,6 +248,8 @@ struct MapLibreView: UIViewRepresentable {
         // camera settles (it's one point conversion — cheap per frame).
         func mapViewRegionIsChanging(_ mapView: MLNMapView) {
             onBearingChange(mapView.direction)
+            let centre = mapView.centerCoordinate
+            onCentreChange(centre.latitude, centre.longitude)
             updateStationProximity(on: mapView)
         }
 
