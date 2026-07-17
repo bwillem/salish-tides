@@ -135,15 +135,17 @@ def process_tile(tdir, geo, spot):
 
 def _infer_tile_stride(tiles):
     """Grid spacing of the downloaded data (1 = native ~500m, 2 = ~1km), read
-    from the first tile's gridX, so the analyzer adapts to whatever was fetched
-    instead of trusting a hand-set constant."""
+    from the first readable tile's gridX, so the analyzer adapts to whatever was
+    fetched instead of trusting a hand-set constant. A corrupt/partial .nc is
+    skipped (try the next), not fatal."""
     for tdir in tiles:
-        fs = sorted(glob.glob(f"{tdir}/uVelocity_*.nc"))
-        if not fs:
-            continue
-        ds = xr.open_dataset(fs[0]); gx = ds["gridX"].values.astype(int); ds.close()
-        if len(gx) >= 2:
-            return int(gx[1] - gx[0])
+        for f in sorted(glob.glob(f"{tdir}/uVelocity_*.nc")):
+            try:
+                ds = xr.open_dataset(f); gx = ds["gridX"].values.astype(int); ds.close()
+            except Exception:
+                continue
+            if len(gx) >= 2:
+                return int(gx[1] - gx[0])
     return None
 
 def main():
@@ -155,16 +157,22 @@ def main():
     ap.add_argument("--cell-stride", type=int, default=CELL_STRIDE,
                     help="analyze every Nth water cell (1 = all)")
     ap.add_argument("--year", type=int, default=YEAR)
+    # Back-compat: the pre-argparse CLI took cell-stride as a bare positional
+    # (`b1_analyze_full.py 2`); still accepted so old notes/scripts don't break.
+    ap.add_argument("cell_stride_pos", nargs="?", type=int, default=None,
+                    help=argparse.SUPPRESS)
     a = ap.parse_args()
-    RAW, CELL_STRIDE, YEAR = os.path.expanduser(a.raw), a.cell_stride, a.year
+    cell_stride = a.cell_stride_pos if a.cell_stride_pos is not None else a.cell_stride
+    RAW, CELL_STRIDE, YEAR = os.path.expanduser(a.raw), cell_stride, a.year
 
     tiles = sorted(glob.glob(f"{RAW}/tile_*"))
     det = _infer_tile_stride(tiles)
     if a.stride is not None:
         STRIDE_TILE = a.stride
         if det is not None and det != STRIDE_TILE:
-            print(f"  WARNING: --stride {STRIDE_TILE} but data gridX spacing is "
-                  f"{det} — georef will mismatch and drop cells", flush=True)
+            sys.exit(f"error: --stride {STRIDE_TILE} but the data's gridX spacing "
+                     f"is {det} — the georef query would run on the wrong grid and "
+                     f"silently drop cells. Omit --stride to auto-detect.")
     elif det is not None:
         STRIDE_TILE = det
     label = {1: "native ~500m", 2: "~1km"}.get(STRIDE_TILE, "custom")

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""B1 full-domain download (stride-2 / ~1km).
+"""B1 full-domain download (native stride-1 / ~500m by default).
 
 Generalizes b1_download.py from the single PoC box to the whole SalishSeaCast
-grid, tiled and resumable. Downloads a year of surface U/V at stride 2 (the
-app's ~1km target resolution) as monthly NetCDF chunks per tile. Skips files
-already on disk, so it can be relaunched freely.
+grid, tiled and resumable. Downloads a year of surface U/V at the chosen stride
+(native 1 by default, --stride 2 = ~1km) as monthly NetCDF chunks per tile.
+Skips files already on disk, so it can be relaunched freely.
 
 Grid: gridY 0-897, gridX 0-397. Tiles are 150x150 native cells; stride-2
 sampling within each tile stays on the global even-index grid (all tile
@@ -15,17 +15,17 @@ from datetime import datetime, timedelta, timezone
 import numpy as np, xarray as xr
 
 BASE = "https://salishsea.eos.ubc.ca/erddap/griddap"
-# Defaults preserve the legacy stride-2 (~1km) run. main() accepts --stride 1
-# for the native (~500m) pull and --out for a fresh directory (never mix stride
-# levels in one dir: same filenames, different cell sampling). These stay
+# Defaults target the native (~500m, stride-1) pull into the shared dir the
+# analyzer reads by default, so the two pipeline halves agree; `--stride 2`
+# gives the legacy ~1km run and `--out` a fresh directory (never mix stride
+# levels in one dir: same filenames, different cell sampling). STRIDE/OUT stay
 # module-level (not parsed at import) so `from b1_download_full import
 # fetch_bytes` in the compare/analyze scripts doesn't trigger argparse.
 YEAR = 2023
-STRIDE = 2
+STRIDE = 1
 TY, TX = 150, 150                      # native tile size
 GY_MAX, GX_MAX = 897, 397
-OUT = ("/private/tmp/claude-501/-Users-bryan-salish-tides/"
-       "04d3a9cd-e3ba-4fcf-8d41-13a614093def/scratchpad/b1_full")
+OUT = os.path.expanduser("~/salish-tides-nemo/b1_full_native")
 VARS = {"uVelocity": "ubcSSg3DuGridFields1hV21-11",
         "vVelocity": "ubcSSg3DvGridFields1hV21-11"}
 os.makedirs(OUT, exist_ok=True)

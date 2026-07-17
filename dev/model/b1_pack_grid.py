@@ -29,6 +29,13 @@ from tidepredict import CONSTITUENTS
 # analysis grid is at native ~0.5 km, so a finer mesh recovers real detail, not
 # interpolation. The Swift decoder is header-driven (reads rows/cols/dLat/dLon),
 # so a finer mesh needs NO app change.
+#
+# Run-only CLI script (no importable API): guard against an accidental
+# `import b1_pack_grid`, which would otherwise parse the importer's argv and
+# pack/write files as an import side effect.
+if __name__ != "__main__":
+    raise ImportError("b1_pack_grid.py is a CLI script — run it, don't import it")
+
 ap = argparse.ArgumentParser()
 ap.add_argument("--km", type=float, default=1.0,
                 help="mesh spacing in km (1.0 = legacy stride-2, 0.5 = native)")
@@ -87,10 +94,11 @@ def scale(la, lo):
     return np.column_stack([(la - latmid) * 111.0,
                             (lo - lon0) * 111.0 * math.cos(math.radians(latmid))])
 tree = cKDTree(scale(lat, lon))
-# Assign a mesh cell to a NEMO node only if one is within ~1 mesh diagonal.
-# Tied to the mesh (not a fixed 1.2 km) so a 0.5 km mesh keeps a crisp
-# coastline instead of pulling water up to 1.2 km inland.
-THRESH_KM = max(KM * math.sqrt(2), 0.6)
+# Assign a mesh cell to a NEMO node only if one is within 1.2 mesh-widths — the
+# same 1.2 km the legacy 1 km pack used, now scaled with KM so the KM=1.0
+# default reproduces it exactly, while a 0.5 km mesh tightens to 0.6 km and
+# keeps a crisp coastline instead of pulling water inland.
+THRESH_KM = KM * 1.2
 
 # mesh cell centers
 mr, mc = np.meshgrid(np.arange(rows), np.arange(cols), indexing="ij")
