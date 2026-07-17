@@ -437,7 +437,11 @@ final class MapViewModel {
         let cLat = (vp.lat_min + vp.lat_max) / 2
         let cLon = (vp.lon_min + vp.lon_max) / 2
         let events = tideEvents
-        let heightAt: (Date) -> Double? = { TideCurve.height(at: $0, events: events) }
+        // heightIfBracketed, not height: the chart's edge clamp reads as
+        // "falling" to the estimator's central difference, which would pin the
+        // indicator to "Ebb" at the bundled data's boundary. nil makes the
+        // estimator decline (row hides) instead of fabricating a tendency.
+        let heightAt: (Date) -> Double? = { TideCurve.heightIfBracketed(at: $0, events: events) }
 
         // First model (in priority order) with water near the centre wins;
         // the flood-axis series must come from the same model as the sample.
