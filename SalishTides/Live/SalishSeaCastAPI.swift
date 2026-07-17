@@ -146,7 +146,7 @@ enum SalishSeaCastAPI {
 
     // ── Datasets ─────────────────────────────────────────────────────────
     // Depth-averaged velocity over the upper ~5 m — the closest match to what
-    // a vessel experiences and to the atlas's surface currents.
+    // a vessel experiences underway.
     static let currentsDataset = "ubcSSfDepthAvgdCurrents1h"
     // Static lon/lat for every (gridY, gridX) cell of the model grid.
     static let bathymetryDataset = "ubcSSnBathymetryV21-08"

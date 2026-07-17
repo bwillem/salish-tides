@@ -1,7 +1,7 @@
 import os
 
 /// App loggers. The offline-first fallback policy means several failures are
-/// deliberately swallowed (live data degrades to cached, cached to atlas) —
+/// deliberately swallowed (live data degrades to cached, cached to the offline model) —
 /// these make those swallow sites diagnosable in the field without changing
 /// the behavior. View in Console.app under the app's subsystem.
 enum Log {

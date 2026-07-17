@@ -7,7 +7,7 @@ import CoreLocation
 
 // Custom Metal style layer that animates tidal current as flowing particles.
 //
-// The data points (live model cells or atlas vectors) are resampled onto a
+// The data points (live or offline-model cells) are resampled onto a
 // **viewport-anchored raster** on every update: bin-average into grid cells,
 // flood-fill outward across chart water (bounded by the data spacing, so flow
 // reaches the drawn coastline but never invents current far from real data),

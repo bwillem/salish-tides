@@ -49,7 +49,7 @@ struct LiveTideSeries: Sendable {
 /// offline data. Everything it fetches lands in `LiveDataStore`, so data
 /// downloaded at the dock keeps working underway; when neither the cache nor
 /// the network can cover a request, callers get nil and fall back to the
-/// atlas/predictions. Fetching (and rendering, via nil returns) is disabled
+/// offline model/predictions. Fetching (and rendering, via nil returns) is disabled
 /// entirely by `AppSettings.offlineOnly`.
 @MainActor
 @Observable
@@ -341,7 +341,7 @@ final class LiveDataService {
             if hourKey == displayedHourKey { dataGeneration += 1 }
         } catch {
             // Network hiccup or hour outside the dataset — the map falls back
-            // to the atlas and the periodic refresh retries after the delay.
+            // to the offline model and the periodic refresh retries after the delay.
             Log.live.info("slice fetch failed for \(hourKey): \(error, privacy: .public)")
             sliceRetryAfter[hourKey] = Date().addingTimeInterval(Self.sliceRetryDelay)
         }
@@ -351,7 +351,7 @@ final class LiveDataService {
 
     /// Live current vectors for the hour containing `date`, or nil when live
     /// data can't/shouldn't be shown (offline-only, no coverage) — callers
-    /// fall back to the bundled atlas. A cache miss for a plausible hour kicks
+    /// fall back to the bundled model. A cache miss for a plausible hour kicks
     /// off an on-demand fetch; `dataGeneration` bumps when it lands.
     func currents(for date: Date) async -> [CurrentVector]? {
         guard !settings.offlineOnly else { return nil }
@@ -489,7 +489,7 @@ final class LiveDataService {
     /// outermost wet point. NEMO's land mask is time-invariant, so the band is
     /// computed once from any cached slice and reused for the app's lifetime.
     /// nil when live data can't be shown (offline-only, cold cache) — the
-    /// atlas needs no mask, its renderer behavior is unchanged without one.
+    /// offline model supplies its own mask then.
     func landMask() async -> [CurrentVector]? {
         guard !settings.offlineOnly else { return nil }
         await ensureReady()

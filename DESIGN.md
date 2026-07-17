@@ -403,9 +403,9 @@ Settings                                    Done
 ```
 
 **Data Sources** (`DataSourcesView`, pushed from About): NOAA CO-OPS / CHS IWLS
-tide attribution, the Salish Sea Tidal Current Atlas, MapLibre basemap credit, and the
-"not for navigation" disclaimer. In-app provenance is expected at App Store
-review for a navigation aid.
+tide attribution, SalishSeaCast (UBC) current-model attribution, MapLibre basemap
+credit, and the "not for navigation" disclaimer. In-app provenance is expected at
+App Store review for a navigation aid.
 
 ---
 
@@ -474,10 +474,14 @@ The animated current particles (§5.4a) are the one continuous animation in the 
 (`project.yml`) rsyncs it into the app bundle — a missing dir fails the build.
 Generate it first:
 
-- **Atlas currents** (`data/maps*`): produced by the extraction tooling in `dev/extraction/`.
 - **Tide predictions** (`data/tides/tides_2026.json`): run `python3 dev/tides/fetch_tides.py`
   (needs network — pulls NOAA + CHS). Re-curate the station set first with
   `dev/tides/curate_stations.py` only if changing coverage/year.
+- **Offline basemap** (`data/basemap/`): see `dev/basemap/`.
+
+(The print-atlas `data/maps*` directories and `dev/extraction/` tooling were
+retired when the harmonic current models replaced the atlas; offline currents
+now ship as committed `.b1` assets under `SalishTides/Resources/`.)
 
 If `data/tides/` is absent the app builds with no tide data and the chart shows
 its "Tide data unavailable" placeholder.
