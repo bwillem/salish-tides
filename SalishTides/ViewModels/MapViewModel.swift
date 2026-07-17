@@ -208,37 +208,39 @@ final class MapViewModel {
             if !culled.isEmpty { liveVectors = culled }
         }
 
-        // Fallback tier: the bundled harmonic models. Synthesized on device
-        // from packed constituents, so anywhere the live field would render
-        // but can't (offline, cold cache, forecast horizon) still gets model
-        // water. The packers keep the domains disjoint (WebTide cells near
-        // SalishSeaCast water are dropped at pack time), so contributions
-        // simply concatenate — no runtime overlap logic. All-nil (viewport
-        // off every domain) → the map shows no current data there.
+        // Harmonic-model tiers. The salishSea model duplicates the live
+        // field's domain (both are the NEMO footprint), so it contributes
+        // only when live doesn't render. webTide's cells were dropped near
+        // SalishSeaCast water at PACK time, so it is disjoint from BOTH the
+        // salishSea model and the live field — it always contributes, which
+        // is what makes the coast seamless online: live water renders live,
+        // and the coast beyond it still gets WebTide arrows in the same
+        // frame. No runtime overlap logic. Everything nil (viewport off
+        // every domain) → the map shows no current data there.
         var modelVectors: [CurrentVector] = []
         var contributing: [OfflineCurrentModel] = []
-        if liveVectors == nil {
-            for model in OfflineCurrentModel.all {
-                if let v = await model.currents(for: date, viewport: visibleViewport) {
-                    modelVectors += v
-                    contributing.append(model)
-                }
-                guard generation == loadGeneration else { return }
+        for model in OfflineCurrentModel.all {
+            if liveVectors != nil, model === OfflineCurrentModel.salishSea { continue }
+            if let v = await model.currents(for: date, viewport: visibleViewport) {
+                modelVectors += v
+                contributing.append(model)
             }
+            guard generation == loadGeneration else { return }
         }
 
-        let vectors = liveVectors ?? modelVectors
+        let vectors = (liveVectors ?? []) + modelVectors
 
-        // The coastline mask, culled like the vectors. Both tiers provide one
-        // (live from cached wet cells, models from their own meshes) so
-        // particles clip at the shoreline. Lower-priority models filter their
-        // dry-shoreline band against the higher-priority fields: the pack-time
-        // mask makes foreign-covered water read as "land" to them, and an
-        // unfiltered band would kill particles along the model seam.
+        // The coastline mask, culled like the vectors. Every tier provides
+        // one (live from cached wet cells, models from their own meshes) so
+        // particles clip at the shoreline. Lower-priority models filter
+        // their dry-shoreline band against the higher-priority fields: the
+        // pack-time mask makes foreign-covered water read as "land" to them,
+        // and an unfiltered band would kill particles along the model seam.
         var landMask: [CurrentVector] = []
         if liveVectors != nil, let mask = await liveData?.landMask() {
             landMask = viewportFiltered(mask)
-        } else if !contributing.isEmpty {
+        }
+        if !contributing.isEmpty {
             var higherFields: [TidalCurrentField] = []
             for model in OfflineCurrentModel.all {
                 if contributing.contains(where: { $0 === model }),
