@@ -2,7 +2,7 @@
 """WebTide ne_pac4 → webtide_nepac.b1: the NE Pacific offline current model,
 packed as a SECOND SCTF1 asset alongside current_model.b1.
 
-Why a separate file (vs webtide_merge_pack.py's single merged asset): the two
+Why a separate file (vs merging both sources into one asset): the two
 sources want different grid resolutions — SalishSeaCast is native ~500 m,
 WebTide's finite-element mesh is 2–12 km — and one regular grid can't serve
 both without either gigabytes of oversampling or degrading the Salish Sea.
@@ -15,8 +15,7 @@ current_model.b1) is dropped, so the two assets are spatially disjoint and the
 app needs zero overlap logic. Re-run this packer whenever current_model.b1 is
 repacked — the meta json records the SSC file's sha256 to catch a mismatch.
 
-Interpolation (from webtide_merge_pack.py, which see): barycentric over
-WebTide's own FE triangulation, per-constituent u/v as COMPLEX phasors
+Interpolation: barycentric over WebTide's own FE triangulation, per-constituent u/v as COMPLEX phasors
 A·e^{-i g} (never raw amplitude/degrees, which would wrap), water-masked for
 free because the mesh only triangulates water. uMean/vMean are 0 — WebTide is
 pure tidal, no residual.
@@ -31,7 +30,7 @@ Usage:
       [--ssc SalishTides/Resources/current_model.b1]
       [--out SalishTides/Resources/webtide_nepac.b1]
 """
-import argparse, hashlib, json, math, os, struct, sys
+import argparse, hashlib, json, math, os, sys
 
 import numpy as np
 from scipy.spatial import cKDTree
@@ -39,6 +38,7 @@ from matplotlib.tri import Triangulation
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+import sctf1
 from tidepredict import CONSTITUENTS
 
 K = list(CONSTITUENTS)                      # M2 S2 N2 K2 K1 O1 P1 Q1
@@ -46,29 +46,13 @@ REC = 2 + 4 * len(K)
 
 
 def decode_b1(path):
-    """SCTF1 → (lat[N], lon[N], coeffs[N,REC]). Shared with the validator."""
-    buf = open(path, "rb").read()
-    assert buf[:5] == b"SCTF1", "bad magic"
-    rows, cols = struct.unpack_from("<HH", buf, 5)
-    lat0, lon0, dLat, dLon = struct.unpack_from("<dddd", buf, 9)
-    o = 41
-    nC = buf[o]; o += 1
-    names = []
-    for _ in range(nC):
-        ln = buf[o]; o += 1
-        names.append(buf[o:o+ln].decode()); o += ln
-    assert names == K, f"constituent set differs: {names} != {K}"
-    nbits = rows * cols
-    bmp = buf[o:o + (nbits + 7)//8]; o += (nbits + 7)//8
-    lats, lons, coeffs = [], [], []
-    p = o
-    for i in range(nbits):
-        if (bmp[i >> 3] >> (i & 7)) & 1:
-            r, c = divmod(i, cols)
-            lats.append(lat0 + r*dLat); lons.append(lon0 + c*dLon)
-            coeffs.append(struct.unpack_from(f"<{REC}f", buf, p)); p += REC*4
-    return (np.array(lats), np.array(lons), np.array(coeffs, np.float64),
-            (rows, cols, lat0, lon0, dLat, dLon))
+    """SCTF1 → (lat[N], lon[N], coeffs[N,REC] f64, header). Thin wrapper over
+    the shared sctf1 module, keeping this script's historical return shape."""
+    g = sctf1.read(path)
+    assert g.names == K, f"constituent set differs: {g.names} != {K}"
+    lat, lon = g.latlon()
+    return (lat, lon, g.coeffs.astype(np.float64),
+            (g.rows, g.cols, g.lat0, g.lon0, g.dLat, g.dLon))
 
 
 def load_webtide_raw(src):
@@ -223,17 +207,8 @@ def main():
     coeff[cells] = block
 
     out = os.path.normpath(args.out)
-    with open(out, "wb") as f:
-        f.write(b"SCTF1")
-        f.write(struct.pack("<HH", rows, cols))
-        f.write(struct.pack("<dddd", lat0, lon0, DLAT, DLON))
-        f.write(struct.pack("<B", len(K)))
-        for nm in K:
-            bb = nm.encode("ascii"); f.write(struct.pack("<B", len(bb))); f.write(bb)
-        # LSB-first within each byte: decoder reads bits[i>>3] & (1<<(i&7)).
-        f.write(np.packbits(present, bitorder="little").tobytes())
-        f.write(coeff[present].tobytes())
-    sz = os.path.getsize(out)
+    sz = sctf1.write(out, sctf1.Grid(rows, cols, lat0, lon0, DLAT, DLON,
+                                     K, present, coeff[present]))
     print(f"wrote {out}  ({sz/1e6:.2f} MB, {len(cells)} nodes)")
 
     # ---- self-validation: independent re-read of what we just wrote ----
