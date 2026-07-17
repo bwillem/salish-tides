@@ -284,18 +284,21 @@ final class MapViewModel {
         if liveVectors != nil, let mask = await liveData?.landMask() {
             landMask = viewportFiltered(mask)
         }
-        if !contributing.isEmpty {
-            var higherFields: [TidalCurrentField] = []
-            for model in OfflineCurrentModel.all {
-                if contributing.contains(where: { $0 === model }),
-                   let mask = await model.landMask(excludingShorelineNear: higherFields) {
-                    landMask += viewportFiltered(mask)
-                }
-                if let field = await model.loadedFieldIfAvailable() {
-                    higherFields.append(field)
-                }
-                guard generation == loadGeneration, !Task.isCancelled else { return }
+        // Fields collect OUTSIDE the contributing check: the crosshair's
+        // land/water verdict below needs them even when the viewport renders
+        // live-only. At each mask call the array holds exactly the models
+        // EARLIER in `.all` — the higher-priority fields the seam filter
+        // excludes against.
+        var loadedFields: [TidalCurrentField] = []
+        for model in OfflineCurrentModel.all {
+            if contributing.contains(where: { $0 === model }),
+               let mask = await model.landMask(excludingShorelineNear: loadedFields) {
+                landMask += viewportFiltered(mask)
             }
+            if let field = await model.loadedFieldIfAvailable() {
+                loadedFields.append(field)
+            }
+            guard generation == loadGeneration, !Task.isCancelled else { return }
         }
 
         // Crosshair acceptance radius scales with the source under the
@@ -312,20 +315,31 @@ final class MapViewModel {
             ? await OfflineCurrentModel.salishSea.loadedFieldIfAvailable() : nil
 
         guard generation == loadGeneration, !Task.isCancelled else { return }
+        let centre = visibleViewport.map { (lat: ($0.lat_min + $0.lat_max) / 2,
+                                            lon: ($0.lon_min + $0.lon_max) / 2) }
         let coarse = Self.crosshairUsesCoarseRadius(
             webTideContributes: webTideContributes,
-            centre: visibleViewport.map { (lat: ($0.lat_min + $0.lat_max) / 2,
-                                           lon: ($0.lon_min + $0.lon_max) / 2) },
+            centre: centre,
             fineField: fineField)
         // Provenance reflects what is actually rendered: a tier is nil (and
         // the next one populated `vectors`) whenever its cull came up empty.
         currentSource = liveVectors != nil ? .live : !modelVectors.isEmpty ? .model : nil
+        // A crosshair parked ON land must read "—" even when water (and its
+        // nodes) sit inside the acceptance radius — quoting the channel next
+        // to the beach makes no sense. The models' own grids are the arbiter
+        // (500 m in the Salish Sea): if some field's containing cell is wet
+        // the point is water; if every covering field says dry it's land; if
+        // no grid covers it at all, the radius search stays the only judge.
+        let onLand = centre.map {
+            Self.centreIsWater(fields: loadedFields, lat: $0.lat, lon: $0.lon) == false
+        } ?? false
         // Crosshair readout uses the full-resolution set; only the rendered
         // layer is down-sampled.
-        let crosshairVector = nearestVector(in: vectors, viewport: visibleViewport,
-                                            maxDistanceDeg: coarse
-                                                ? Self.crosshairMaxDistanceCoarseDeg
-                                                : Self.crosshairMaxDistanceDeg)
+        let crosshairVector = onLand ? nil
+            : nearestVector(in: vectors, viewport: visibleViewport,
+                            maxDistanceDeg: coarse
+                                ? Self.crosshairMaxDistanceCoarseDeg
+                                : Self.crosshairMaxDistanceDeg)
         crosshairSpeed = crosshairVector?.speedKnots
         // Speed publishes even at slack ("0.0 kn" over water is information;
         // "—" is reserved for land / off coverage), but a sub-significance
@@ -587,6 +601,24 @@ final class MapViewModel {
         let fineReachKm = crosshairMaxDistanceDeg * 111.0
         return !fineField.hasWater(lat: centre.lat, lon: centre.lon,
                                    withinKm: fineReachKm)
+    }
+
+    /// The models' land/water verdict at a point, across every loaded field:
+    /// - `true`  — some field's containing cell is a water node (the point is
+    ///   on water; a dry verdict from a lower-resolution or pack-masked field
+    ///   never overrules it),
+    /// - `false` — at least one field's grid covers the point and every one
+    ///   that does says dry: the point is land,
+    /// - `nil`   — no grid covers the point (open ocean off every mesh);
+    ///   the caller has no land evidence and should fall back to its own rule.
+    nonisolated static func centreIsWater(fields: [TidalCurrentField],
+                                          lat: Double, lon: Double) -> Bool? {
+        var covered = false
+        for field in fields {
+            if field.isWater(lat: lat, lon: lon) { return true }
+            if field.coverage.contains(lat: lat, lon: lon) { covered = true }
+        }
+        return covered ? false : nil
     }
 
     private func nearestVector(in vectors: [CurrentVector], viewport: ChartBounds?,

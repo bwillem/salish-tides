@@ -92,4 +92,42 @@ struct MapViewModelLogicTests {
         #expect(MapViewModel.crosshairUsesCoarseRadius(
             webTideContributes: true, centre: nil, fineField: field) == true)
     }
+
+    // MARK: - centreIsWater (crosshair land/water verdict)
+
+    @Test func waterWhenContainingCellIsWet() {
+        // Cell 0 is water; a point within half a cell of its node is ON it.
+        let field = makeField(waterCells: [0])
+        #expect(MapViewModel.centreIsWater(fields: [field],
+                                           lat: 48.001, lon: -123.001) == true)
+    }
+
+    @Test func landWhenEveryCoveringFieldSaysDry() {
+        // Point sits on a dry cell inside the grid — land, even though water
+        // exists one cell over (inside the crosshair acceptance radius). This
+        // is the beach-adjacent case: nearby nodes must not be quoted.
+        let field = makeField(waterCells: [1])   // water at (48, -122.995)
+        #expect(MapViewModel.centreIsWater(fields: [field],
+                                           lat: 48.0, lon: -123.0) == false)
+    }
+
+    @Test func wetVerdictFromAnyFieldWins() {
+        // A dry verdict from one grid (e.g. SalishSea's rotated-domain bbox
+        // over west-coast water, or WebTide's pack-masked seam) must not
+        // overrule another field's wet containing cell.
+        let dryHere = makeField(waterCells: [15])            // covers, all dry near origin
+        let wetHere = makeField(d: 0.036, waterCells: [0])   // coarse mesh, wet at origin
+        #expect(MapViewModel.centreIsWater(fields: [dryHere, wetHere],
+                                           lat: 48.0, lon: -123.0) == true)
+    }
+
+    @Test func nilWhenNoFieldCoversThePoint() {
+        // Off every mesh: no land evidence either way — the caller's radius
+        // search stays the only judge.
+        let field = makeField(waterCells: [0])
+        #expect(MapViewModel.centreIsWater(fields: [field],
+                                           lat: 50.0, lon: -130.0) == nil)
+        #expect(MapViewModel.centreIsWater(fields: [],
+                                           lat: 48.0, lon: -123.0) == nil)
+    }
 }
