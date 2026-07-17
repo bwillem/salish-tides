@@ -78,7 +78,10 @@ extension Font {
     static var stControlIcon: Font { bodyScaled(size: 18, weight: .medium) }       // gear
     static var stControlIconSmall: Font { bodyScaled(size: 16, weight: .medium) }  // locate
     static var stCompassNeedle: Font { bodyScaled(size: 9, weight: .regular) }     // needle triangles
-    static var stStationGlyph: Font { bodyScaled(size: 11, weight: .semibold) }    // tide-station marker arrow
+    // Tide-station marker arrow. FIXED size (not `bodyScaled`): the badge is a
+    // fixed 26 pt glass circle, so a Dynamic-Type-scaled glyph would overflow and
+    // clip it at large accessibility text sizes.
+    static let stStationGlyph = Font.system(size: 11, weight: .semibold)
 
     private static func bodyScaled(size: CGFloat, weight: UIFont.Weight) -> Font {
         Font(UIFontMetrics(forTextStyle: .body)

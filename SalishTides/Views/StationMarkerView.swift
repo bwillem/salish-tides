@@ -22,6 +22,8 @@ struct StationMarkerView: View {
     let nearCrosshair: Bool
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(CrosshairPresenter.self) private var crosshair
     @State private var pulsing = false
     @State private var tapped = false
     @State private var pillHeight: CGFloat = 0
@@ -56,6 +58,24 @@ struct StationMarkerView: View {
         .accessibilityHint("The tide chart shows predictions for this station.")
         // Start the pulse once shown; Reduce Motion keeps it a static halo.
         .onAppear { pulsing = !reduceMotion }
+        // Re-arm the pulse: SwiftUI drops a `repeatForever` animation while the
+        // app is backgrounded (and won't restart it on its own), and a
+        // Reduce-Motion toggle has to switch the pulse between branches.
+        .onChange(of: scenePhase) { _, phase in if phase == .active { rearmPulse() } }
+        .onChange(of: reduceMotion) { _, _ in rearmPulse() }
+        // Interacting with the map (pan/zoom/scrub) dismisses a tapped pill —
+        // the overlay's stand-in for the annotation's old "tap open water to
+        // dismiss" (a SwiftUI overlay can't see taps that land on the map).
+        .onChange(of: crosshair.isEmphasized) { _, active in if active { tapped = false } }
+    }
+
+    /// Re-fires the pulse's `false→true` edge so its repeating animation restarts
+    /// (SwiftUI won't on its own after a background/foreground or a branch swap).
+    /// Stays a static halo under Reduce Motion.
+    private func rearmPulse() {
+        let animate = !reduceMotion
+        pulsing = false
+        Task { @MainActor in pulsing = animate }
     }
 
     /// Glyph on a glass circle — the shared `.floatingCard()` surface, so it's

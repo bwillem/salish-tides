@@ -398,10 +398,13 @@ from the plain blue user-location dot. Hit target is the full 44 pt view (§4.3)
 
 **Name pill:** the station's `stationDisplayName` in a small glass capsule
 above the badge — the same `.floatingCard()` glass, `.stCaption` type,
-status-pill insets (`Spacing.sm` / `Spacing.xs`), floated above the badge with an
-`alignmentGuide` (no height measurement). Hidden at rest; revealed while either
-trigger holds:
-- **Tap** — a SwiftUI tap on the badge toggles it, or
+status-pill insets (`Spacing.sm` / `Spacing.xs`), floated above the badge by a
+measured-height offset (its centre half its height + an `sm` gap above the
+badge's top edge, so it clears the badge at any Dynamic Type size). Hidden at
+rest; revealed while either trigger holds:
+- **Tap** — a SwiftUI tap on the badge toggles it; interacting with the map
+  (pan/zoom/scrub) dismisses it, the overlay's stand-in for the old
+  tap-open-water-to-dismiss (a SwiftUI overlay can't see taps on the map), or
 - **Crosshair proximity** — the map centre sits within 30 pt of the station
   (the reticle's reach: 8 pt gap + 22 pt arm), checked per-frame while the
   camera moves.

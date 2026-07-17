@@ -301,8 +301,10 @@ struct MapLibreView: UIViewRepresentable {
                 CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lon)
             }
             let name = station?.name.stationDisplayName ?? ""
+            let id = station?.id
             MainActor.assumeIsolated {
                 if stationMarker.name != name { stationMarker.name = name }
+                if stationMarker.stationID != id { stationMarker.stationID = id }
             }
             projectStation(on: mapView)
         }

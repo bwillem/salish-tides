@@ -107,6 +107,11 @@ final class StationMarkerPresenter {
     /// coordinator gates on an actual change before writing.
     var screenPoint: CGPoint?
 
+    /// The station's stable id — the overlay's SwiftUI identity (`.id`), so a
+    /// swap to a different station cross-fades even when two stations share a
+    /// normalised display name. nil when there's no station.
+    var stationID: String?
+
     /// Tendency for the badge glyph (↑ flood / ↓ ebb / neutral) — kept in step
     /// with the phase card's arrow.
     var tendency: CurrentPhase.Tendency?
