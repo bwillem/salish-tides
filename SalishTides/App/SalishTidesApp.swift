@@ -18,7 +18,7 @@ struct SalishTidesApp: App {
         // service — a small dependency chain.
         let settings = AppSettings()
         let network = NetworkMonitor()
-        let liveData = LiveDataService(settings: settings, network: network)
+        let liveData = LiveDataService(network: network)
         _settings = State(initialValue: settings)
         _network = State(initialValue: network)
         _liveData = State(initialValue: liveData)
