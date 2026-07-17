@@ -1,6 +1,6 @@
 # Salish Tides
 
-An **offline-first tidal-current planning app** for sailors in the Salish Sea (iOS/iPadOS, primary target iPad at the helm). The map *is* the product — a full-bleed MapLibre map with thin SwiftUI overlays showing current speed/direction and tide state at the crosshair, scrubbable over ±12 h.
+An **offline-first tidal-current planning app** for sailors in the Salish Sea (iOS/iPadOS, primary target iPad at the helm). The map *is* the product — a full-bleed MapLibre map with thin SwiftUI overlays showing current speed/direction and tide state at the crosshair, scrubbable over ±48 h.
 
 ## Stack
 
@@ -53,9 +53,9 @@ Bundled JSON → SQLite (GRDB) is populated once by `DatabaseMigrator` on first 
 
 ## Conventions & invariants
 
-- **Canonical units never change in storage**: currents in **knots** (`CurrentVector.speedKnots`), tide heights in **metres** (station datum). Convert only at the readout (`AppSettings.formatSpeed/formatHeight`). Never persist a converted value.
+- **Canonical units never change in storage**: currents in **m/s** (`CurrentVector.speed_ms`; readouts consume knots via the computed `speedKnots`), tide heights in **metres** (station datum). Convert only at the readout (`AppSettings.formatSpeed/formatHeight`). Never persist a converted value.
 - **All times display in `TimeZone.salish`** (America/Vancouver) via `Calendar.salish`; underlying data is UTC.
-- **Design tokens**: colors, fonts, spacing, and the `.floatingCard()` surface live only in `SalishTides/Design/DesignTokens.swift`. Don't use hex literals, `Color(red:...)`, or `.system(size:)` outside it (breaks theming + Dynamic Type). Day/Night follows system appearance; overriding `appearance` swaps the whole theme.
+- **Design tokens**: colors, fonts, spacing, and the `.floatingCard()` surface live only in `SalishTides/Design/DesignTokens.swift`. Don't use hex literals, `Color(red:...)`, or `.system(size:)` outside it (breaks theming + Dynamic Type) — sole exception: Canvas-drawn tick/axis labels in the tape and tide chart, per DESIGN.md. The app defaults to Night (`.dark`); the `appearance` setting can follow the system or override, and switching swaps the whole theme.
 - The map deliberately **does not** swap basemaps on connectivity change — MapLibre's ambient cache serves what it holds; the "Offline" pill is the only signal.
 - `MapViewModel` uses a monotonic `loadGeneration` token to discard stale async results during rapid pan/scrub — re-check it after every `await`.
 
