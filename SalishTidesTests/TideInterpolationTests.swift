@@ -47,6 +47,22 @@ struct TideCurveTests {
     @Test func emptyEventsReturnsNil() {
         #expect(TideCurve.height(at: t0, events: []) == nil)
     }
+
+    @Test func heightIfBracketedAgreesInsideAndDeclinesOutside() throws {
+        // Inside coverage the two APIs are identical...
+        for offset in [0.0, 1.5, 3, 6, 9, 12].map({ $0 * 3600 }) {
+            let t = t0.addingTimeInterval(offset)
+            #expect(TideCurve.heightIfBracketed(at: t, events: events)
+                    == TideCurve.height(at: t, events: events))
+        }
+        // ...but outside, where height(at:) clamps to a constant (which a
+        // central-difference probe would misread as "falling" → "Ebb"),
+        // heightIfBracketed must return nil so the phase estimator can
+        // decline instead of fabricating a verdict.
+        #expect(TideCurve.heightIfBracketed(at: t0.addingTimeInterval(-1), events: events) == nil)
+        #expect(TideCurve.heightIfBracketed(at: t0.addingTimeInterval(12 * 3600 + 1), events: events) == nil)
+        #expect(TideCurve.heightIfBracketed(at: t0, events: []) == nil)
+    }
 }
 
 struct LiveTideSeriesTests {
