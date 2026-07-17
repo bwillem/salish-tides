@@ -24,6 +24,7 @@ struct StationMarkerView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var pulsing = false
     @State private var tapped = false
+    @State private var pillHeight: CGFloat = 0
 
     private static let badgeSize: CGFloat = 26
     private static let hitSize: CGFloat = 44   // HIG minimum touch target
@@ -35,10 +36,20 @@ struct StationMarkerView: View {
         ZStack {
             pulse
             badge
+            if revealPill {
+                pill
+                    .background(pillHeightReader)
+                    // Float the pill fully above the badge: place its centre half
+                    // its own height plus an `sm` gap above the badge's top edge,
+                    // so its bottom clears the badge in either Dynamic Type size.
+                    .offset(y: -(Self.badgeSize / 2 + Spacing.sm + pillHeight / 2))
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
         }
         .frame(width: Self.hitSize, height: Self.hitSize)
         .contentShape(Circle())
         .onTapGesture { withAnimation(.easeOut(duration: 0.2)) { tapped.toggle() } }
+        .animation(.easeOut(duration: 0.2), value: revealPill)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Tide station: \(name)")
         .accessibilityAddTraits(.isButton)
@@ -56,18 +67,6 @@ struct StationMarkerView: View {
             .foregroundStyle(.primary)
             .frame(width: Self.badgeSize, height: Self.badgeSize)
             .floatingCard(cornerRadius: Self.badgeSize / 2)
-            .overlay(alignment: .top) {
-                if revealPill {
-                    pill
-                        // Float the pill fully above the badge with an `sm` gap,
-                        // no height measurement: shifting the pill's own top guide
-                        // down by its height + gap lifts its bottom edge to sit
-                        // `sm` above the badge's top.
-                        .alignmentGuide(.top) { $0.height + Spacing.sm }
-                        .transition(.opacity.combined(with: .offset(y: 3)))
-                }
-            }
-            .animation(.easeOut(duration: 0.2), value: revealPill)
     }
 
     private var pill: some View {
@@ -78,6 +77,16 @@ struct StationMarkerView: View {
             .padding(.horizontal, Spacing.sm)
             .padding(.vertical, Spacing.xs)
             .floatingCard(cornerRadius: Radius.pill)
+    }
+
+    /// Measures the pill's rendered height so it floats exactly above the badge
+    /// regardless of Dynamic Type size.
+    private var pillHeightReader: some View {
+        GeometryReader { geo in
+            Color.clear
+                .onAppear { pillHeight = geo.size.height }
+                .onChange(of: geo.size.height) { _, new in pillHeight = new }
+        }
     }
 
     @ViewBuilder

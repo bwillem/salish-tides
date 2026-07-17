@@ -92,6 +92,13 @@ struct ContentView: View {
                         .transition(.opacity)
                 }
             }
+            // Match the map's full-bleed coordinate space: the coordinator
+            // projects to `mapView.convert(_:toPointTo:)`, whose points are
+            // measured from the full-screen map (it ignores the safe area). This
+            // overlay must ignore it too, or every `.position` is shifted by the
+            // top inset — a constant screen offset that reads as a zoom-dependent
+            // drift on the map (a few km when zoomed out, metres when zoomed in).
+            .ignoresSafeArea()
             .animation(.easeOut(duration: 0.22), value: stationMarker.name)
             .animation(.easeOut(duration: 0.22), value: stationMarker.screenPoint == nil)
             VStack(spacing: 0) {
