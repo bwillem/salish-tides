@@ -157,6 +157,59 @@ struct OfflineCurrentModelTests {
         #expect(field.nearestWaterCell(lat: 48.004, lon: -122.996, maxDistanceKm: 5) == 0)
     }
 
+    @Test func bundledAssetsDecodeAndAreHealthy() throws {
+        // Both shipped models must decode with zero dropped nodes and sit in
+        // their expected boxes (tests are app-hosted, so Bundle.main works).
+        let expected: [(resource: String, lat: ClosedRange<Double>, lon: ClosedRange<Double>)] = [
+            ("current_model", 46...52, -128 ... -121),   // Salish Sea, native 500 m
+            ("webtide_nepac", 45...61, -141 ... -121),   // WA coast → SE Alaska
+        ]
+        for spec in expected {
+            let url = try #require(Bundle.main.url(forResource: spec.resource,
+                                                   withExtension: "b1"),
+                                   "missing bundled asset \(spec.resource).b1")
+            let field = try OfflineCurrentModel.decode(try Data(contentsOf: url))
+            #expect(field.droppedNodes == 0, "\(spec.resource): dropped nodes")
+            #expect(field.nodeCount > 10_000, "\(spec.resource): suspiciously few nodes")
+            #expect(spec.lat.contains(field.coverage.lat_min)
+                    && spec.lat.contains(field.coverage.lat_max), "\(spec.resource): lat box")
+            #expect(spec.lon.contains(field.coverage.lon_min)
+                    && spec.lon.contains(field.coverage.lon_max), "\(spec.resource): lon box")
+        }
+    }
+
+    @Test func seamProbeReachIsDistanceBasedNotCellBased() throws {
+        // Real seam geometry: the foreign (higher-priority) field is the
+        // 500 m SalishSea mesh, and the packer's mask leaves this model's
+        // seam dry cells up to ~2.4 km from foreign water. The probe must
+        // reach in KM — a fixed 2-cell probe on a 500 m mesh (~1 km) misses
+        // and leaves a zero-speed barrier along the seam in open water.
+        let fine = try OfflineCurrentModel.decode(
+            makeAsset(rows: 3, cols: 3, lat0: 48, lon0: -123,
+                      dLat: 0.0045, dLon: 0.0045,   // ≈ 500 m cells
+                      presence: [Bool](repeating: true, count: 9),
+                      records: (0..<9).map { _ in record() }))
+        // A seam point ~2.4 km east of the fine field's easternmost water.
+        let seamLat = 48.0045
+        let seamLon = -122.991 + 2.4 / (111.0 * cos(48 * Double.pi / 180))
+        #expect(fine.hasWater(lat: seamLat, lon: seamLon, withinKm: 3.0))
+        #expect(!fine.hasWater(lat: seamLat, lon: seamLon, withinKm: 1.0))
+
+        // Genuine coastline far from any foreign water stays unfiltered.
+        #expect(!fine.hasWater(lat: 50, lon: -130, withinKm: 3.0))
+
+        // And the filter built on it clears a realistic seam band: 4 km-mesh
+        // dry points 0–2.4 km from fine water are all dropped at 3 km reach.
+        let seamPoints = [
+            CurrentVector(lat: seamLat, lon: seamLon, speed_ms: 0, direction_deg: 0),
+            CurrentVector(lat: 48.0045, lon: -122.9905, speed_ms: 0, direction_deg: 0),
+        ]
+        let survivors = seamPoints.filter {
+            !fine.hasWater(lat: $0.lat, lon: $0.lon, withinKm: 3.0)
+        }
+        #expect(survivors.isEmpty)
+    }
+
     @Test func dryShorelineBandsTheWater() throws {
         // 3×3 mesh, single water cell in the centre → all 8 neighbours masked.
         var presence = [Bool](repeating: false, count: 9)

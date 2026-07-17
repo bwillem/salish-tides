@@ -42,6 +42,36 @@ struct TidalCurrentField: Sendable {
                     lon_min: lon0, lon_max: lon0 + Double(cols - 1) * dLon)
     }
 
+    /// Whether any water node lies within `km` of the point, expressed as a
+    /// grid probe of ceil(km / cell-edge) cells — used to tell a genuine
+    /// coastline from the seam another model's pack-time mask carved out.
+    /// Distance-based, NOT cell-based: the caller reasons in the masking
+    /// distance (km), and this field's own resolution must not change the
+    /// reach (a 2-cell probe on a 500 m mesh is 1 km; on a 4 km mesh, 8 km).
+    func hasWater(lat: Double, lon: Double, withinKm km: Double) -> Bool {
+        let cellDeg = min(dLat, dLon * GeoMath.lonScale(atLat: lat))
+        guard cellDeg > 0, km > 0 else { return false }
+        // No cap on the radius: the probe loops clamp to the grid anyway, and
+        // capping would silently shrink the reach on a grid smaller than it.
+        let radius = Int(((km / 111.0) / cellDeg).rounded(.up))
+        return hasWater(lat: lat, lon: lon, withinCells: radius)
+    }
+
+    /// Whether any water node lies within `withinCells` mesh cells of the
+    /// point — a cheap O(radius²) grid probe.
+    func hasWater(lat: Double, lon: Double, withinCells radius: Int) -> Bool {
+        let r = Int(((lat - lat0) / dLat).rounded())
+        let c = Int(((lon - lon0) / dLon).rounded())
+        guard r >= -radius, r < rows + radius,
+              c >= -radius, c < cols + radius else { return false }
+        for rr in max(0, r - radius)...min(rows - 1, r + radius) {
+            for cc in max(0, c - radius)...min(cols - 1, c + radius) {
+                if nodeIndex[rr * cols + cc] >= 0 { return true }
+            }
+        }
+        return false
+    }
+
     /// Mesh cell index of the water node nearest to (lat, lon), or nil when
     /// none lies within `maxDistanceKm`. Scans expanding square index rings
     /// from the containing cell; the best candidate in the first non-empty

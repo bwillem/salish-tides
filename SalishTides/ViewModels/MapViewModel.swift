@@ -208,37 +208,78 @@ final class MapViewModel {
             if !culled.isEmpty { liveVectors = culled }
         }
 
-        // Fallback tier: the bundled harmonic model. Synthesized on device
-        // from packed constituents, so anywhere the live field would render
-        // but can't (offline, cold cache, forecast horizon) still gets
-        // full-resolution model water. nil when the viewport is off the
-        // model's domain — the map simply shows no current data there.
-        var modelVectors: [CurrentVector]?
-        if liveVectors == nil {
-            modelVectors = await OfflineCurrentModel.shared.currents(for: date,
-                                                                     viewport: visibleViewport)
+        // Harmonic-model tiers. The salishSea model duplicates the live
+        // field's domain (both are the NEMO footprint), so it contributes
+        // only when live doesn't render. webTide's cells were dropped near
+        // SalishSeaCast water at PACK time, so it is disjoint from BOTH the
+        // salishSea model and the live field — it always contributes, which
+        // is what makes the coast seamless online: live water renders live,
+        // and the coast beyond it still gets WebTide arrows in the same
+        // frame. No runtime overlap logic. Everything nil (viewport off
+        // every domain) → the map shows no current data there.
+        var modelVectors: [CurrentVector] = []
+        var contributing: [OfflineCurrentModel] = []
+        for model in OfflineCurrentModel.all {
+            if liveVectors != nil, model === OfflineCurrentModel.salishSea { continue }
+            if let v = await model.currents(for: date, viewport: visibleViewport) {
+                modelVectors += v
+                contributing.append(model)
+            }
             guard generation == loadGeneration else { return }
         }
 
-        let vectors = liveVectors ?? modelVectors ?? []
+        let vectors = (liveVectors ?? []) + modelVectors
 
-        // The coastline mask, culled like the vectors. Both tiers provide one
-        // (live from cached wet cells, model from its own mesh) so particles
-        // clip at the shoreline.
+        // The coastline mask, culled like the vectors. Every tier provides
+        // one (live from cached wet cells, models from their own meshes) so
+        // particles clip at the shoreline. Lower-priority models filter
+        // their dry-shoreline band against the higher-priority fields: the
+        // pack-time mask makes foreign-covered water read as "land" to them,
+        // and an unfiltered band would kill particles along the model seam.
         var landMask: [CurrentVector] = []
         if liveVectors != nil, let mask = await liveData?.landMask() {
             landMask = viewportFiltered(mask)
-        } else if modelVectors != nil, let mask = await OfflineCurrentModel.shared.landMask() {
-            landMask = viewportFiltered(mask)
+        }
+        if !contributing.isEmpty {
+            var higherFields: [TidalCurrentField] = []
+            for model in OfflineCurrentModel.all {
+                if contributing.contains(where: { $0 === model }),
+                   let mask = await model.landMask(excludingShorelineNear: higherFields) {
+                    landMask += viewportFiltered(mask)
+                }
+                if let field = await model.loadedFieldIfAvailable() {
+                    higherFields.append(field)
+                }
+                guard generation == loadGeneration else { return }
+            }
+        }
+
+        // Crosshair acceptance radius scales with the source under the
+        // CENTRE, not just whatever contributes somewhere in the viewport:
+        // on the ~4 km WebTide mesh the default ~1.6 km radius would miss
+        // every node and read "—" over open water, but widening it while the
+        // centre sits in the dense Salish Sea field would let a crosshair on
+        // land report a channel's current from 3.7 km away. Resolved BEFORE
+        // the final guard so every published property below updates in one
+        // uninterrupted main-actor stretch.
+        var coarse = contributing.contains { $0 === OfflineCurrentModel.webTide }
+        if coarse, let vp = visibleViewport,
+           let fine = await OfflineCurrentModel.salishSea.coverage(),
+           fine.contains(lat: (vp.lat_min + vp.lat_max) / 2,
+                         lon: (vp.lon_min + vp.lon_max) / 2) {
+            coarse = false
         }
 
         guard generation == loadGeneration else { return }
         // Provenance reflects what is actually rendered: a tier is nil (and
         // the next one populated `vectors`) whenever its cull came up empty.
-        currentSource = liveVectors != nil ? .live : modelVectors != nil ? .model : nil
+        currentSource = liveVectors != nil ? .live : !modelVectors.isEmpty ? .model : nil
         // Crosshair readout uses the full-resolution set; only the rendered
         // layer is down-sampled.
-        let crosshairVector = nearestVector(in: vectors, viewport: visibleViewport)
+        let crosshairVector = nearestVector(in: vectors, viewport: visibleViewport,
+                                            maxDistanceDeg: coarse
+                                                ? Self.crosshairMaxDistanceCoarseDeg
+                                                : Self.crosshairMaxDistanceDeg)
         crosshairSpeed = crosshairVector?.speedKnots
         crosshairDirection = crosshairVector?.direction_deg
         // Arrows get the display-density thinned set; the particle field gets
@@ -319,8 +360,10 @@ final class MapViewModel {
     private static let floodDirWindow = Array(-12...12)
 
     /// Cache key for a learned flood axis: it's a property of (place, tide
-    /// curve, spring/neap state), so bucket by model cell + station + UTC day.
+    /// curve, spring/neap state), so bucket by model + cell + station + UTC
+    /// day (cell indices alone collide across models).
     private struct FloodDirKey: Hashable {
+        let model: String
         let cell: Int
         let stationID: String
         let day: Int
@@ -341,11 +384,20 @@ final class MapViewModel {
         let events = tideEvents
         let heightAt: (Date) -> Double? = { TideCurve.height(at: $0, events: events) }
 
-        guard let now = await OfflineCurrentModel.shared.velocitySeries(
-            lat: cLat, lon: cLon, dates: [date],
-            maxDistanceKm: Self.phaseMaxDistanceKm)
-        else {
-            // Off the model's water (open ocean, far north): the tide curve
+        // First model (in priority order) with water near the centre wins;
+        // the flood-axis series must come from the same model as the sample.
+        var covering: (model: OfflineCurrentModel, cell: Int, u: Double, v: Double)?
+        for model in OfflineCurrentModel.all {
+            if let now = await model.velocitySeries(
+                lat: cLat, lon: cLon, dates: [date],
+                maxDistanceKm: Self.phaseMaxDistanceKm) {
+                covering = (model, now.cell, now.series[0].u, now.series[0].v)
+                break
+            }
+            guard generation == loadGeneration else { return }
+        }
+        guard let covering else {
+            // Off every model's water (open ocean, far north): the tide curve
             // alone still gives a defensible rising/falling answer.
             guard generation == loadGeneration else { return }
             currentPhase = CurrentPhaseEstimator.phase(u: 0, v: 0, at: date,
@@ -354,12 +406,13 @@ final class MapViewModel {
             return
         }
 
-        let key = FloodDirKey(cell: now.cell, stationID: station.id,
+        let key = FloodDirKey(model: covering.model.resourceName,
+                              cell: covering.cell, stationID: station.id,
                               day: Int(date.timeIntervalSince1970 / 86_400))
         var floodDir = floodDirCache.value(for: key)
         if floodDir == nil {
             let dates = Self.floodDirWindow.map { date.addingTimeInterval(Double($0) * 3600) }
-            if let day = await OfflineCurrentModel.shared.velocitySeries(
+            if let day = await covering.model.velocitySeries(
                 lat: cLat, lon: cLon, dates: dates,
                 maxDistanceKm: Self.phaseMaxDistanceKm) {
                 let samples = zip(dates, day.series).map {
@@ -371,7 +424,7 @@ final class MapViewModel {
             }
         }
         guard generation == loadGeneration else { return }
-        currentPhase = CurrentPhaseEstimator.phase(u: now.series[0].u, v: now.series[0].v,
+        currentPhase = CurrentPhaseEstimator.phase(u: covering.u, v: covering.v,
                                                    at: date, floodDirection: floodDir,
                                                    heightAt: heightAt)
     }
@@ -442,9 +495,13 @@ final class MapViewModel {
     // Beyond this, the nearest current vector is too far to be "under" the
     // crosshair — i.e. it's on land or off coverage, so report no speed
     // (the data has no slack vectors; current exists only where there's flow).
-    private let crosshairMaxDistanceDeg = 0.015  // ≈ 1.6 km
+    // The coarse radius applies when the ~4 km WebTide mesh contributes: it
+    // matches that mesh's own land resolution, so "on land" stays meaningful.
+    private static let crosshairMaxDistanceDeg = 0.015        // ≈ 1.6 km
+    private static let crosshairMaxDistanceCoarseDeg = 0.033  // ≈ 3.7 km
 
-    private func nearestVector(in vectors: [CurrentVector], viewport: ChartBounds?) -> CurrentVector? {
+    private func nearestVector(in vectors: [CurrentVector], viewport: ChartBounds?,
+                               maxDistanceDeg: Double = crosshairMaxDistanceDeg) -> CurrentVector? {
         guard let vp = viewport else { return nil }
         let cLat = (vp.lat_min + vp.lat_max) / 2
         let cLon = (vp.lon_min + vp.lon_max) / 2
@@ -456,7 +513,7 @@ final class MapViewModel {
                                     toLat: v.lat, toLon: v.lon, cosLat: cosLat)
         }
         guard let nearest = vectors.filter({ $0.isSignificant }).min(by: { dist2($0) < dist2($1) }),
-              dist2(nearest) <= crosshairMaxDistanceDeg * crosshairMaxDistanceDeg
+              dist2(nearest) <= maxDistanceDeg * maxDistanceDeg
         else { return nil }
         return nearest
     }

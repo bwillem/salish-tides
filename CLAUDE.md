@@ -16,7 +16,7 @@ xcodebuild -scheme SalishTides -destination 'platform=iOS Simulator,name=iPad Pr
 xcodebuild -scheme SalishTides -destination 'platform=iOS Simulator,name=iPad Pro 13-inch (M4)' test
 ```
 
-Tests (`SalishTidesTests/`) are **pure logic only** — date/epoch parsing, tide interpolation, harmonic synthesis, grid packing, chart selection. No UI or network tests.
+Tests (`SalishTidesTests/`) are **pure logic only** — date/epoch parsing, tide interpolation, harmonic synthesis, `.b1` decoding, grid packing, flood/ebb estimation. No UI or network tests.
 
 To see a change in the running app, prefer the `/run` skill (drives the simulator). **Confirm with the user before installing/launching/screenshotting in a simulator** — parallel agents share the machine.
 
@@ -24,11 +24,10 @@ To see a change in the running app, prefer the `/run` skill (drives the simulato
 
 `data/` is **gitignored** and absent from a fresh clone, but a post-build script (`project.yml`) rsyncs it into the app bundle — a missing/empty dir **fails the build**. Generate it first:
 
-- **Atlas currents** (`data/maps*`) — from source PDFs: `dev/extraction/regenerate_all.sh` (needs PyMuPDF + PDFs in `dev/pdfs/`). Also regenerates the *tracked* `atlas_index*.json`.
 - **Tide predictions** (`data/tides/tides_2026.json`) — `python3 dev/tides/fetch_tides.py` (needs network: NOAA + CHS).
 - **Basemap** (`data/basemap/`) — bundled PMTiles; see `dev/basemap/`.
 
-Committed assets that do *not* need regenerating: `SalishTides/Resources/current_model.b1` (the offline harmonic model), `atlas_lookup*.json`, `atlas_index*.json`, style JSONs.
+Committed assets that do *not* need regenerating: the offline harmonic models `SalishTides/Resources/current_model.b1` (SalishSeaCast, native ~500 m) and `webtide_nepac.b1` (DFO WebTide ne_pac4 at ~4 km, WA coast → SE Alaska), plus the style JSONs. Repack via `dev/model/b1_pack_grid.py` / `dev/model/webtide_pack.py`; **whenever `current_model.b1` is repacked, re-run `webtide_pack.py`** (it masks WebTide cells against SSC water and records the SSC sha256 in its meta json).
 
 **MapTiler key**: optional, for the online Ocean/Satellite basemaps. Lives in the gitignored `Config/Secrets.xcconfig` (`MAPTILER_KEY = ...`). No key → those styles are disabled and the app falls back to the bundled Standard basemap. The app always builds and runs without it.
 
@@ -36,18 +35,21 @@ Committed assets that do *not* need regenerating: `SalishTides/Resources/current
 
 State is a handful of `@Observable` stores built in `SalishTidesApp.init` and injected via the SwiftUI environment (no prop-drilling): `MapViewModel`, `AppSettings`, `NetworkMonitor`, `MapController`, `CrosshairPresenter`, `LiveDataService`.
 
-### Current field — 3-tier fallback chain
-`MapViewModel.currentSource` picks, in order (each tier below fills gaps the next can't):
+### Current field — live tier + bundled harmonic models
+`MapViewModel.currentSource` is `.live`, `.model`, or nil (no coverage → no badge):
 1. **`.live`** — real-time SalishSeaCast forecast (`Live/`), enhancement when online; cached in `LiveDataStore` so dock-fetched data keeps working underway. Disabled entirely by `AppSettings.offlineOnly`.
-2. **`.model`** — bundled offline harmonic model (`CurrentModel/`): `current_model.b1` decoded by `OfflineCurrentModel` (an `actor`), synthesized per-hour by `TidalHarmonics` (8-constituent Doodson engine, validated against NOAA). Reproduces live SalishSeaCast at ~0.98 correlation with no network.
-3. **`.atlas`** — the printed Salish Sea Tidal Current Atlas (4 volumes, `AtlasVolume.swift`), extracted from PDFs into SQLite. Sparsest; no land mask.
+2. **`.model`** — bundled offline harmonic models (`CurrentModel/`): `.b1` constituent grids decoded by `OfflineCurrentModel` (an `actor`; one instance per asset, priority-ordered in `OfflineCurrentModel.all`), synthesized per-hour by `TidalHarmonics` (8-constituent Doodson engine, validated against NOAA). `salishSea` reproduces live SalishSeaCast at ~0.98 correlation; `webTide` extends coverage up the outer coast.
+
+**Overlap is resolved at pack time, not runtime**: `webtide_pack.py` drops every WebTide cell within 2.4 km of SalishSeaCast water, so the model domains are spatially disjoint and rendering is plain concatenation. `webTide` renders even alongside the live tier (it's disjoint from the live/NEMO footprint too); `salishSea` is suppressed while live renders because it duplicates that domain. Lower-priority models filter their dry-shoreline land mask against higher-priority fields (`hasWater(withinKm:)`) so the pack-mask edge doesn't render as a particle barrier mid-strait.
+
+**Flood/ebb indicator** (`CurrentPhaseEstimator`, pure + tested): learns the local flood axis by correlating a tidal day of model velocities against the tide curve's rise/fall (rising−falling sums suppress steady residual flow), classifies the instantaneous current along it, quality-gated with a tide-height fallback. Always model-derived — never the live field — so online/offline agree. Known gap: WebTide's mesh doesn't cover the narrow inner channels (Port Hardy nearshore, W Johnstone Strait, Grenville Channel) — deliberately blank rather than extrapolated.
 
 ### Rendering
 - **Default: animated GPU particle field** — `Map/CurrentParticleLayer` (`MLNCustomStyleLayer` Metal subclass), "comet streaks" advected through a velocity texture at 30 fps.
 - **Fallback: static arrows** (MapLibre line layers). Chosen via `AppSettings.effectiveCurrentStyle`, which **auto-falls-back to arrows** under Reduce Motion / Low Power Mode (live, no relaunch).
 
 ### Persistence
-Bundled JSON → SQLite (GRDB) is populated once by `DatabaseMigrator` on first launch (progress → splash). `VectorDatabase` (atlas vectors) and `TideDatabase` (tide stations + hi/lo events). Bumping `VectorDatabase.schemaVersion` drops+rebuilds the table — the DB is a pure derived cache, so this is always safe, **but** keep `DatabaseMigrator.vectorKey`'s version in lockstep or the fresh table is left empty.
+Bundled JSON → SQLite (GRDB) is populated once by `DatabaseMigrator` on first launch (progress → splash): `TideDatabase` (tide stations + hi/lo events) only. The migrator also deletes the retired print-atlas `vectors.sqlite` from upgraded installs. `LiveDataStore` (`live.sqlite`) is the separate live-data cache.
 
 ## Conventions & invariants
 
@@ -67,14 +69,18 @@ Bundled JSON → SQLite (GRDB) is populated once by `DatabaseMigrator` on first 
 | Live SalishSeaCast | `SalishTides/Live/` |
 | Map (MapLibre, particles, styles) | `SalishTides/Map/` |
 | SQLite (GRDB) + migration | `SalishTides/Data/` |
-| Settings, atlas specs, geo math | `SalishTides/Models/` |
+| Settings, phase/geo types, geo math | `SalishTides/Models/` |
 | SwiftUI overlay views | `SalishTides/Views/` |
 | Design tokens | `SalishTides/Design/DesignTokens.swift` |
-| Dev tooling (model pack, extraction, basemap) | `dev/` |
+| Dev tooling (model packers, tides, basemap) | `dev/` |
 
 `DESIGN.md` documents the design system but is **partially stale** — verify against code before trusting it.
 
 ## Never
 
 - Add Co-Authored-By / "Generated with Claude" lines to commits or PRs.
-- Commit `Config/Secrets.xcconfig` or anything under `data/`.
+- Commit `Config/Secrets.xcconfig`, anything under `data/`, or the raw WebTide
+  download (`dev/model/webtide/` — gitignored).
+- **Ship a TestFlight/App Store build containing `webtide_nepac.b1` until the
+  DFO/BIO redistribution sign-off lands** (see the license warning in
+  `dev/model/webtide_fetch.py`). Merging to main is fine; releasing is not.
