@@ -13,28 +13,38 @@ and skipped on re-run, so an interrupted analysis (sleep/reboot) picks up where
 it left off. A final pass merges the parts into dev/model/b1_grid_full.json and
 prints aggregate reconstruction skill.
 
-Usage: python3 dev/model/b1_analyze_full.py [stride]   # stride>1 = subsample cells
+Grid stride is auto-detected from the downloaded data's gridX spacing (1 =
+native ~500m, 2 = ~1km), so the analyzer always matches whatever the downloader
+fetched — no constant to keep in sync.
+
+Usage: python3 dev/model/b1_analyze_full.py [--raw DIR] [--stride N]
+                                            [--cell-stride N] [--year Y]
 """
-import sys, os, glob, json, time, io, csv, math, cmath, urllib.request
+import sys, os, glob, json, time, io, csv, math, cmath, urllib.request, argparse
 sys.path.insert(0, "dev/model")
 import numpy as np, xarray as xr
 import utide
 from tidepredict import predict, CONSTITUENTS
 
-RAW = ("/private/tmp/claude-501/-Users-bryan-salish-tides/"
-       "04d3a9cd-e3ba-4fcf-8d41-13a614093def/scratchpad/b1_full")
+# Defaults target the native (~500m, stride-1) rebuild. main() overrides via
+# argparse and, crucially, auto-detects STRIDE_TILE from the data so a stride
+# mismatch can't silently drop cells (a stride-2 georef query against stride-1
+# data would leave every odd-index cell without a lat/lon and skip it).
+RAW = os.path.expanduser("~/salish-tides-nemo/b1_full_native")
 PARTS = "dev/model/b1_grid_full.parts"
 OUT = "dev/model/b1_grid_full.json"
 YEAR = 2023
-STRIDE_TILE = 2                       # matches the downloader's within-tile stride
+STRIDE_TILE = 1                       # native ~500m; auto-detected in main()
 NAMES = list(CONSTITUENTS.keys())
-CELL_STRIDE = int(sys.argv[1]) if len(sys.argv) > 1 else 1
+CELL_STRIDE = 1                       # analyze every Nth water cell (1 = all)
 GY_MAX, GX_MAX = 897, 397
 os.makedirs(PARTS, exist_ok=True)
 
 # --- lat/lon for the whole even-index grid, one bathymetry query -------------
 def load_geo():
-    cache = f"{PARTS}/_geo.json"
+    # Stride-specific: the even-only (stride-2) grid and the full native
+    # (stride-1) grid have different georef sets, so cache them separately.
+    cache = f"{PARTS}/_geo_s{STRIDE_TILE}.json"
     if os.path.exists(cache):
         d = json.load(open(cache))
         return {tuple(map(int, k.split(","))): v for k, v in d.items()}
@@ -123,9 +133,46 @@ def process_tile(tdir, geo, spot):
             print(f"    {k+1}/{len(cells)} cells  {time.time()-t0:.0f}s", flush=True)
     return nodes
 
+def _infer_tile_stride(tiles):
+    """Grid spacing of the downloaded data (1 = native ~500m, 2 = ~1km), read
+    from the first tile's gridX, so the analyzer adapts to whatever was fetched
+    instead of trusting a hand-set constant."""
+    for tdir in tiles:
+        fs = sorted(glob.glob(f"{tdir}/uVelocity_*.nc"))
+        if not fs:
+            continue
+        ds = xr.open_dataset(fs[0]); gx = ds["gridX"].values.astype(int); ds.close()
+        if len(gx) >= 2:
+            return int(gx[1] - gx[0])
+    return None
+
 def main():
-    geo = load_geo()
+    global RAW, STRIDE_TILE, CELL_STRIDE, YEAR
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--raw", default=RAW, help="downloaded-tiles dir")
+    ap.add_argument("--stride", type=int, default=None,
+                    help="grid stride of the data; auto-detected from gridX if omitted")
+    ap.add_argument("--cell-stride", type=int, default=CELL_STRIDE,
+                    help="analyze every Nth water cell (1 = all)")
+    ap.add_argument("--year", type=int, default=YEAR)
+    a = ap.parse_args()
+    RAW, CELL_STRIDE, YEAR = os.path.expanduser(a.raw), a.cell_stride, a.year
+
     tiles = sorted(glob.glob(f"{RAW}/tile_*"))
+    det = _infer_tile_stride(tiles)
+    if a.stride is not None:
+        STRIDE_TILE = a.stride
+        if det is not None and det != STRIDE_TILE:
+            print(f"  WARNING: --stride {STRIDE_TILE} but data gridX spacing is "
+                  f"{det} — georef will mismatch and drop cells", flush=True)
+    elif det is not None:
+        STRIDE_TILE = det
+    label = {1: "native ~500m", 2: "~1km"}.get(STRIDE_TILE, "custom")
+    print(f"analyze: {len(tiles)} tile dirs in {RAW}", flush=True)
+    print(f"grid stride {STRIDE_TILE} ({label}), cell-stride {CELL_STRIDE}, "
+          f"year {YEAR}", flush=True)
+
+    geo = load_geo()
     spot = []
     present, done, skipped = 0, 0, 0
     for tdir in tiles:

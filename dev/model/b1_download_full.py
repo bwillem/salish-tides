@@ -10,11 +10,16 @@ Grid: gridY 0-897, gridX 0-397. Tiles are 150x150 native cells; stride-2
 sampling within each tile stays on the global even-index grid (all tile
 origins are even), so tiles mosaic without gaps or overlaps.
 """
-import urllib.request, os, time, sys, threading
+import urllib.request, os, time, sys, threading, argparse, glob
 from datetime import datetime, timedelta, timezone
 import numpy as np, xarray as xr
 
 BASE = "https://salishsea.eos.ubc.ca/erddap/griddap"
+# Defaults preserve the legacy stride-2 (~1km) run. main() accepts --stride 1
+# for the native (~500m) pull and --out for a fresh directory (never mix stride
+# levels in one dir: same filenames, different cell sampling). These stay
+# module-level (not parsed at import) so `from b1_download_full import
+# fetch_bytes` in the compare/analyze scripts doesn't trigger argparse.
 YEAR = 2023
 STRIDE = 2
 TY, TX = 150, 150                      # native tile size
@@ -115,8 +120,14 @@ def fetch_file(var, ds, m, gy0, gy1, gx0, gx1, path):
     data = fetch_bytes(_url(var, ds, t0, t1, gy0, gy1, gx0, gx1),
                        retries=1, timeout=180)     # one quick try, then slice
     if data:
-        with open(path, "wb") as f:
+        # Atomic write: a crash/reboot mid-write must never leave a truncated
+        # .nc that still passes have()'s >500-byte check. Write to .tmp then
+        # rename (atomic on the same filesystem), so `path` only ever appears
+        # complete. (The slice path below already does this via os.replace.)
+        tmp = path + ".tmp"
+        with open(tmp, "wb") as f:
             f.write(data)
+        os.replace(tmp, path)
         return len(data)
     print(f"    whole-month failed; slicing {var} {YEAR}-{m:02d} "
           f"tile {gy0},{gx0}", flush=True)
@@ -164,9 +175,30 @@ def have(path):
     return os.path.exists(path) and os.path.getsize(path) > 500
 
 def main():
+    global STRIDE, OUT, YEAR
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--stride", type=int, default=STRIDE,
+                    help="cell stride: 2 = ~1km (legacy), 1 = ~500m (native)")
+    ap.add_argument("--out", default=OUT, help="output dir (use a fresh one per stride)")
+    ap.add_argument("--year", type=int, default=YEAR)
+    a = ap.parse_args()
+    STRIDE, OUT, YEAR = a.stride, a.out, a.year
+    os.makedirs(OUT, exist_ok=True)
+    # Sweep stray temp/part files from a prior interruption (a killed slice
+    # concat leaves .part*/.tmp behind; harmless but clutter). Final .nc files
+    # are never touched — those are the resumable, skip-if-have payload.
+    stray = glob.glob(f"{OUT}/tile_*/*.tmp") + glob.glob(f"{OUT}/tile_*/*.part*")
+    for s in stray:
+        try:
+            os.remove(s)
+        except OSError:
+            pass
+    if stray:
+        print(f"swept {len(stray)} stray temp files from a prior interruption", flush=True)
     targets = all_targets()
     total = len(targets)
     print(f"full-domain download: {total} files, stride {STRIDE}, year {YEAR}", flush=True)
+    print(f"  -> {OUT}", flush=True)
     t_start = time.time()
     # Never-give-up multi-pass loop: a file that fails all its retries is simply
     # left for the next pass, so a bad ERDDAP patch never aborts the run. Exits 0
