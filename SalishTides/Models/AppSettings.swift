@@ -109,6 +109,18 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
         case .dark:   .dark
         }
     }
+
+    /// UIKit form, applied to the window's `overrideUserInterfaceStyle` so the
+    /// override reaches presented sheets and alerts too — `.preferredColorScheme`
+    /// only themes the in-hierarchy views, leaving detached presentations on the
+    /// system trait. `.unspecified` follows the device.
+    var uiStyle: UIUserInterfaceStyle {
+        switch self {
+        case .system: .unspecified
+        case .light:  .light
+        case .dark:   .dark
+        }
+    }
 }
 
 /// Clock format for every time display (timeline readout, tape, chart axis).
