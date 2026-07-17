@@ -327,7 +327,12 @@ final class MapViewModel {
                                                 ? Self.crosshairMaxDistanceCoarseDeg
                                                 : Self.crosshairMaxDistanceDeg)
         crosshairSpeed = crosshairVector?.speedKnots
-        crosshairDirection = crosshairVector?.direction_deg
+        // Speed publishes even at slack ("0.0 kn" over water is information;
+        // "—" is reserved for land / off coverage), but a sub-significance
+        // vector's bearing is numerical noise — the card falls back to its
+        // reticle glyph when direction is nil.
+        crosshairDirection = (crosshairVector?.isSignificant ?? false)
+            ? crosshairVector?.direction_deg : nil
         // Arrows get the display-density thinned set; the particle field gets
         // full-resolution data (the raster does its own averaging — feeding it
         // the fastest-per-bin thinned picks would bias speeds and starve its
@@ -596,14 +601,12 @@ final class MapViewModel {
             GeoMath.distanceSquared(fromLat: cLat, fromLon: cLon,
                                     toLat: v.lat, toLon: v.lon, cosLat: cosLat)
         }
-        // isSignificant drops near-zero vectors (< 0.02 m/s). The harmonic
-        // model DOES emit real slack-water speeds (unlike the retired print
-        // atlas this filter was written for), so at true slack the readout
-        // shows "—" rather than "0.0 kn". Kept deliberately for now: without
-        // it, a crosshair near land would read the nearest wet cell's
-        // noise-level residual as if it were a real current. Whether slack
-        // should surface as an explicit 0.0 is a pending product decision.
-        guard let nearest = vectors.filter({ $0.isSignificant }).min(by: { dist2($0) < dist2($1) }),
+        // No significance filter: the harmonic model emits real slack-water
+        // speeds, and "0.0 kn" over water is information (slack!) while "—"
+        // means off coverage / on land. The caller suppresses the DIRECTION
+        // below the significance threshold instead — a near-zero vector's
+        // bearing is numerical noise, but its magnitude is an honest zero.
+        guard let nearest = vectors.min(by: { dist2($0) < dist2($1) }),
               dist2(nearest) <= maxDistanceDeg * maxDistanceDeg
         else { return nil }
         return nearest
