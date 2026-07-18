@@ -4,6 +4,20 @@ All notable changes to Salish Tides are recorded here. Versions follow
 [semantic versioning](https://semver.org); dates are the release date in the
 Salish Sea (America/Vancouver). The newest release is first.
 
+## [1.0.1] - 2026-07-17
+
+### Changed
+- Reorganized Settings into clearer appearance sections
+- Added a first-run disclaimer noting the app is a planning aid, not for navigation
+
+### Fixed
+- The crosshair reticle now draws above tide-station markers instead of behind them
+- Dialogs now match the active Day/Night theme
+
+### Removed
+- Removed the manual live-data toggle — live data now turns on automatically when
+  you're online
+
 ## [1.0.0] - 2026-07-17
 
 First public release. Salish Tides is an offline-first map of tidal currents and
