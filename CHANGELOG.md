@@ -4,6 +4,11 @@ All notable changes to Salish Tides are recorded here. Versions follow
 [semantic versioning](https://semver.org); dates are the release date in the
 Salish Sea (America/Vancouver). The newest release is first.
 
+## [1.0.2] - 2026-07-17
+
+### Fixed
+- Fixed the timeline staying in "Now" mode after you pick a date from the calendar
+
 ## [1.0.1] - 2026-07-17
 
 ### Changed
