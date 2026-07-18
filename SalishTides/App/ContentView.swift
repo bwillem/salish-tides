@@ -64,6 +64,14 @@ struct ContentView: View {
         ZStack(alignment: .bottom) {
             MapLibreView()
                 .ignoresSafeArea()
+            // Tide-station marker: a SwiftUI glass overlay pinned over the map at
+            // the station's projected screen point. It sits directly above the
+            // map — so its glass samples the map, unlike a MapLibre annotation —
+            // but below the reticle/tags/controls, so the crosshair always reads
+            // on top of a station marker at the same point. Isolated in its own
+            // subview so the coordinator's per-frame `screenPoint` writes
+            // re-render only the marker, not all of ContentView.
+            StationMarkerOverlay()
             // Navionics-style: always on-screen but faint at rest, ramping to
             // full contrast while panning/zooming or scrubbing, then easing back
             // a couple seconds after release. Quick up, gentle down.
@@ -81,13 +89,6 @@ struct ContentView: View {
                 .animation(crosshair.isEmphasized ? .easeOut(duration: 0.18)
                                                   : .easeOut(duration: 0.5),
                            value: crosshair.isEmphasized)
-            // Tide-station marker: a SwiftUI glass overlay pinned over the map at
-            // the station's projected screen point. It lives here — above the
-            // map, below the controls/timeline — precisely so its glass samples
-            // the map, unlike a MapLibre annotation. Isolated in its own subview
-            // so the coordinator's per-frame `screenPoint` writes re-render only
-            // the marker, not all of ContentView.
-            StationMarkerOverlay()
             VStack(spacing: 0) {
                 HStack(alignment: .top) {
                     // Top-left control cluster: settings, compass (only when
