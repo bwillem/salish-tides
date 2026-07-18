@@ -1,6 +1,6 @@
 ---
 name: release-notes
-description: Cut a Salish Tides release — turn the commits since the last release tag into user-facing release notes, bump the Xcode version per semantic versioning, update CHANGELOG.md + the website changelog page, and tag it. Use when the user wants to "cut a release", "make release notes", "bump the version", "ship a new version", or "update the changelog".
+description: Cut a Salish Tides release — turn the commits since the last release tag into user-facing release notes, bump the Xcode version per semantic versioning, update CHANGELOG.md + the website changelog page, tag it, and optionally archive + upload the build to App Store Connect via the API key. Use when the user wants to "cut a release", "make release notes", "bump the version", "ship a new version", "update the changelog", or "upload to App Store Connect / TestFlight".
 ---
 
 # Release notes + version bump
@@ -147,6 +147,31 @@ Do **not** commit, tag, or push yourself. Summarize what changed:
 
 Show the user the new changelog entry so they can review the wording before it's
 committed.
+
+### 8. Distribute the build (optional — only if the user asks to ship/upload)
+
+Uploading a binary to App Store Connect is an **outward-facing, hard-to-reverse**
+action. Only do it when the user explicitly asks to upload / ship / push to
+TestFlight, and only after the version bump above is committed (the build embeds
+`MARKETING_VERSION` + `CURRENT_PROJECT_VERSION`, so archive *after* applying them).
+
+```bash
+dev/release/distribute.sh                 # archive (Release) -> export .ipa -> validate -> upload
+dev/release/distribute.sh --validate-only # dry run: archive + validate, no upload
+dev/release/distribute.sh --archive-only  # just build the .xcarchive
+```
+
+It reads the API-key coordinates (`ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_PATH`,
+`DEVELOPMENT_TEAM`) from the gitignored `Config/Secrets.xcconfig`; the `.p8` key
+itself lives outside the repo at `~/.appstoreconnect/private_keys/` and is never
+committed. If preflight fails (missing issuer id, key file, or team id), it stops
+before building — relay the exact message; don't try to patch credentials yourself.
+
+Confirm with the user before running the real upload. Prefer `--validate-only`
+first if there's any doubt the archive is sound. The build is **not** submitted for
+review — after processing it appears under TestFlight; the user attaches it to the
+version and submits. Note the DFO/WebTide redistribution caveat in CLAUDE.md before
+shipping a build that bundles `webtide_nepac.b1`.
 
 ## Notes
 
