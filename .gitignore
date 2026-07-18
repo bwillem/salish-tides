@@ -29,7 +29,11 @@ DerivedData/
 !/data/basemap/
 /dev/pdfs/
 ios-production-handoff/
-.claude/
+# Local Claude Code state is ignored, EXCEPT the project's shared skills, which
+# are tracked so everyone gets them (e.g. the release-notes skill). Same
+# re-include idiom as /data/* above.
+.claude/*
+!.claude/skills/
 __pycache__/
 *.pyc
 
