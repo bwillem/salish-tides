@@ -14,11 +14,19 @@ struct TimelineControlView: View {
     // time it opens so the calendar lands on the day being viewed.
     @State private var showingDatePicker = false
     @State private var pickerDate: Date = .now
+    // Whether the tape's anchor is pinned to the live "now" hour (jumpToNow),
+    // as opposed to a specific day chosen from the date picker (jumpToDate).
+    // The offset alone can't tell these apart — both sit at offset 0 — so this
+    // flag is what lets the now dot/pill and the hourly re-anchor treat a
+    // picked date as "not now" instead of snapping back.
+    @State private var anchorIsNow = true
 
     // Reflects the live scrub position (displayDate), not just the committed
-    // offset, so the dot/pill respond as the user drags.
+    // offset, so the dot/pill respond as the user drags. Gated on anchorIsNow
+    // so a date picked from the calendar (offset 0 on its own anchor) doesn't
+    // read as "now".
     private var isNow: Bool {
-        abs(vm.displayDate.timeIntervalSince(sessionAnchor)) < 60
+        anchorIsNow && abs(vm.displayDate.timeIntervalSince(sessionAnchor)) < 60
     }
 
     var body: some View {
@@ -175,6 +183,7 @@ struct TimelineControlView: View {
     private func jumpToNow() {
         sessionAnchor = Self.nearestHour()
         offsetHours = 0
+        anchorIsNow = true
         Task { await vm.setTime(sessionAnchor) }
     }
 
@@ -194,6 +203,7 @@ struct TimelineControlView: View {
         guard let anchored = cal.date(from: comps) else { return }
         sessionAnchor = anchored
         offsetHours = 0
+        anchorIsNow = false
         Task { await vm.setTime(anchored) }
     }
 
@@ -209,9 +219,12 @@ struct TimelineControlView: View {
         guard !isScrubbing else { return }
         let top = Self.nearestHour()
         guard top != sessionAnchor else { return }
-        // Branch on the committed offset, not displayDate proximity — the
-        // readout's isNow can be transiently true as a scrub passes the tick.
-        if offsetHours == 0 {
+        // Follow the clock only when parked on the live "now" hour: offset 0
+        // AND an anchor pinned to now. A date picked from the calendar also
+        // sits at offset 0 but must stay put, not snap back to now. (Branch on
+        // the committed offset, not displayDate proximity — the readout's isNow
+        // can be transiently true as a scrub passes the tick.)
+        if offsetHours == 0 && anchorIsNow {
             jumpToNow()
         } else {
             let delta = Int((top.timeIntervalSince(sessionAnchor) / 3600).rounded())
