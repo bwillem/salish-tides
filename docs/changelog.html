@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Changelog — Salish Tides</title>
+  <meta name="description" content="What's new in Salish Tides — release notes.">
+  <link rel="icon" href="logo.png">
+  <link rel="stylesheet" href="/site.css">
+
+  <style>
+    /* Tokens, reset, and base body typography come from /site.css. */
+    body {
+      margin: 0 auto;
+      max-width: 62ch;
+      padding: 3rem 1.25rem 4rem;
+      font-size: 0.9375rem;
+      line-height: 1.7;
+    }
+
+    a { color: inherit; }
+
+    .back {
+      display: inline-block;
+      margin-bottom: 2.5rem;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.8125rem;
+    }
+    .back:hover, .back:focus-visible { color: var(--fg); }
+
+    h1 { font-size: 1.25rem; margin: 0 0 2.5rem; }
+
+    .release + .release { margin-top: 1rem; }
+
+    h2 {
+      font-size: 1rem;
+      margin: 2.75rem 0 0.75rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--rule);
+    }
+    h2 .date {
+      color: var(--muted);
+      font-size: 0.8125rem;
+      font-weight: normal;
+      margin-left: 0.5rem;
+    }
+
+    h3 {
+      font-size: 0.8125rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin: 1.5rem 0 0.4rem;
+    }
+
+    ul { margin: 0 0 0.5rem; padding-left: 1.25rem; }
+    li { margin: 0 0 0.35rem; }
+
+    p { margin: 0 0 1rem; }
+
+    code {
+      font-size: 0.85em;
+      padding: 0.1em 0.35em;
+      border-radius: 4px;
+      background: color-mix(in srgb, var(--fg) 8%, transparent);
+    }
+  </style>
+</head>
+<body>
+  <a class="back" href="/">&larr; salish tides</a>
+
+  <h1>Changelog</h1>
+
+    <section class="release">
+      <h2>1.0.0 <span class="date">2026-07-17</span></h2>
+      <p>First public release. Salish Tides is an offline-first map of tidal currents and tide heights for the Salish Sea — built for the helm, and designed to keep working when you have no signal on the water.</p>
+      <h3>Added</h3>
+      <ul>
+        <li>Full-bleed nautical map of the Salish Sea with an always-on crosshair that reads out current speed, direction, and tide state at any point you touch.</li>
+        <li>Real-time surface currents from the SalishSeaCast ocean model when you&#x27;re online, with a live &quot;Offline&quot; indicator when you&#x27;re not.</li>
+        <li>On-device harmonic current models so the map keeps predicting with no signal — a native ~500 m model across the full Salish Sea, extended up the outer coast to SE Alaska.</li>
+        <li>Animated current field: GPU &quot;comet-streak&quot; particles advected through the flow, with a static-arrow style that turns on automatically under Reduce Motion or Low Power Mode.</li>
+        <li>Flood / ebb indicator that learns the local flood axis from the tide curve.</li>
+        <li>Tide heights and high/low predictions for a curated registry of Salish Sea stations, with a tide chart and a phase card at the nearest station.</li>
+        <li>Scrubbable timeline covering ±48 hours, snapping to the hour, with a 12- or 24-hour clock setting. All times display in Salish Sea local time.</li>
+        <li>Day and Night themes that swap the whole look, including the basemap — follow the system appearance or override it.</li>
+        <li>Map compass and locate controls, and optional display of your own position on the chart (When-In-Use location, never stored or transmitted).</li>
+        <li>No account, no analytics, no tracking — the app collects nothing and runs fully offline once installed.</li>
+      </ul>
+    </section>
+</body>
+</html>

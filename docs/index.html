@@ -21,35 +21,13 @@
   <meta name="twitter:description" content="Real-time offline current map for the Salish Sea.">
   <meta name="twitter:image" content="https://salishtides.app/og-image.png">
 
+  <link rel="stylesheet" href="/site.css">
   <style>
-    :root {
-      color-scheme: light dark;
-      --bg:   #ffffff;
-      --fg:   #111111;
-      --muted:#6b6b6b;
-      --rule: #e2e2e2;
-    }
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg:   #0f1c28;  /* app night-water */
-        --fg:   #eef2f5;
-        --muted:#8ea0ad;
-        --rule: #22323f;
-      }
-    }
-
-    * { box-sizing: border-box; }
-
+    /* Tokens, reset, and base body typography come from /site.css. */
     html, body { height: 100%; }
 
     body {
       margin: 0;
-      background: var(--bg);
-      color: var(--fg);
-      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-      -webkit-font-smoothing: antialiased;
-      text-rendering: optimizeLegibility;
-
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -197,6 +175,7 @@
     <nav>
       <a href="#">download</a>
       <button type="button" onclick="document.getElementById('about').showModal()">about</button>
+      <a href="/changelog">changelog</a>
       <a href="/privacy">privacy</a>
     </nav>
     <p class="copyright">&copy; Bryan Guenther <span id="year">2026</span></p>
