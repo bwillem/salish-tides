@@ -170,8 +170,7 @@ before building — relay the exact message; don't try to patch credentials your
 Confirm with the user before running the real upload. Prefer `--validate-only`
 first if there's any doubt the archive is sound. The build is **not** submitted for
 review — after processing it appears under TestFlight; the user attaches it to the
-version and submits. Note the DFO/WebTide redistribution caveat in CLAUDE.md before
-shipping a build that bundles `webtide_nepac.b1`.
+version and submits.
 
 ## Notes
 

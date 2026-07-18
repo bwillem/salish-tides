@@ -54,12 +54,17 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# --- config: env wins, else read "KEY = value" from Secrets.xcconfig ---------- #
-read_cfg() {
-  [[ -f "$SECRETS" ]] || return 0
-  grep -E "^[[:space:]]*$1[[:space:]]*=" "$SECRETS" | tail -1 \
-    | sed -E "s/^[^=]*=[[:space:]]*//; s/[[:space:]]*(\/\/.*)?$//"
+# --- config: env wins, else read "KEY = value" from an xcconfig --------------- #
+# The trailing `|| true` is load-bearing: without it a grep miss returns non-zero,
+# which under `set -euo pipefail` aborts the whole script at the assignment (before
+# any preflight `die` can report the real problem). A miss must yield "" instead.
+read_xcconfig() {  # read_xcconfig <key> <file>
+  [[ -f "$2" ]] || return 0
+  grep -E "^[[:space:]]*$1[[:space:]]*=" "$2" | tail -1 \
+    | sed -E "s/^[^=]*=[[:space:]]*//; s/[[:space:]]*(\/\/.*)?$//" || true
 }
+read_cfg() { read_xcconfig "$1" "$SECRETS"; }
+read_base() { read_xcconfig "$1" "$REPO_ROOT/Config/Base.xcconfig"; }
 
 ASC_KEY_ID="${ASC_KEY_ID:-$(read_cfg ASC_KEY_ID)}"
 ASC_ISSUER_ID="${ASC_ISSUER_ID:-$(read_cfg ASC_ISSUER_ID)}"
@@ -73,14 +78,20 @@ DEVELOPMENT_TEAM="${DEVELOPMENT_TEAM:-$(read_cfg DEVELOPMENT_TEAM)}"
 [[ -n "$DEVELOPMENT_TEAM" ]]|| die "DEVELOPMENT_TEAM not set (Config/Secrets.xcconfig or env)"
 [[ -f "$ASC_KEY_PATH" ]]    || die "API key file not found at ASC_KEY_PATH: $ASC_KEY_PATH"
 command -v xcodebuild >/dev/null || die "xcodebuild not found (install Xcode command line tools)"
+# The upload/validate steps need altool; check it up front rather than after a
+# multi-minute archive + export (unless we're only archiving).
+if [[ "$ARCHIVE_ONLY" -eq 0 ]]; then
+  command -v xcrun >/dev/null || die "xcrun not found (install Xcode command line tools)"
+  xcrun --find altool >/dev/null 2>&1 || die "altool not found (needed to upload; try: xcrun --find altool)"
+fi
 
 # altool discovers AuthKey_<id>.p8 in these dirs; point it at wherever the key lives.
 export API_PRIVATE_KEYS_DIR
 API_PRIVATE_KEYS_DIR="$(cd "$(dirname "$ASC_KEY_PATH")" && pwd)"
 
-MARKETING_VERSION="$(read_cfg MARKETING_VERSION)"
-[[ -n "$MARKETING_VERSION" ]] || MARKETING_VERSION="$(grep -E '^MARKETING_VERSION' "$REPO_ROOT/Config/Base.xcconfig" | sed -E 's/^[^=]*=[[:space:]]*//')"
-BUILD_NUMBER="$(grep -E '^CURRENT_PROJECT_VERSION' "$REPO_ROOT/Config/Base.xcconfig" | sed -E 's/^[^=]*=[[:space:]]*//')"
+# Version + build live in Base.xcconfig (never Secrets), so read them from there.
+MARKETING_VERSION="$(read_base MARKETING_VERSION)"
+BUILD_NUMBER="$(read_base CURRENT_PROJECT_VERSION)"
 
 echo "── Salish Tides · App Store Connect distribution ─────────────────────────"
 echo "  version    $MARKETING_VERSION ($BUILD_NUMBER)"
@@ -122,13 +133,23 @@ fi
 echo "▸ exporting signed .ipa…"
 rm -rf "$EXPORT_DIR"
 mkdir -p "$EXPORT_DIR"
+
+# Xcode 16 renamed the App Store export method 'app-store' → 'app-store-connect'
+# (the old value is rejected on newer toolchains); pick by major version.
+XCODE_MAJOR="$(xcodebuild -version 2>/dev/null | sed -nE '1s/^Xcode ([0-9]+).*/\1/p')"
+if [[ -n "$XCODE_MAJOR" && "$XCODE_MAJOR" -ge 16 ]]; then
+  EXPORT_METHOD="app-store-connect"
+else
+  EXPORT_METHOD="app-store"
+fi
+
 PLIST="$EXPORT_DIR/ExportOptions.plist"
 cat > "$PLIST" <<PLIST_EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>method</key><string>app-store</string>
+  <key>method</key><string>$EXPORT_METHOD</string>
   <key>destination</key><string>export</string>
   <key>teamID</key><string>$DEVELOPMENT_TEAM</string>
   <key>signingStyle</key><string>automatic</string>

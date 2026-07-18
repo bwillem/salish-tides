@@ -83,6 +83,3 @@ Bundled JSON → SQLite (GRDB) is populated once by `DatabaseMigrator` on first 
   (`dev/model/webtide/` — gitignored), or any part of `data/` **other than** the
   build inputs `data/tides/` + `data/basemap/` (those two are tracked; the
   retired print-atlas `data/maps*/` and other scratch stay ignored).
-- **Ship a TestFlight/App Store build containing `webtide_nepac.b1` until the
-  DFO/BIO redistribution sign-off lands** (see the license warning in
-  `dev/model/webtide_fetch.py`). Merging to main is fine; releasing is not.

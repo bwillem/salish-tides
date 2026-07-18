@@ -1,0 +1,30 @@
+/* Shared base for the Salish Tides site: color tokens, reset, base typography.
+   Linked by index.html, privacy.html, and the generated changelog.html so the
+   palette + font stack live in ONE place. Page-specific layout stays inline in
+   each page's <style> (which loads after this file and thus wins on conflicts). */
+
+:root {
+  color-scheme: light dark;
+  --bg:   #ffffff;
+  --fg:   #111111;
+  --muted:#6b6b6b;
+  --rule: #e2e2e2;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:   #000000;  /* website dark mode is true black (app uses night-water) */
+    --fg:   #eef2f5;
+    --muted:#8ea0ad;
+    --rule: #22323f;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}

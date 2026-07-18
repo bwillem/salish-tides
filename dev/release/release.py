@@ -281,37 +281,16 @@ def render_changelog_html(releases: list[dict]) -> str:
   <title>Changelog — Salish Tides</title>
   <meta name="description" content="What's new in Salish Tides — release notes.">
   <link rel="icon" href="logo.png">
+  <link rel="stylesheet" href="/site.css">
 
   <style>
-    :root {{
-      color-scheme: light dark;
-      --bg:   #ffffff;
-      --fg:   #111111;
-      --muted:#6b6b6b;
-      --rule: #e2e2e2;
-    }}
-    @media (prefers-color-scheme: dark) {{
-      :root {{
-        --bg:   #0f1c28;
-        --fg:   #eef2f5;
-        --muted:#8ea0ad;
-        --rule: #22323f;
-      }}
-    }}
-
-    * {{ box-sizing: border-box; }}
-
+    /* Tokens, reset, and base body typography come from /site.css. */
     body {{
       margin: 0 auto;
       max-width: 62ch;
       padding: 3rem 1.25rem 4rem;
-      background: var(--bg);
-      color: var(--fg);
-      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
       font-size: 0.9375rem;
       line-height: 1.7;
-      -webkit-font-smoothing: antialiased;
-      text-rendering: optimizeLegibility;
     }}
 
     a {{ color: inherit; }}
@@ -420,9 +399,9 @@ def cmd_apply(args: argparse.Namespace) -> None:
         except ValueError:
             sys.exit(f"CURRENT_PROJECT_VERSION '{cur_build}' is not an integer")
 
-    if not str(new_build).isdigit() or int(new_build) < int(cur_build or 0):
+    if not str(new_build).isdigit() or int(new_build) <= int(cur_build or 0):
         sys.exit(
-            f"build number must be an increasing integer "
+            f"build number must be a strictly increasing integer "
             f"(current {cur_build}, requested {new_build})"
         )
 
