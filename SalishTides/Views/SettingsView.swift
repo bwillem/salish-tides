@@ -54,6 +54,11 @@ struct SettingsView: View {
                 }
 
                 // ── Map Style ────────────────────────────────────────────
+                // TEMP: hidden until the Satellite basemap is release-ready.
+                // Un-comment this Section to re-expose basemap switching; the
+                // app falls back to the bundled Standard basemap meanwhile.
+                // (mapStyleRow(_:) below is kept for the same restore.)
+                /*
                 Section {
                     ForEach(Basemap.allCases.filter(\.isAvailable)) { style in
                         mapStyleRow(style)
@@ -63,6 +68,7 @@ struct SettingsView: View {
                 } footer: {
                     Text("Standard works fully offline. Satellite streams online only, caching the areas you view.")
                 }
+                */
 
                 // ── About ────────────────────────────────────────────────
                 Section("About") {
