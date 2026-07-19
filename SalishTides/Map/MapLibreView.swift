@@ -26,6 +26,14 @@ struct MapLibreView: UIViewRepresentable {
         MapStyleLoader.styleURL(for: settings.basemap, dark: scheme == .dark)
     }
 
+    /// `ChartBounds.coverage` in MapLibre's terms — the supported region, i.e.
+    /// the extent of the bundled offline basemap.
+    private static let coverageBounds = MLNCoordinateBounds(
+        sw: CLLocationCoordinate2D(latitude: ChartBounds.coverage.lat_min,
+                                   longitude: ChartBounds.coverage.lon_min),
+        ne: CLLocationCoordinate2D(latitude: ChartBounds.coverage.lat_max,
+                                   longitude: ChartBounds.coverage.lon_max))
+
     func makeUIView(context: Context) -> MLNMapView {
         // Grow the ambient cache so a day's viewing survives offline (default is
         // ~50 MB). This is what makes online styles render offline afterward.
@@ -37,8 +45,20 @@ struct MapLibreView: UIViewRepresentable {
         // We render our own compass control (top-left stack), so hide the
         // built-in one.
         mapView.compassView.compassVisibility = .hidden
+        // Provisional floor until the first layout gives a real view size, at
+        // which point Coordinator.applyMinimumZoom raises it to whatever keeps
+        // the coverage box filling the screen.
         mapView.minimumZoomLevel = 7
         mapView.maximumZoomLevel = 14
+
+        // Constrain the camera to the region we actually ship tiles for. Beyond
+        // this box the bundled PMTiles has nothing, so panning out lands the
+        // user on a blank grey page with no way to tell they've left the chart.
+        // MapLibre keeps the whole visible region inside these bounds (not just
+        // the centre), so the blank edge never comes into view at all. The
+        // matching minimum-zoom floor (applied once we have a real view size)
+        // is what stops the box shrinking into an island of map adrift in grey.
+        mapView.maximumScreenBounds = Self.coverageBounds
 
         // Default center: Salish Sea
         let center = CLLocationCoordinate2D(latitude: 48.8, longitude: -123.2)
@@ -66,6 +86,11 @@ struct MapLibreView: UIViewRepresentable {
             context.coordinator.invalidateLandPolygons()
             mapView.styleURL = desiredStyleURL(for: colorScheme)
         }
+        // Re-floor the minimum zoom whenever the view is resized (rotation,
+        // Split View, Stage Manager): the floor is the zoom at which the
+        // coverage box still fills the viewport, so the user can never zoom out
+        // past the edge of the shipped tiles.
+        context.coordinator.applyMinimumZoom(on: mapView)
         // Pushes the vectors to both the arrow source and the particle layer.
         // Read vm.currentVectors / vm.currentFieldVectors / vm.currentLandMask
         // here so Observation re-runs updateUIView on change (the coordinator
@@ -114,6 +139,19 @@ struct MapLibreView: UIViewRepresentable {
                 Task { @MainActor in
                     active ? crosshair.interactionBegan() : crosshair.interactionEnded()
                 }
+            },
+            onUserLocationChange: { [mapController] coordinate in
+                // Drives the locate button's enabled state (a fix outside the
+                // supported region can't be recentred on).
+                // CLLocationCoordinate2D isn't Equatable; compare components so
+                // a repeated identical fix doesn't re-render the overlay.
+                Task { @MainActor in
+                    let current = mapController.userLocation
+                    if current?.latitude != coordinate?.latitude
+                        || current?.longitude != coordinate?.longitude {
+                        mapController.userLocation = coordinate
+                    }
+                }
             }
         )
     }
@@ -142,6 +180,8 @@ struct MapLibreView: UIViewRepresentable {
         private let onCentreChange: (Double, Double) -> Void
         // Signals the start (true) / end (false) of a user pan/zoom/rotate.
         private let onInteraction: (Bool) -> Void
+        // Latest user fix (nil until one arrives, or if permission is denied).
+        private let onUserLocationChange: (CLLocationCoordinate2D?) -> Void
         // Drives the SwiftUI station-marker overlay: the coordinator projects the
         // station's coordinate to a screen point each camera frame and writes it
         // here (touched only inside MainActor.assumeIsolated, on the main thread
@@ -153,12 +193,77 @@ struct MapLibreView: UIViewRepresentable {
              onViewportChange: @escaping (ChartBounds) -> Void,
              onBearingChange: @escaping (Double) -> Void,
              onCentreChange: @escaping (Double, Double) -> Void,
-             onInteraction: @escaping (Bool) -> Void) {
+             onInteraction: @escaping (Bool) -> Void,
+             onUserLocationChange: @escaping (CLLocationCoordinate2D?) -> Void) {
             self.stationMarker = stationMarker
             self.onViewportChange = onViewportChange
             self.onBearingChange = onBearingChange
             self.onCentreChange = onCentreChange
             self.onInteraction = onInteraction
+            self.onUserLocationChange = onUserLocationChange
+        }
+
+        // MARK: Camera constraint
+
+        // The view size the zoom floor was last computed for; recomputed only
+        // on an actual resize (updateUIView runs for every observed change).
+        nonisolated(unsafe) private var minZoomSize: CGSize = .zero
+
+        /// Sets `minimumZoomLevel` to the zoom at which `ChartBounds.coverage`
+        /// still covers the whole viewport.
+        ///
+        /// Pairs with `maximumScreenBounds`, which holds the visible region
+        /// inside the coverage box but says nothing about zoom: without a floor
+        /// the user could zoom to the old z7 minimum and watch the shipped
+        /// tiles shrink to a postage stamp adrift in blank grey. At the floor
+        /// the box exactly fills the screen, so there's nothing left to pan to.
+        func applyMinimumZoom(on mapView: MLNMapView) {
+            let size = MainActor.assumeIsolated { mapView.bounds.size }
+            // Mid-layout: no meaningful size to fit against yet.
+            guard size.width > 0, size.height > 0, size != minZoomSize else { return }
+            minZoomSize = size
+
+            let box = ChartBounds.coverage
+            // Web Mercator at zoom z spans 256·2^z points for 360° of longitude
+            // and 2π of Mercator y, so the zoom that makes a span fill a screen
+            // dimension is log2(dimension / (256 · spanFraction)).
+            func mercatorY(_ lat: Double) -> Double {
+                log(tan(.pi / 4 + lat * .pi / 360))
+            }
+            let lonZoom = log2(360 * size.width / (256 * (box.lon_max - box.lon_min)))
+            let latSpan = mercatorY(box.lat_max) - mercatorY(box.lat_min)
+            let latZoom = log2(2 * .pi * size.height / (256 * latSpan))
+
+            MainActor.assumeIsolated {
+                // Cover, not fit: the tighter of the two constraints wins, so
+                // neither dimension can show past the edge of the box. Never
+                // exceed the zoom ceiling, which would leave the range inverted
+                // (MapLibre calls that undefined behaviour).
+                let floor = min(max(lonZoom, latZoom), mapView.maximumZoomLevel)
+                guard mapView.minimumZoomLevel != floor else { return }
+                mapView.minimumZoomLevel = floor
+                if mapView.zoomLevel < floor {
+                    mapView.setZoomLevel(floor, animated: false)
+                }
+            }
+        }
+
+        // MARK: User location
+
+        func mapView(_ mapView: MLNMapView, didUpdate userLocation: MLNUserLocation?) {
+            let coordinate = userLocation?.location?.coordinate
+            onUserLocationChange(coordinate.flatMap {
+                CLLocationCoordinate2DIsValid($0) ? $0 : nil
+            })
+        }
+
+        func mapView(_ mapView: MLNMapView, didFailToLocateUserWithError error: Error) {
+            // Only a hard denial clears the fix: CoreLocation also reports
+            // transient `.locationUnknown` while it's still working on one, and
+            // dropping a good fix for that would flicker the locate button off
+            // mid-passage. Anything else is left to the next didUpdate.
+            guard (error as? CLError)?.code == .denied else { return }
+            onUserLocationChange(nil)
         }
 
         // Gesture-driven camera changes (as opposed to programmatic moves like

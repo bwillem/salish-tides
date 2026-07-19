@@ -101,7 +101,9 @@ struct ContentView: View {
                             }
                             .transition(.scale.combined(with: .opacity))
                         }
-                        LocateButton { mapController.recenterOnUser() }
+                        LocateButton(enabled: mapController.canRecenterOnUser) {
+                            mapController.recenterOnUser()
+                        }
                     }
                     .animation(.snappy, value: mapController.isNorthUp)
                     .padding(.leading)
@@ -231,8 +233,15 @@ private struct CompassButton: View {
     }
 }
 
-/// Locate control — centers and follows the user's location (Maps-style).
+/// Locate control — centers the map on the user's location (Maps-style).
+///
+/// Disabled when there's no usable fix: location permission denied, no fix yet,
+/// or a fix outside the supported region (`ChartBounds.coverage`). The map's
+/// camera is clamped to that box, so recentring on a user beyond it can't take
+/// them anywhere — better a visibly dimmed button than one that appears to do
+/// nothing when tapped.
 private struct LocateButton: View {
+    let enabled: Bool
     var action: () -> Void
 
     var body: some View {
@@ -242,9 +251,13 @@ private struct LocateButton: View {
                 .foregroundStyle(.primary)
                 .frame(width: 44, height: 44)
         }
+        .opacity(enabled ? 1 : 0.35)
         .floatingCard(cornerRadius: Radius.lg)
+        .disabled(!enabled)
+        .animation(.snappy, value: enabled)
         .accessibilityLabel("Locate me")
-        .accessibilityHint("Centers the map on your location")
+        .accessibilityHint(enabled ? "Centers the map on your location"
+                                   : "Unavailable — your location is outside the charted area")
     }
 }
 
