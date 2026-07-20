@@ -355,7 +355,7 @@ private struct SourceExplainer: View {
             Text("""
                  Salish Tides gets data from SalishSeaCast (SSC) when it can. \
                  SSC accounts for weather and salinity as well as tide. \
-                 Offline models are only predicted tidal currents.
+                 Offline models may be less accurate as they are only tidal.
                  """)
                 .font(.stPhase)
                 .foregroundStyle(Color.inkSecondary)
