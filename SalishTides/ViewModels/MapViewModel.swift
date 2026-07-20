@@ -45,7 +45,7 @@ final class MapViewModel {
     // only carries provenance for the UI.
     enum CurrentSource { case live, model }
     var currentSource: CurrentSource?
-    /// Live currents rendering right now — drives the "Online mode" badge.
+    /// Live currents rendering right now — drives the "SSC live model" badge.
     var isLiveCurrents: Bool { currentSource == .live }
     var liveTideSeries: LiveTideSeries?
 
