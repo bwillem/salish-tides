@@ -4,6 +4,18 @@ All notable changes to Salish Tides are recorded here. Versions follow
 [semantic versioning](https://semver.org); dates are the release date in the
 Salish Sea (America/Vancouver). The newest release is first.
 
+## [1.1.0] - 2026-07-20
+
+### Added
+- Tap the data-source pill to see where the live currents come from
+
+### Changed
+- Keep the map inside the charted area, so panning and zooming can't wander off into blank space
+- Name the live source in the pill: "SSC live model" for SalishSeaCast
+
+### Fixed
+- Disable "locate me" when your position is outside the charted area or no location is available — it used to look active but do nothing
+
 ## [1.0.2] - 2026-07-17
 
 ### Fixed
