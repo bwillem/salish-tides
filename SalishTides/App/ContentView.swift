@@ -101,7 +101,9 @@ struct ContentView: View {
                             }
                             .transition(.scale.combined(with: .opacity))
                         }
-                        LocateButton { mapController.recenterOnUser() }
+                        LocateButton(enabled: mapController.canRecenterOnUser) {
+                            mapController.recenterOnUser()
+                        }
                     }
                     .animation(.snappy, value: mapController.isNorthUp)
                     .padding(.leading)
@@ -120,7 +122,7 @@ struct ContentView: View {
                 // basemap (Satellite) is selected and the network is unreachable,
                 // noting that *new* imagery can't load (cached tiles keep showing;
                 // it clears itself once back online) — and the currents-source
-                // tier on the right ("Online mode" / "Offline model"; none until
+                // tier on the right ("SSC live model" / "Offline model"; none until
                 // a load completes). Full attribution: Settings → Data Sources.
                 //
                 // The animation lives on the always-present Group, not on the
@@ -231,8 +233,15 @@ private struct CompassButton: View {
     }
 }
 
-/// Locate control — centers and follows the user's location (Maps-style).
+/// Locate control — centers the map on the user's location (Maps-style).
+///
+/// Disabled when there's no usable fix: location permission denied, no fix yet,
+/// or a fix outside the supported region (`ChartBounds.coverage`). The map's
+/// camera is clamped to that box, so recentring on a user beyond it can't take
+/// them anywhere — better a visibly dimmed button than one that appears to do
+/// nothing when tapped.
 private struct LocateButton: View {
+    let enabled: Bool
     var action: () -> Void
 
     var body: some View {
@@ -242,18 +251,29 @@ private struct LocateButton: View {
                 .foregroundStyle(.primary)
                 .frame(width: 44, height: 44)
         }
+        .opacity(enabled ? 1 : 0.35)
         .floatingCard(cornerRadius: Radius.lg)
+        .disabled(!enabled)
+        .animation(.snappy, value: enabled)
         .accessibilityLabel("Locate me")
-        .accessibilityHint("Centers the map on your location")
+        .accessibilityHint(enabled ? "Centers the map on your location"
+                                   : "Unavailable — your location is outside the charted area")
     }
 }
 
 /// Currents-source status pill — a coloured dot + label in its own small glass
 /// container, shown bottom-right to say which tier the rendered current field is
-/// drawn from. "Online mode" (live SalishSeaCast) uses the brand accent; the
+/// drawn from. "SSC live model" (live SalishSeaCast) uses the brand accent; the
 /// "Offline model" harmonic tier uses a muted dot.
+///
+/// The live pill is tappable and explains itself in a popover: "SSC" means
+/// nothing to a sailor who hasn't read the data-sources screen, and the reason
+/// to care — that the live tier folds in recent weather and salinity, which the
+/// harmonic model can't — is the kind of thing worth surfacing at the point of
+/// confusion rather than burying in Settings.
 private struct SourceBadge: View {
     let content: Content
+    @State private var showingExplainer = false
 
     /// The presentable states of `MapViewModel.CurrentSource`. nil source
     /// (nothing rendered yet / off coverage) maps to nil, so the call site can
@@ -269,16 +289,16 @@ private struct SourceBadge: View {
             }
         }
 
-        var label: String { self == .online ? "Online mode" : "Offline model" }
+        var label: String { self == .online ? "SSC live model" : "Offline model" }
         var dot: Color { self == .online ? Color.brandAccent : Color.inkSecondary.opacity(0.6) }
         var a11y: String {
             self == .online
-                ? "Online mode: showing live SalishSeaCast current forecast."
+                ? "SSC live model: showing live SalishSeaCast current forecast."
                 : "Offline model: showing tide-predicted currents without weather effects."
         }
     }
 
-    var body: some View {
+    private var pill: some View {
         HStack(spacing: Spacing.xs) {
             Circle()
                 .fill(content.dot)
@@ -286,12 +306,69 @@ private struct SourceBadge: View {
             Text(content.label)
                 .font(.stCaption)
                 .foregroundStyle(Color.inkSecondary)
+            // Only the live pill is tappable, so only it advertises the fact.
+            if content == .online {
+                Image(systemName: "info.circle")
+                    .font(.stCaption)
+                    .foregroundStyle(Color.inkSecondary.opacity(0.7))
+            }
         }
         .padding(.horizontal, Spacing.sm)
         .padding(.vertical, Spacing.xs)
         .floatingCard(cornerRadius: Radius.pill)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(content.a11y)
+    }
+
+    var body: some View {
+        if content == .online {
+            Button { showingExplainer = true } label: { pill }
+                .buttonStyle(.plain)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(content.a11y)
+                .accessibilityHint("Explains where the live current data comes from")
+                .popover(isPresented: $showingExplainer) {
+                    SourceExplainer()
+                        // No compact adaptation override: popovers are an
+                        // iPadOS/macOS component, so on iPhone SwiftUI adapts
+                        // this to a sheet, which is the platform convention.
+                        // A small detent keeps it from burying the map the
+                        // pill is describing.
+                        .presentationDetents([.height(220)])
+                        .presentationDragIndicator(.visible)
+                }
+        } else {
+            pill
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(content.a11y)
+        }
+    }
+}
+
+/// Popover behind the "SSC live model" pill — what the live tier is and why it's
+/// worth having. Deliberately short: it's a glance at the helm, not a manual.
+/// Full attribution lives in Settings → Data Sources.
+private struct SourceExplainer: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            Text("SSC live model")
+                .font(.stPhase)
+                .foregroundStyle(.primary)
+            Text("""
+                 Salish Tides pulls live model data from SalishSeaCast whenever \
+                 it can reach it. That forecast is likely more accurate than the \
+                 built-in one — it accounts for recent weather and salinity, \
+                 which tide-driven predictions can't.
+                 """)
+                .font(.stPhase)
+                .foregroundStyle(Color.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(Spacing.lg)
+        // A fixed width plus vertical fixedSize gives the popover a real
+        // intrinsic height to size itself to. With `maxWidth` instead, it
+        // falls back to a default content size and clips the copy top and
+        // bottom — which is exactly what it did.
+        .frame(width: 300)
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
 

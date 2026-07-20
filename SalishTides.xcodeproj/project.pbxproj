@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0183D2C6A9443E80CC31453A /* ChartBoundsCoverageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B561881BEA8A6420E5AD9EE6 /* ChartBoundsCoverageTests.swift */; };
 		03D4C3756B723DD64956DBFC /* MapViewModelLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC7BBFABADB89396C15DFABC /* MapViewModelLogicTests.swift */; };
 		0428DEAC804FB2FCD2285E6E /* ocean-light.json in Resources */ = {isa = PBXBuildFile; fileRef = 2A78F6D08450A43684299A05 /* ocean-light.json */; };
 		053B19B40E8654F9155B864F /* TidalHarmonics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 174AD48AFB6611FDE9777B62 /* TidalHarmonics.swift */; };
@@ -114,6 +115,7 @@
 		B430D515B3053CB1308FC171 /* LRUCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LRUCache.swift; sourceTree = "<group>"; };
 		B460FF242F858B027A672B40 /* TimelineControlView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineControlView.swift; sourceTree = "<group>"; };
 		B534466B629735C3AFD88226 /* CurrentVector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrentVector.swift; sourceTree = "<group>"; };
+		B561881BEA8A6420E5AD9EE6 /* ChartBoundsCoverageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChartBoundsCoverageTests.swift; sourceTree = "<group>"; };
 		B98F7598EF156FEBB14254C0 /* LiveDataService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveDataService.swift; sourceTree = "<group>"; };
 		BC0C2E94595CF5DDCD144C35 /* MapController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapController.swift; sourceTree = "<group>"; };
 		BF78D89E101E6B88EB6D487E /* PhaseIndicatorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhaseIndicatorView.swift; sourceTree = "<group>"; };
@@ -318,6 +320,7 @@
 		FFEA14C427ED1D3FF71AC516 /* SalishTidesTests */ = {
 			isa = PBXGroup;
 			children = (
+				B561881BEA8A6420E5AD9EE6 /* ChartBoundsCoverageTests.swift */,
 				AC1102E5F68419EC85F05430 /* CurrentPhaseEstimatorTests.swift */,
 				4725F47676631EBF5824A138 /* EpochUTCTests.swift */,
 				E7B240886F13A107F45EA941 /* HelperTests.swift */,
@@ -457,6 +460,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0183D2C6A9443E80CC31453A /* ChartBoundsCoverageTests.swift in Sources */,
 				650F7FE452876746C629AA78 /* CurrentPhaseEstimatorTests.swift in Sources */,
 				FF28886D72C0D9078739DC3D /* EpochUTCTests.swift in Sources */,
 				49E216D8D042D5603CFDA76D /* HelperTests.swift in Sources */,
