@@ -210,36 +210,38 @@ struct MapLibreView: UIViewRepresentable {
         nonisolated(unsafe) private var minZoomSize: CGSize = .zero
 
         /// Sets `minimumZoomLevel` to the zoom at which `ChartBounds.coverage`
-        /// still covers the whole viewport.
+        /// still covers the whole viewport, at any bearing.
         ///
         /// Pairs with `maximumScreenBounds`, which holds the visible region
         /// inside the coverage box but says nothing about zoom: without a floor
         /// the user could zoom to the old z7 minimum and watch the shipped
         /// tiles shrink to a postage stamp adrift in blank grey. At the floor
-        /// the box exactly fills the screen, so there's nothing left to pan to.
+        /// the box still fills the screen, so there's nothing left to pan to.
+        ///
+        /// Called from `updateUIView` *and* from the camera-settle and idle
+        /// callbacks. The first layout can land after the final `updateUIView`
+        /// of a launch, and until the floor is applied the map is still on the
+        /// provisional z7 from `makeUIView` — i.e. exactly the state this is
+        /// meant to prevent. Driving it from the map's own callbacks as well
+        /// makes it self-healing instead of dependent on SwiftUI's
+        /// invalidation schedule. Re-entry is free: it no-ops unless the
+        /// viewport size actually changed.
         func applyMinimumZoom(on mapView: MLNMapView) {
-            let size = MainActor.assumeIsolated { mapView.bounds.size }
-            // Mid-layout: no meaningful size to fit against yet.
-            guard size.width > 0, size.height > 0, size != minZoomSize else { return }
-            minZoomSize = size
-
-            let box = ChartBounds.coverage
-            // Web Mercator at zoom z spans 256·2^z points for 360° of longitude
-            // and 2π of Mercator y, so the zoom that makes a span fill a screen
-            // dimension is log2(dimension / (256 · spanFraction)).
-            func mercatorY(_ lat: Double) -> Double {
-                log(tan(.pi / 4 + lat * .pi / 360))
-            }
-            let lonZoom = log2(360 * size.width / (256 * (box.lon_max - box.lon_min)))
-            let latSpan = mercatorY(box.lat_max) - mercatorY(box.lat_min)
-            let latZoom = log2(2 * .pi * size.height / (256 * latSpan))
-
             MainActor.assumeIsolated {
-                // Cover, not fit: the tighter of the two constraints wins, so
-                // neither dimension can show past the edge of the box. Never
-                // exceed the zoom ceiling, which would leave the range inverted
-                // (MapLibre calls that undefined behaviour).
-                let floor = min(max(lonZoom, latZoom), mapView.maximumZoomLevel)
+                let size = mapView.bounds.size
+                guard size != minZoomSize,
+                      let raw = ChartBounds.coverage.minimumZoomCovering(
+                          width: size.width, height: size.height) else { return }
+                minZoomSize = size
+
+                // Never exceed the ceiling: an inverted range is undefined
+                // behaviour per MLNMapView, and a floor that reaches the
+                // ceiling would silently freeze the map at one zoom.
+                let ceiling = mapView.maximumZoomLevel
+                assert(raw < ceiling,
+                       "coverage zoom floor \(raw) meets the \(ceiling) ceiling — the viewport is too large for the shipped basemap extent; the map would be locked to a single zoom")
+                let floor = min(raw, ceiling)
+
                 guard mapView.minimumZoomLevel != floor else { return }
                 mapView.minimumZoomLevel = floor
                 if mapView.zoomLevel < floor {
@@ -255,6 +257,19 @@ struct MapLibreView: UIViewRepresentable {
             onUserLocationChange(coordinate.flatMap {
                 CLLocationCoordinate2DIsValid($0) ? $0 : nil
             })
+        }
+
+        func mapView(_ mapView: MLNMapView, didChangeLocationManagerAuthorization manager: any MLNLocationManager) {
+            // Permission pulled in Settings mid-session. MapLibre reports that
+            // here, not through didFailToLocateUser, so without this the last
+            // good fix would stick and the locate button would stay lit and
+            // recentre on a stale position.
+            switch manager.authorizationStatus {
+            case .denied, .restricted:
+                onUserLocationChange(nil)
+            default:
+                break
+            }
         }
 
         func mapView(_ mapView: MLNMapView, didFailToLocateUserWithError error: Error) {
@@ -313,6 +328,8 @@ struct MapLibreView: UIViewRepresentable {
         // regionDidChangeWith:animated: above — the reason-based callback replaces
         // the plain regionDidChangeAnimated: this logic used to live in.
         private func regionDidSettle(_ mapView: MLNMapView) {
+            // Self-healing zoom floor — see applyMinimumZoom.
+            applyMinimumZoom(on: mapView)
             let b = mapView.visibleCoordinateBounds
             let viewport = ChartBounds(
                 lat_min: b.sw.latitude,
@@ -494,6 +511,9 @@ struct MapLibreView: UIViewRepresentable {
         /// areas and after style reloads — a snapshot taken mid-load misses
         /// land whose tiles hadn't arrived yet.
         func mapViewDidBecomeIdle(_ mapView: MLNMapView) {
+            // Self-healing zoom floor — see applyMinimumZoom. Idle is the one
+            // callback guaranteed to fire after the view has real bounds.
+            applyMinimumZoom(on: mapView)
             // Re-project the station marker once the map is truly at rest: on
             // first launch the map can settle while the view is still mid-layout
             // (zero/interim bounds), and a pure layout change fires no region

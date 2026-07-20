@@ -35,6 +35,25 @@ EXCLUDE_LAYERS=(roads buildings pois)
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 OUT="${REPO_ROOT}/data/basemap/salish.pmtiles"
 
+# --- Keep the app's camera clamp in sync -----------------------------------
+# The app constrains the map to this exact extent (ChartBounds.coverage). If
+# BBOX changes and the constant doesn't, the app clamps to the old box and the
+# mismatch is invisible — a wrong-but-plausible map rather than a build error.
+# Fail loudly here instead, since this script is the only thing that moves the
+# boundary. (The .pmtiles header can't be the source of truth: tile-join
+# rewrites it to global bounds.)
+CHART_BOUNDS="${REPO_ROOT}/SalishTides/Models/ChartBounds.swift"
+IFS=',' read -r bb_lon_min bb_lat_min bb_lon_max bb_lat_max <<< "$BBOX"
+swift_bounds=$(sed -n 's/.*ChartBounds(lat_min: *\([-0-9.]*\), *lat_max: *\([-0-9.]*\),.*/\1,\2/p;s/.*lon_min: *\([-0-9.]*\), *lon_max: *\([-0-9.]*\)).*/\1,\2/p' "$CHART_BOUNDS" | tr -d '\n')
+expected="${bb_lat_min},${bb_lat_max}${bb_lon_min},${bb_lon_max}"
+if [[ "$swift_bounds" != "$expected" ]]; then
+  echo "error: BBOX and ChartBounds.coverage disagree." >&2
+  echo "  build-pmtiles.sh BBOX : lat ${bb_lat_min}..${bb_lat_max}, lon ${bb_lon_min}..${bb_lon_max}" >&2
+  echo "  ChartBounds.coverage  : ${swift_bounds:-<not found>}" >&2
+  echo "  Update 'static let coverage' in ${CHART_BOUNDS#$REPO_ROOT/} to match, then re-run." >&2
+  exit 1
+fi
+
 command -v pmtiles   >/dev/null || { echo "error: pmtiles CLI not found — 'brew install pmtiles'" >&2; exit 1; }
 command -v tile-join >/dev/null || { echo "error: tile-join not found — 'brew install tippecanoe'" >&2; exit 1; }
 command -v curl      >/dev/null || { echo "error: curl not found (needed to detect the latest Protomaps build)" >&2; exit 1; }
