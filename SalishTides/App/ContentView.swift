@@ -354,8 +354,9 @@ private struct SourceExplainer: View {
                 .foregroundStyle(.primary)
             Text("""
                  Salish Tides gets live model data from SalishSeaCast whenever \
-                 it can. SSC is likely more accurate than the offline models — \
-                 it accounts for weather and salinity, as well as tide,
+                 it can. SalishSeaCast is usually better. It accounts for \
+                 weather and salinity as well as tide. Offline models are only \
+                 predicted tidal currents.
                  """)
                 .font(.stPhase)
                 .foregroundStyle(Color.inkSecondary)
