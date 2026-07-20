@@ -1,5 +1,5 @@
 ---
-name: release-notes
+name: release
 description: Cut a Salish Tides release — turn the commits since the last release tag into user-facing release notes, bump the Xcode version per semantic versioning, update CHANGELOG.md + the website changelog page, tag it, and optionally archive + upload the build to App Store Connect via the API key. Use when the user wants to "cut a release", "make release notes", "bump the version", "ship a new version", "update the changelog", or "upload to App Store Connect / TestFlight".
 ---
 

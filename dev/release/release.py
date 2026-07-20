@@ -2,7 +2,7 @@
 """Release plumbing for Salish Tides — the deterministic half of the release flow.
 
 The judgement calls (summarizing commits into user-facing notes, choosing the
-semver bump) are made by the `release-notes` Claude skill. Everything mechanical
+semver bump) are made by the `release` Claude skill. Everything mechanical
 and error-prone lives here so it's reproducible and testable:
 
   status   Print current versions, the last release tag, and every commit since
