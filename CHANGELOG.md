@@ -4,6 +4,11 @@ All notable changes to Salish Tides are recorded here. Versions follow
 [semantic versioning](https://semver.org); dates are the release date in the
 Salish Sea (America/Vancouver). The newest release is first.
 
+## [1.1.1] - 2026-07-30
+
+### Changed
+- Let the map pan further north, so you can centre on the currents above Vancouver Island and up Queen Charlotte Strait
+
 ## [1.1.0] - 2026-07-20
 
 ### Added
