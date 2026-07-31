@@ -26,13 +26,13 @@ struct MapLibreView: UIViewRepresentable {
         MapStyleLoader.styleURL(for: settings.basemap, dark: scheme == .dark)
     }
 
-    /// `ChartBounds.coverage` in MapLibre's terms — the supported region, i.e.
-    /// the extent of the bundled offline basemap.
-    private static let coverageBounds = MLNCoordinateBounds(
-        sw: CLLocationCoordinate2D(latitude: ChartBounds.coverage.lat_min,
-                                   longitude: ChartBounds.coverage.lon_min),
-        ne: CLLocationCoordinate2D(latitude: ChartBounds.coverage.lat_max,
-                                   longitude: ChartBounds.coverage.lon_max))
+    /// `ChartBounds.cameraPan` in MapLibre's terms — the coverage box loosened
+    /// so the screen centre can reach the data edges (see `ChartBounds.cameraPan`).
+    private static let cameraPanBounds = MLNCoordinateBounds(
+        sw: CLLocationCoordinate2D(latitude: ChartBounds.cameraPan.lat_min,
+                                   longitude: ChartBounds.cameraPan.lon_min),
+        ne: CLLocationCoordinate2D(latitude: ChartBounds.cameraPan.lat_max,
+                                   longitude: ChartBounds.cameraPan.lon_max))
 
     func makeUIView(context: Context) -> MLNMapView {
         // Grow the ambient cache so a day's viewing survives offline (default is
@@ -51,14 +51,16 @@ struct MapLibreView: UIViewRepresentable {
         mapView.minimumZoomLevel = 7
         mapView.maximumZoomLevel = 14
 
-        // Constrain the camera to the region we actually ship tiles for. Beyond
-        // this box the bundled PMTiles has nothing, so panning out lands the
-        // user on a blank grey page with no way to tell they've left the chart.
-        // MapLibre keeps the whole visible region inside these bounds (not just
-        // the centre), so the blank edge never comes into view at all. The
-        // matching minimum-zoom floor (applied once we have a real view size)
-        // is what stops the box shrinking into an island of map adrift in grey.
-        mapView.maximumScreenBounds = Self.coverageBounds
+        // Constrain the camera. MapLibre keeps the whole visible region inside
+        // this box (not just the centre), so we pan against `cameraPan` rather
+        // than the raw `coverage` box: coverage would hold the centre half a
+        // screen in from every edge, leaving the water and current data north of
+        // Vancouver Island unreachable. cameraPan trades a little grey past the
+        // basemap at the very edges for a centre that can reach the data. The
+        // matching minimum-zoom floor (applied once we have a real view size,
+        // still computed from `coverage`) is what stops the map shrinking into
+        // an island adrift in grey.
+        mapView.maximumScreenBounds = Self.cameraPanBounds
 
         // Default center: Salish Sea
         let center = CLLocationCoordinate2D(latitude: 48.8, longitude: -123.2)
