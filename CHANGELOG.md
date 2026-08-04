@@ -4,6 +4,11 @@ All notable changes to Salish Tides are recorded here. Versions follow
 [semantic versioning](https://semver.org); dates are the release date in the
 Salish Sea (America/Vancouver). The newest release is first.
 
+## [1.1.2] - 2026-08-04
+
+### Fixed
+- Show animated current particles again in Low Power Mode — the current style toggle no longer sticks on arrows
+
 ## [1.1.1] - 2026-07-30
 
 ### Changed
