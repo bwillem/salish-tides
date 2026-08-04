@@ -34,13 +34,22 @@ struct SettingsView: View {
                 }
 
                 // ── Currents ─────────────────────────────────────────────
-                Section("Currents") {
+                // Reduce Motion forces the static arrows fallback, so the picker
+                // can't change anything while it's on — disable it and say why.
+                Section {
                     Picker("Current", selection: $settings.currentStyle) {
                         ForEach(CurrentStyle.allCases) { style in
                             Text(style.label).tag(style)
                         }
                     }
                     .pickerStyle(.segmented)
+                    .disabled(settings.reduceMotion)
+                } header: {
+                    Text("Currents")
+                } footer: {
+                    if settings.reduceMotion {
+                        Text("Arrows are shown while Reduce Motion is on.")
+                    }
                 }
 
                 // ── Appearance ───────────────────────────────────────────
