@@ -142,7 +142,7 @@ enum ClockFormat: String, CaseIterable, Identifiable {
 
 /// How tidal current is drawn on the map. Particles (animated flow) is the
 /// default; arrows are the static fallback and the automatic substitute when
-/// Reduce Motion or Low Power Mode is on (see `AppSettings.effectiveCurrentStyle`).
+/// Reduce Motion is on (see `AppSettings.effectiveCurrentStyle`).
 enum CurrentStyle: String, CaseIterable, Identifiable {
     case particles, arrows
 
@@ -187,16 +187,18 @@ final class AppSettings {
         didSet { defaults.set(basemap.rawValue, forKey: Keys.basemap) }
     }
 
-    // Mirrors the accessibility / power state; updated via notifications so
+    // Mirrors the Reduce Motion accessibility state; updated via notification so
     // `effectiveCurrentStyle` re-evaluates (and observers re-render) when the
-    // user toggles Reduce Motion or Low Power Mode while the app is running.
+    // user toggles Reduce Motion while the app is running. Low Power Mode is
+    // deliberately *not* mirrored here — it used to force the arrows fallback,
+    // but that made particles silently unavailable on any phone in Low Power
+    // Mode, which read as a bug; particles stay on there now.
     private(set) var reduceMotion: Bool = UIAccessibility.isReduceMotionEnabled
-    private(set) var lowPowerMode: Bool = ProcessInfo.processInfo.isLowPowerModeEnabled
 
-    /// The style actually rendered: particles unless the user picked arrows, or
-    /// Reduce Motion / Low Power Mode forces the static fallback.
+    /// The style actually rendered: particles unless the user picked arrows or
+    /// Reduce Motion forces the static fallback.
     var effectiveCurrentStyle: CurrentStyle {
-        (currentStyle == .arrows || reduceMotion || lowPowerMode) ? .arrows : .particles
+        (currentStyle == .arrows || reduceMotion) ? .arrows : .particles
     }
 
     private let defaults: UserDefaults
@@ -210,18 +212,14 @@ final class AppSettings {
         self.currentStyle = defaults.string(forKey: Keys.currentStyle).flatMap(CurrentStyle.init) ?? .particles
         self.basemap    = defaults.string(forKey: Keys.basemap).flatMap(Basemap.init) ?? .standard
 
-        observeAccessibilityAndPower()
+        observeReduceMotion()
     }
 
-    private func observeAccessibilityAndPower() {
-        let nc = NotificationCenter.default
-        nc.addObserver(forName: UIAccessibility.reduceMotionStatusDidChangeNotification,
-                       object: nil, queue: .main) { [weak self] _ in
+    private func observeReduceMotion() {
+        NotificationCenter.default.addObserver(
+            forName: UIAccessibility.reduceMotionStatusDidChangeNotification,
+            object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.reduceMotion = UIAccessibility.isReduceMotionEnabled }
-        }
-        nc.addObserver(forName: .NSProcessInfoPowerStateDidChange,
-                       object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.lowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled }
         }
     }
 
