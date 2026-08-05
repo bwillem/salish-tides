@@ -4,6 +4,11 @@ All notable changes to Salish Tides are recorded here. Versions follow
 [semantic versioning](https://semver.org); dates are the release date in the
 Salish Sea (America/Vancouver). The newest release is first.
 
+## [1.1.4] - 2026-08-04
+
+### Changed
+- Let the map pan to every edge of the charted area, including southern Puget Sound
+
 ## [1.1.3] - 2026-08-04
 
 ### Changed
