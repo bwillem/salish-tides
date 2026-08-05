@@ -63,6 +63,19 @@ struct CurrentStation: Sendable, Identifiable {
     }
 }
 
+/// A current station's predicted state at one instant — enough to place and
+/// label a glass marker on the map. `speedKn` is unsigned; `isFlood` carries
+/// the direction so the marker glyph can point flood vs ebb.
+struct CurrentStationReading: Sendable, Equatable, Identifiable {
+    let code: String
+    let name: String
+    let lat, lon: Double
+    let speedKn: Double
+    let bearingDeg: Double   // compass bearing the current flows toward
+    let isFlood: Bool
+    var id: String { code }
+}
+
 /// A predicted slack or peak (extrema) at a current station.
 struct CurrentEvent: Sendable {
     enum Kind: UInt8 { case slack = 0, maxFlood = 1, maxEbb = 2 }

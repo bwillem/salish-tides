@@ -139,6 +139,31 @@ final class StationMarkerPresenter {
     var nearCrosshair = false
 }
 
+/// Publishes the CHS current-station markers' live screen positions so a SwiftUI
+/// glass overlay (`CurrentStationMarkerOverlay`) can render them *over* the map —
+/// the same real Liquid Glass as the tide-station marker, but many at once (Dodd,
+/// Seymour, Active Pass, ...). The `MapLibreView` coordinator projects each
+/// station coordinate to a screen point on every camera frame and pushes the set
+/// here; the overlay follows each with `.position`.
+@MainActor
+@Observable
+final class CurrentStationMarkerPresenter {
+    /// One projected current-station marker in the map's full-screen coordinate
+    /// space. `speedKn`/`isFlood` drive the glyph and tint; they refresh with the
+    /// hourly prediction, while `point` moves every camera frame.
+    struct Marker: Identifiable, Equatable {
+        let id: String          // CHS station code
+        let name: String
+        let point: CGPoint
+        let speedKn: Double
+        let bearingDeg: Double
+        let isFlood: Bool
+    }
+
+    /// Visible current-station markers. Empty when none are in view.
+    var markers: [Marker] = []
+}
+
 // MARK: - Legacy offline-pack cleanup
 
 /// One-time cleanup of offline map packs left by earlier builds.

@@ -64,6 +64,10 @@ struct ContentView: View {
         ZStack(alignment: .bottom) {
             MapLibreView()
                 .ignoresSafeArea()
+            // CHS current-station glass markers (Dodd, Seymour, Active Pass, ...),
+            // over the map so their glass samples it. Below the tide marker and
+            // crosshair so those read on top at a shared point.
+            CurrentStationMarkerOverlay()
             // Tide-station marker: a SwiftUI glass overlay pinned over the map at
             // the station's projected screen point. It sits directly above the
             // map — so its glass samples the map, unlike a MapLibre annotation —
@@ -466,6 +470,28 @@ private struct StationMarkerOverlay: View {
         .ignoresSafeArea()
         .animation(.easeOut(duration: 0.22), value: marker.stationID)
         .animation(.easeOut(duration: 0.22), value: marker.screenPoint == nil)
+    }
+}
+
+/// The CHS current-station markers overlay: a glass badge per visible pass
+/// (Dodd, Seymour, Active Pass, ...), positioned by the coordinator's per-frame
+/// projection. Isolated so those per-frame writes re-render only these markers.
+/// Keyed by station code so each badge keeps its tap state as the map moves.
+private struct CurrentStationMarkerOverlay: View {
+    @Environment(CurrentStationMarkerPresenter.self) private var presenter
+
+    var body: some View {
+        ZStack {
+            ForEach(presenter.markers) { m in
+                CurrentStationMarkerView(marker: m)
+                    .position(m.point)
+            }
+        }
+        // Match the map's full-bleed coordinate space (see StationMarkerOverlay).
+        .ignoresSafeArea()
+        // Animate only appearance/disappearance, not the per-frame position
+        // tracking during a pan (which must stay instant).
+        .animation(.easeOut(duration: 0.2), value: presenter.markers.map(\.id))
     }
 }
 

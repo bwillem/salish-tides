@@ -9,6 +9,7 @@ struct SalishTidesApp: App {
     @State private var mapController = MapController()
     @State private var crosshair = CrosshairPresenter()
     @State private var stationMarker = StationMarkerPresenter()
+    @State private var currentStationMarkers = CurrentStationMarkerPresenter()
     // One-shot cleanup of any offline map packs left by earlier builds; no
     // basemap downloads packs anymore, so it just reclaims that disk once.
     @State private var packCleaner = LegacyOfflinePackCleaner()
@@ -36,6 +37,7 @@ struct SalishTidesApp: App {
                 .environment(mapController)
                 .environment(crosshair)
                 .environment(stationMarker)
+                .environment(currentStationMarkers)
                 .environment(liveData)
                 .tint(.brandAccent)
                 // Drive the window's interface style directly rather than via

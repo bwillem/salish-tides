@@ -8,6 +8,7 @@ struct MapLibreView: UIViewRepresentable {
     @Environment(MapController.self) private var mapController
     @Environment(CrosshairPresenter.self) private var crosshair
     @Environment(StationMarkerPresenter.self) private var stationMarker
+    @Environment(CurrentStationMarkerPresenter.self) private var currentStationMarkers
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
 
@@ -100,9 +101,11 @@ struct MapLibreView: UIViewRepresentable {
         context.coordinator.updateVectors(vm.currentVectors,
                                           fieldVectors: vm.currentFieldVectors,
                                           mask: vm.currentLandMask, on: mapView)
-        // CHS current-station markers (Dodd, Seymour, ...). Read
-        // vm.currentStationVectors here so Observation re-runs on change.
-        context.coordinator.updateStationVectors(vm.currentStationVectors, on: mapView)
+        // CHS current-station glass markers (Dodd, Seymour, ...). Read
+        // vm.currentStationReadings so Observation re-runs when the hourly
+        // predictions change; the coordinator projects each to a screen point
+        // every camera frame (like the tide-station marker).
+        context.coordinator.updateStationReadings(vm.currentStationReadings, on: mapView)
         context.coordinator.setParticleDark(colorScheme == .dark)
         // Particles vs arrows, honouring the Reduce-Motion / Low-Power fallback,
         // plus pause-on-background. Read here so Observation re-runs updateUIView
@@ -122,6 +125,7 @@ struct MapLibreView: UIViewRepresentable {
     func makeCoordinator() -> Coordinator {
         Coordinator(
             stationMarker: stationMarker,
+            currentStationMarkers: currentStationMarkers,
             onViewportChange: { [vm] bounds in
                 Task { await vm.updateViewport(bounds) }
             },
@@ -170,13 +174,6 @@ struct MapLibreView: UIViewRepresentable {
         private let barbLayerID = "salish-barbs"
         private let particleLayerID = "salish-particles"
         private let slackLayerID = "salish-slack"
-        // CHS current-station markers — a separate source + always-on layers so
-        // the passes (Dodd, Seymour, ...) draw on top of the field and the land
-        // fill, where the raster has nothing.
-        private let stationSourceID = "salish-stations"
-        private let stationShaftLayerID = "salish-station-shafts"
-        private let stationBarbLayerID = "salish-station-barbs"
-        private let stationDotLayerID = "salish-station-dots"
         nonisolated(unsafe) private var pendingVectors: [CurrentVector]?
         // The custom particle layer, re-created on each style (re)load. Held so
         // updateUIView can push the latest velocity field to it.
@@ -200,14 +197,17 @@ struct MapLibreView: UIViewRepresentable {
         // where every MLN callback runs). @MainActor @Observable classes are
         // Sendable, so this needs no nonisolated(unsafe).
         private let stationMarker: StationMarkerPresenter
+        private let currentStationMarkers: CurrentStationMarkerPresenter
 
         init(stationMarker: StationMarkerPresenter,
+             currentStationMarkers: CurrentStationMarkerPresenter,
              onViewportChange: @escaping (ChartBounds) -> Void,
              onBearingChange: @escaping (Double) -> Void,
              onCentreChange: @escaping (Double, Double) -> Void,
              onInteraction: @escaping (Bool) -> Void,
              onUserLocationChange: @escaping (CLLocationCoordinate2D?) -> Void) {
             self.stationMarker = stationMarker
+            self.currentStationMarkers = currentStationMarkers
             self.onViewportChange = onViewportChange
             self.onBearingChange = onBearingChange
             self.onCentreChange = onCentreChange
@@ -353,8 +353,9 @@ struct MapLibreView: UIViewRepresentable {
             onBearingChange(mapView.direction)
             // Instant camera moves (recenter-on-user, initial framing) can land
             // without a single regionIsChanging tick, so re-project the station
-            // marker (position + crosshair proximity) on settle as well.
+            // markers (position + crosshair proximity) on settle as well.
             projectStation(on: mapView)
+            projectStations(on: mapView)
             // Rescale the arrows when the zoom changes: a pure zoom-in-place
             // keeps the same vectors, so the viewport-driven data reload may
             // not rebuild the shapes — re-apply here so the arrows track the
@@ -395,6 +396,7 @@ struct MapLibreView: UIViewRepresentable {
             let centre = mapView.centerCoordinate
             onCentreChange(centre.latitude, centre.longitude)
             projectStation(on: mapView)
+            projectStations(on: mapView)
         }
 
         // MARK: Tide-station marker
@@ -471,12 +473,52 @@ struct MapLibreView: UIViewRepresentable {
             }
         }
 
+        // MARK: CHS current-station glass markers
+        //
+        // Same mechanism as the tide-station marker, but many at once: the
+        // hourly readings (coord + speed + flood/ebb) are held here, and every
+        // camera frame each is projected to a screen point and pushed to the
+        // presenter, which a SwiftUI overlay renders as glass badges.
+        nonisolated(unsafe) private var stationReadings: [CurrentStationReading] = []
+
+        /// New hourly predictions arrived — store them and re-project.
+        func updateStationReadings(_ readings: [CurrentStationReading], on mapView: MLNMapView) {
+            stationReadings = readings
+            projectStations(on: mapView)
+        }
+
+        /// Projects every current-station reading to a screen point and pushes
+        /// the visible set to the presenter. Called on every camera frame and on
+        /// settle; the whole-array write is change-gated.
+        private func projectStations(on mapView: MLNMapView) {
+            let readings = stationReadings
+            MainActor.assumeIsolated {
+                let size = mapView.bounds.size
+                guard !readings.isEmpty, size.width > 0, size.height > 0 else {
+                    if !currentStationMarkers.markers.isEmpty { currentStationMarkers.markers = [] }
+                    return
+                }
+                let m = Self.stationVisibilityMargin
+                var out: [CurrentStationMarkerPresenter.Marker] = []
+                out.reserveCapacity(readings.count)
+                for r in readings {
+                    let p = mapView.convert(CLLocationCoordinate2D(latitude: r.lat, longitude: r.lon),
+                                            toPointTo: mapView)
+                    guard p.x.isFinite, p.y.isFinite,
+                          p.x > -m, p.y > -m, p.x < size.width + m, p.y < size.height + m
+                    else { continue }
+                    out.append(.init(id: r.code, name: r.name, point: p,
+                                     speedKn: r.speedKn, bearingDeg: r.bearingDeg, isFlood: r.isFlood))
+                }
+                if out != currentStationMarkers.markers { currentStationMarkers.markers = out }
+            }
+        }
+
         // Latest arrows vectors + particle-field inputs (full-res vectors,
         // land mask, drawn-land polygons, viewport), retained both for change
         // detection and so they can be re-pushed to a freshly created layer
         // after a style reload.
         nonisolated(unsafe) private var lastVectors: [CurrentVector] = []
-        nonisolated(unsafe) private var lastStationVectors: [CurrentVector] = []
         nonisolated(unsafe) private var lastFieldVectors: [CurrentVector] = []
         nonisolated(unsafe) private var lastMask: [CurrentVector] = []
         nonisolated(unsafe) private var lastLandPolygons: [CurrentParticleLayer.LandPolygon] = []
@@ -689,32 +731,6 @@ struct MapLibreView: UIViewRepresentable {
             style.addLayer(shaftLayer)
             style.addLayer(barbLayer)
 
-            // CHS current-station markers: their own source + always-on layers,
-            // added last so they sit on top of the field and the land fill (the
-            // passes are masked/empty in the raster). Bolder than the field
-            // arrows and anchored by a dot so they read as authoritative points.
-            let stationSource = MLNShapeSource(identifier: stationSourceID, shapes: [], options: nil)
-            style.addSource(stationSource)
-            let stationDot = MLNCircleStyleLayer(identifier: stationDotLayerID, source: stationSource)
-            stationDot.circleColor = NSExpression(forConstantValue: UIColor.currentSpeedRamp(dark: dark).last ?? .systemTeal)
-            stationDot.circleRadius = NSExpression(forConstantValue: 3.0)
-            stationDot.circleStrokeColor = NSExpression(forConstantValue: UIColor.white.withAlphaComponent(0.9))
-            stationDot.circleStrokeWidth = NSExpression(forConstantValue: 1.0)
-            stationDot.predicate = NSPredicate(format: "arrow_type == 'station-dot'")
-            let stationShaft = MLNLineStyleLayer(identifier: stationShaftLayerID, source: stationSource)
-            stationShaft.lineColor = speedColorExpression(dark: dark)
-            stationShaft.lineWidth = NSExpression(format: "TERNARY(speed_knots < 1.5, 2.6, TERNARY(speed_knots < 3.0, 3.2, 4.4))")
-            stationShaft.lineCap = NSExpression(forConstantValue: "round")
-            stationShaft.predicate = NSPredicate(format: "arrow_type == 'shaft'")
-            let stationBarb = MLNLineStyleLayer(identifier: stationBarbLayerID, source: stationSource)
-            stationBarb.lineColor = speedColorExpression(dark: dark)
-            stationBarb.lineWidth = NSExpression(format: "TERNARY(speed_knots < 1.5, 2.2, TERNARY(speed_knots < 3.0, 2.8, 3.8))")
-            stationBarb.lineCap = NSExpression(forConstantValue: "round")
-            stationBarb.predicate = NSPredicate(format: "arrow_type == 'barb'")
-            style.addLayer(stationDot)
-            style.addLayer(stationShaft)
-            style.addLayer(stationBarb)
-
             // Animated particle current overlay. Inserted BELOW the basemap's
             // land fill when the style has one (Standard orders ocean below
             // the land fills — see standard-{light,dark}.json), so land paints
@@ -747,8 +763,6 @@ struct MapLibreView: UIViewRepresentable {
                                  landPolygons: lastLandPolygons, boundsWorld: lastBoundsWorld)
             particleLayer.setDark(lastDark)
             particleLayer.setActive(lastStyleMode != .arrows)
-            // Re-seed the station markers too, so they survive a style reload.
-            applyStationVectors(lastStationVectors, style: style, zoom: lastAppliedZoom)
         }
 
         private func applyVectors(_ vectors: [CurrentVector], style: MLNStyle, zoom: Double) {
@@ -756,30 +770,6 @@ struct MapLibreView: UIViewRepresentable {
             lastAppliedZoom = zoom
             let scale = Self.arrowScale(forZoom: zoom)
             source.shape = MLNShapeCollectionFeature(shapes: buildFeatures(from: vectors, zoomScale: scale))
-        }
-
-        /// Push CHS current-station markers to their own source. Always visible
-        /// (independent of the particles/arrows toggle) — the passes are the one
-        /// place the raster can't speak, so the authoritative point always shows.
-        func updateStationVectors(_ vectors: [CurrentVector], on mapView: MLNMapView) {
-            guard vectors != lastStationVectors else { return }
-            lastStationVectors = vectors
-            guard let style = mapView.style else { return }
-            applyStationVectors(vectors, style: style, zoom: mapView.zoomLevel)
-        }
-
-        private func applyStationVectors(_ vectors: [CurrentVector], style: MLNStyle, zoom: Double) {
-            guard let source = style.source(withIdentifier: stationSourceID) as? MLNShapeSource else { return }
-            let scale = Self.arrowScale(forZoom: zoom)
-            var shapes = buildFeatures(from: vectors, zoomScale: scale)
-            // A dot at every station anchors the marker even at slack (no arrow).
-            for v in vectors {
-                let dot = MLNPointFeature()
-                dot.coordinate = CLLocationCoordinate2D(latitude: v.lat, longitude: v.lon)
-                dot.attributes = ["arrow_type": "station-dot"]
-                shapes.append(dot)
-            }
-            source.shape = MLNShapeCollectionFeature(shapes: shapes)
         }
 
         private func buildFeatures(from vectors: [CurrentVector], zoomScale: Double) -> [MLNShape] {

@@ -19,11 +19,11 @@ final class MapViewModel {
     // culled (not thinned — it's a contiguous barrier band) like the vectors.
     // The particle layer treats an empty mask as all-water.
     var currentLandMask: [CurrentVector] = []
-    // CHS current-station vectors (Dodd Narrows, Seymour Narrows, ...) at the
-    // loaded hour: the narrow passes the raster models mask/understate, drawn
-    // as authoritative point markers on top of the field. Predicted on-device
-    // from the bundled harmonic constants (CurrentStationStore).
-    var currentStationVectors: [CurrentVector] = []
+    // CHS current-station readings (Dodd Narrows, Seymour Narrows, ...) at the
+    // loaded hour: the narrow passes the raster models mask/understate, drawn as
+    // glass markers on top of the field. Predicted on-device from the bundled
+    // harmonic constants (CurrentStationStore).
+    var currentStationReadings: [CurrentStationReading] = []
     var isMigrating = false
     var migrationProgress: Double = 0
     var migrationError: String?
@@ -352,24 +352,25 @@ final class MapViewModel {
         let fieldVectors = viewportFiltered(vectors)
         if fieldVectors != currentFieldVectors { currentFieldVectors = fieldVectors }
         if landMask != currentLandMask { currentLandMask = landMask }
-        let stations = stationVectors(for: date)
-        if stations != currentStationVectors { currentStationVectors = stations }
+        let stations = stationReadings(for: date)
+        if stations != currentStationReadings { currentStationReadings = stations }
 
         await updateTides(for: date, generation: generation)
     }
 
-    /// CHS current-station vectors within the viewport (+cull margin), predicted
+    /// CHS current-station readings within the viewport (+cull margin), predicted
     /// at `date`. Independent of the raster field — these are the passes where
     /// the raster has no usable data, so they render even where it's empty.
-    private func stationVectors(for date: Date) -> [CurrentVector] {
+    private func stationReadings(for date: Date) -> [CurrentStationReading] {
         let terms = TidalHarmonics.synthesisTerms(at: date)
         let region = visibleViewport?.expanded(byFraction: ChartBounds.cullMarginFraction)
         return CurrentStationStore.all.compactMap { s in
             if let region, !region.contains(lat: s.lat, lon: s.lon) { return nil }
             let signed = s.signedSpeedKn(terms: terms)
-            return CurrentVector(lat: s.lat, lon: s.lon,
-                                 speed_ms: abs(signed) / 1.944,
-                                 direction_deg: signed >= 0 ? s.floodDir : s.ebbDir)
+            return CurrentStationReading(code: s.code, name: s.name, lat: s.lat, lon: s.lon,
+                                         speedKn: abs(signed),
+                                         bearingDeg: signed >= 0 ? s.floodDir : s.ebbDir,
+                                         isFlood: signed >= 0)
         }
     }
 
