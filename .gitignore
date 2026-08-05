@@ -58,3 +58,7 @@ __pycache__/
 /dev/model/b1_grid_full.parts/
 /dev/model/b1_grid_full.json
 /dev/model/webtide/
+# CHS current-station staging JSON (constants + a year of events, ~4 MB,
+# regenerable by current_stations_pack.py). The compact binary that ships is
+# tracked separately once Phase 2 defines it.
+/dev/model/current_stations.json
