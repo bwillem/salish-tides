@@ -11,6 +11,9 @@
 		03D4C3756B723DD64956DBFC /* MapViewModelLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC7BBFABADB89396C15DFABC /* MapViewModelLogicTests.swift */; };
 		0428DEAC804FB2FCD2285E6E /* ocean-light.json in Resources */ = {isa = PBXBuildFile; fileRef = 2A78F6D08450A43684299A05 /* ocean-light.json */; };
 		053B19B40E8654F9155B864F /* TidalHarmonics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 174AD48AFB6611FDE9777B62 /* TidalHarmonics.swift */; };
+		A1C57A7100000000000000B1 /* CurrentStations.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C57A7100000000000000B2 /* CurrentStations.swift */; };
+		A1C57A7100000000000000B3 /* CurrentStationsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C57A7100000000000000B4 /* CurrentStationsTests.swift */; };
+		A1C57A7100000000000000B5 /* current_stations.b1 in Resources */ = {isa = PBXBuildFile; fileRef = A1C57A7100000000000000B6 /* current_stations.b1 */; };
 		086279564982225F48B141F0 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 190464A173F749BB0A3B786E /* SettingsView.swift */; };
 		08E5BFDB78B9E55E1DA9E61D /* MapStyleLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA074DF096B9F67F83B4959E /* MapStyleLoader.swift */; };
 		0A31E6B0ABD55CE03955FA4F /* SalishSeaCastAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = F59E3A1C7E73F800052D2EB1 /* SalishSeaCastAPI.swift */; };
@@ -79,6 +82,9 @@
 		111F059C707D7FB549B00EE7 /* CurrentPhaseEstimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrentPhaseEstimator.swift; sourceTree = "<group>"; };
 		13F1A8410C09D220966B31D2 /* StationMarkerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StationMarkerView.swift; sourceTree = "<group>"; };
 		174AD48AFB6611FDE9777B62 /* TidalHarmonics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TidalHarmonics.swift; sourceTree = "<group>"; };
+		A1C57A7100000000000000B2 /* CurrentStations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrentStations.swift; sourceTree = "<group>"; };
+		A1C57A7100000000000000B4 /* CurrentStationsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrentStationsTests.swift; sourceTree = "<group>"; };
+		A1C57A7100000000000000B6 /* current_stations.b1 */ = {isa = PBXFileReference; path = current_stations.b1; sourceTree = "<group>"; };
 		190464A173F749BB0A3B786E /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		28E631FED305377F6178516B /* TapeSliderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TapeSliderView.swift; sourceTree = "<group>"; };
 		29431B00732877DA2E615BF3 /* ocean-dark.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "ocean-dark.json"; sourceTree = "<group>"; };
@@ -256,6 +262,7 @@
 			isa = PBXGroup;
 			children = (
 				89BC3EF0433987C4491BE1F2 /* current_model.b1 */,
+				A1C57A7100000000000000B6 /* current_stations.b1 */,
 				529E7D505F4A804C9AC32942 /* standard-dark.json */,
 				727BC113893557DFF4A9C2AF /* standard-light.json */,
 				7723CD53D2DFE8ED88D864D5 /* webtide_nepac.b1 */,
@@ -285,6 +292,7 @@
 				5B151297D28F1A4591936554 /* OfflineCurrentModel.swift */,
 				D674FD1F00E257735CAA9F7D /* TidalCurrentField.swift */,
 				174AD48AFB6611FDE9777B62 /* TidalHarmonics.swift */,
+				A1C57A7100000000000000B2 /* CurrentStations.swift */,
 			);
 			path = CurrentModel;
 			sourceTree = "<group>";
@@ -326,6 +334,7 @@
 				E7B240886F13A107F45EA941 /* HelperTests.swift */,
 				CC7BBFABADB89396C15DFABC /* MapViewModelLogicTests.swift */,
 				59FDAF7820C92D47A610A686 /* OfflineCurrentModelTests.swift */,
+				A1C57A7100000000000000B4 /* CurrentStationsTests.swift */,
 				C0F9A23CCE026670B01978ED /* SalishSeaCastAPITests.swift */,
 				E8081DA114D0FC66D04441D6 /* TidalHarmonicsTests.swift */,
 				97D8B5FD71DD4180933BD278 /* TideInterpolationTests.swift */,
@@ -423,6 +432,7 @@
 				F3E5D213CEF07F5E60967213 /* Assets.xcassets in Resources */,
 				7E0271059E302369E9B87F7B /* PrivacyInfo.xcprivacy in Resources */,
 				EE84FEF09DED69A2EA490686 /* current_model.b1 in Resources */,
+				A1C57A7100000000000000B5 /* current_stations.b1 in Resources */,
 				8A09E69E3A83AA62722D3822 /* ocean-dark.json in Resources */,
 				0428DEAC804FB2FCD2285E6E /* ocean-light.json in Resources */,
 				A5343BB0E832A96634DF63E2 /* satellite.json in Resources */,
@@ -466,6 +476,7 @@
 				49E216D8D042D5603CFDA76D /* HelperTests.swift in Sources */,
 				03D4C3756B723DD64956DBFC /* MapViewModelLogicTests.swift in Sources */,
 				A8762D5675981B3B04E5896F /* OfflineCurrentModelTests.swift in Sources */,
+				A1C57A7100000000000000B3 /* CurrentStationsTests.swift in Sources */,
 				913ECCC1C28E4590C0F6C1F2 /* SalishSeaCastAPITests.swift in Sources */,
 				5ECB3ACF5E354698777E214E /* TidalHarmonicsTests.swift in Sources */,
 				8045C849BD33CF92358F1076 /* TideInterpolationTests.swift in Sources */,
@@ -508,6 +519,7 @@
 				CC1DE4A9F7C994DD5459CB22 /* TapeSliderView.swift in Sources */,
 				983B4B36E574FAE3AA740712 /* TidalCurrentField.swift in Sources */,
 				053B19B40E8654F9155B864F /* TidalHarmonics.swift in Sources */,
+				A1C57A7100000000000000B1 /* CurrentStations.swift in Sources */,
 				5DB2319BABC9FB829D843F6A /* TideChartView.swift in Sources */,
 				9CEBBFBDEB99CD300FC775BF /* TideDatabase.swift in Sources */,
 				CD10BDF599A8B4DC91FC583E /* TideStation.swift in Sources */,
