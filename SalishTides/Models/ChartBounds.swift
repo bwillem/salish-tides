@@ -24,31 +24,32 @@ struct ChartBounds: Decodable, Sendable, Equatable {
     static let coverage = ChartBounds(lat_min: 46.92, lat_max: 51.20,
                                       lon_min: -128.23, lon_max: -122.05)
 
-    /// The camera-pan boundary — `coverage` loosened so the screen *centre* can
-    /// reach the data edges instead of stalling half a viewport short of them.
+    /// The camera-pan boundary — `coverage` loosened on every edge so the screen
+    /// *centre* can reach the data edges instead of stalling half a viewport
+    /// short of them.
     ///
     /// `maximumScreenBounds` keeps the whole *visible region* inside its box, so
     /// pointing it straight at `coverage` pins the centre roughly half a screen
-    /// in from every edge. That reads as "too tight" at the top: the water and
-    /// current data north of Vancouver Island reach `coverage.lat_max` (51.2°N),
-    /// but the centre could never get near it. Padding the box lets the centre
-    /// travel to the true edge. The trade is deliberate — parking the centre at
-    /// the very edge now shows some grey past the basemap, which the raw
-    /// coverage box existed to prevent; we accept that to make the edge data
-    /// reachable.
+    /// in from every edge — you can't centre on the water at the top (north of
+    /// Vancouver Island), the bottom (southern Puget Sound), or the sides even
+    /// though the data reaches there. So the box is padded outward by a uniform
+    /// generous margin, enough for the centre to travel right to the edge at any
+    /// usable zoom.
     ///
-    /// North is padded most (the edge that prompted this) — far enough for the
-    /// centre to travel past the tide-station extent (52.2°N) and well up
-    /// Queen Charlotte Strait, where current data still runs; west/east enough
-    /// to centre on the water flanking the island's north end; south barely,
-    /// since there's only open Pacific below Juan de Fuca. These pads are camera
-    /// reach only — they don't touch the basemap/min-zoom/locate authority,
-    /// which stays `coverage`. The further north the centre goes the more grey
-    /// shows past the basemap edge (51.2°N); that's the accepted trade.
-    static let cameraPan = ChartBounds(lat_min: coverage.lat_min - 0.15,
-                                       lat_max: coverage.lat_max + 1.30,
-                                       lon_min: coverage.lon_min - 0.35,
-                                       lon_max: coverage.lon_max + 0.35)
+    /// The trade is deliberate and chosen: parking the centre at the very edge
+    /// scrolls some grey no-man's-land past the basemap into view, which the raw
+    /// coverage box existed to prevent. Being able to reach every part of the
+    /// charted area is worth more than never seeing grey — better to overshoot
+    /// into emptiness than to lock the user out of data that's actually there.
+    ///
+    /// These pads are camera reach only — they don't touch the
+    /// basemap/min-zoom/locate authority, which stays `coverage`.
+    private static let cameraPanMargin = 1.30
+
+    static let cameraPan = ChartBounds(lat_min: coverage.lat_min - cameraPanMargin,
+                                       lat_max: coverage.lat_max + cameraPanMargin,
+                                       lon_min: coverage.lon_min - cameraPanMargin,
+                                       lon_max: coverage.lon_max + cameraPanMargin)
 
     /// Fraction of span added on each side when culling or fetching around
     /// the viewport, so pans don't immediately hit empty edges. Shared by
