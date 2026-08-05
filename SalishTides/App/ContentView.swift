@@ -121,6 +121,12 @@ struct ContentView: View {
                     .padding(.top, Spacing.sm)
                 }
                 Spacer()
+                // Tapped current-station card (Dodd, Seymour, ...): floats above
+                // the status pills / timeline, showing the pass's current now plus
+                // its next slack / max from the bundled CHS events.
+                CurrentStationCard()
+                    .padding(.horizontal, Spacing.lg)
+                    .padding(.bottom, Spacing.sm)
                 // Status pills above the timeline, on one baseline: connectivity
                 // on the left — an "Offline" pill shown only while a streaming
                 // basemap (Satellite) is selected and the network is unreachable,
@@ -481,9 +487,16 @@ private struct CurrentStationMarkerOverlay: View {
     @Environment(CurrentStationMarkerPresenter.self) private var presenter
 
     var body: some View {
-        ZStack {
+        @Bindable var presenter = presenter
+        return ZStack {
             ForEach(presenter.markers) { m in
-                CurrentStationMarkerView(marker: m)
+                CurrentStationMarkerView(
+                    marker: m,
+                    isSelected: presenter.selectedStationCode == m.id,
+                    onTap: {
+                        presenter.selectedStationCode =
+                            presenter.selectedStationCode == m.id ? nil : m.id
+                    })
                     .position(m.point)
             }
         }

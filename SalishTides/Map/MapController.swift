@@ -162,6 +162,10 @@ final class CurrentStationMarkerPresenter {
 
     /// Visible current-station markers. Empty when none are in view.
     var markers: [Marker] = []
+
+    /// CHS code of the station whose card is open, or nil. Set by tapping a
+    /// marker; drives `CurrentStationCard`.
+    var selectedStationCode: String?
 }
 
 // MARK: - Legacy offline-pack cleanup

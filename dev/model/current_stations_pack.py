@@ -93,15 +93,20 @@ def fetch_ts(sid, code, start, end):
 
 
 def fetch_events(sid, start, end):
-    url = (f"{API}/stations/{sid}/data?time-series-code=wcp1-events"
-           f"&from={iso(start)}&to={iso(end)}")
+    # The events endpoint caps the range near a year, so chunk (like fetch_ts).
     ev = []
-    for row in get(url):
-        if row.get("value") is None:
-            continue
-        t = dt.datetime.fromisoformat(row["eventDate"].replace("Z", "+00:00"))
-        ev.append({"t": int(t.timestamp()),
-                   "kind": row.get("qualifier", ""), "speed": round(row["value"], 3)})
+    cur = start
+    while cur < end:
+        nxt = min(cur + dt.timedelta(days=200), end)
+        url = (f"{API}/stations/{sid}/data?time-series-code=wcp1-events"
+               f"&from={iso(cur)}&to={iso(nxt)}")
+        for row in get(url):
+            if row.get("value") is None:
+                continue
+            t = dt.datetime.fromisoformat(row["eventDate"].replace("Z", "+00:00"))
+            ev.append({"t": int(t.timestamp()),
+                       "kind": row.get("qualifier", ""), "speed": round(row["value"], 3)})
+        cur = nxt
     ev.sort(key=lambda e: e["t"])
     return ev
 
@@ -146,6 +151,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--stations", default="", help="comma CHS codes; default all in box")
     ap.add_argument("--days", type=int, default=365, help="fit window length")
+    ap.add_argument("--event-days", type=int, default=365, help="slack/max window ahead")
     ap.add_argument("--holdout-days", type=int, default=15)
     ap.add_argument("--out", default=os.path.join(HERE, "current_stations.json"))
     args = ap.parse_args()
@@ -157,7 +163,13 @@ def main():
     print(f"stations to pack: {len(all_st)}")
 
     end = dt.datetime.now(dt.timezone.utc).replace(minute=0, second=0, microsecond=0)
-    start = end - dt.timedelta(days=args.days)
+    start = end - dt.timedelta(days=args.days)              # fit window (past)
+    # Events are for PLANNING, so they face the future: a small look-back so a
+    # just-passed slack still shows, then a year ahead. (The harmonic curve
+    # predicts current speed at any time; only the discrete slack/max events
+    # come from this bundled window.)
+    ev_start = end - dt.timedelta(days=2)
+    ev_end = end + dt.timedelta(days=args.event_days)
 
     packed = []
     print(f"\n{'name':22} {'code':6} {'flood/ebb':10} {'peak_kn':>7} {'holdout_rms':>11} {'events':>7}")
@@ -171,7 +183,7 @@ def main():
         common = sorted(set(spd) & set(drc))
         signed = {t: spd[t] * math.cos(math.radians(drc[t] - flood)) for t in common}
         z0, cons, rms, peak = fit(signed, args.holdout_days)
-        events = fetch_events(s["id"], start, end)
+        events = fetch_events(s["id"], ev_start, ev_end)
         packed.append({"code": s["code"], "name": s["name"], "lat": s["lat"], "lon": s["lon"],
                        "floodDir": flood, "ebbDir": ebb, "z0": z0, "constituents": cons,
                        "holdoutRmsKn": round(rms, 3), "peakKn": round(peak, 2),
