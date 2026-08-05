@@ -112,48 +112,6 @@
     nav a:hover,
     nav a:focus-visible { color: var(--fg); }
 
-    /* nav "about" is a button so it can open the dialog — style it like the links */
-    nav button {
-      font: inherit;
-      color: var(--muted);
-      background: none;
-      border: 0;
-      padding: 0;
-      cursor: pointer;
-      letter-spacing: inherit;
-      transition: color 0.15s ease;
-    }
-    nav button:hover,
-    nav button:focus-visible { color: var(--fg); }
-
-    /* About modal */
-    dialog {
-      max-width: 42ch;
-      margin: auto;                 /* centers in the viewport */
-      padding: 1.75rem;
-      border: 1px solid var(--rule);
-      border-radius: 10px;
-      background: var(--bg);
-      color: var(--fg);
-      font-size: 0.9375rem;
-      line-height: 1.65;
-    }
-    dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
-    dialog p { margin: 0 0 1rem; }
-    dialog p:last-of-type { margin-bottom: 1.5rem; }
-    dialog .close {
-      display: block;
-      margin-left: auto;
-      font: inherit;
-      color: var(--muted);
-      background: none;
-      border: 0;
-      padding: 0;
-      cursor: pointer;
-    }
-    dialog .close:hover,
-    dialog .close:focus-visible { color: var(--fg); }
-
     /* Fixed to the bottom on tall viewports; flows naturally on short ones. */
     @media (min-height: 560px) {
       body { justify-content: space-between; }
@@ -174,24 +132,12 @@
   <footer>
     <nav>
       <a href="https://apps.apple.com/us/app/salish-tides/id6791828601">download</a>
-      <button type="button" onclick="document.getElementById('about').showModal()">about</button>
+      <a href="/about">about</a>
       <a href="/changelog">changelog</a>
       <a href="/privacy">privacy</a>
     </nav>
     <p class="copyright">&copy; Bryan Guenther <span id="year">2026</span></p>
   </footer>
-
-  <dialog id="about">
-    <p>Salish Tides is an offline-first map of tidal currents and tide heights for
-       the Salish Sea. When you're online it shows real-time surface-current
-       forecasts from the SalishSeaCast ocean model; when you're not, it falls back
-       to harmonic predictions computed on your device — so it keeps working with
-       no signal, out on the water.</p>
-    <p>It's a planning aid for paddlers, sailors, and anyone who works around the
-       tide. It is <strong>not</strong> an official source for navigation — always
-       consult official charts and current tables.</p>
-    <button type="button" class="close" onclick="this.closest('dialog').close()">close</button>
-  </dialog>
 
   <script>document.getElementById("year").textContent = new Date().getFullYear();</script>
 </body>
