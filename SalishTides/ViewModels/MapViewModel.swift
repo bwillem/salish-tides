@@ -347,9 +347,14 @@ final class MapViewModel {
         // and thinning (arbitrary pick per bin at speed 0) punches holes in it.
         // Only assign on change — every reassignment re-runs the map update
         // and a particle field rebuild via Observation.
-        let thinnedVectors = thinned(vectors, for: visibleViewport)
+        // Punch a hole in the raster arrows + particle field around every pass:
+        // there the model masks the throat and understates the flow, and the CHS
+        // station marker is the authority. Removing those vectors lets the
+        // particle field fade out around the marker instead of drawing a weak,
+        // contradictory current under it.
+        let thinnedVectors = suppressingStations(thinned(vectors, for: visibleViewport))
         if thinnedVectors != currentVectors { currentVectors = thinnedVectors }
-        let fieldVectors = viewportFiltered(vectors)
+        let fieldVectors = suppressingStations(viewportFiltered(vectors))
         if fieldVectors != currentFieldVectors { currentFieldVectors = fieldVectors }
         if landMask != currentLandMask { currentLandMask = landMask }
         let stations = stationReadings(for: date)
@@ -371,6 +376,29 @@ final class MapViewModel {
                                          speedKn: abs(signed),
                                          bearingDeg: signed >= 0 ? s.floodDir : s.ebbDir,
                                          isFlood: signed >= 0)
+        }
+    }
+
+    /// Radius (km) around a CHS current station within which raster vectors are
+    /// dropped so the station marker owns the pass. ~the physical scale of the
+    /// narrow passes; the particle layer's frontier fade softens the edge.
+    private static let stationSuppressionKm = 1.3
+
+    /// Drops raster vectors within `stationSuppressionKm` of any current station,
+    /// so the authoritative marker doesn't sit on a contradictory weak current.
+    /// Cheap: |vectors| × 22 squared-distance checks, once per load (not frame).
+    private func suppressingStations(_ points: [CurrentVector]) -> [CurrentVector] {
+        let stations = CurrentStationStore.all
+        guard !stations.isEmpty else { return points }
+        let r2 = Self.stationSuppressionKm * Self.stationSuppressionKm
+        return points.filter { v in
+            let cosLat = cos(v.lat * .pi / 180)
+            for s in stations {
+                let dLat = (v.lat - s.lat) * 111.0
+                let dLon = (v.lon - s.lon) * 111.0 * cosLat
+                if dLat * dLat + dLon * dLon < r2 { return false }
+            }
+            return true
         }
     }
 
