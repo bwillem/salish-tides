@@ -152,7 +152,11 @@ private struct DataSourcesView: View {
             Section("Tidal Currents") {
                 LabeledContent("Salish Sea", value: "SalishSeaCast · UBC")
                 LabeledContent("North Coast", value: "WebTide · DFO")
+                LabeledContent("Narrow Passes", value: "CHS · DFO")
                 Text("Offline currents are synthesized on device from tidal harmonic constituents: the Salish Sea from a year of the SalishSeaCast NEMO model (UBC Earth, Ocean & Atmospheric Sciences), and the outer coast north to Southeast Alaska from the WebTide ne_pac4 model (Fisheries and Oceans Canada). Tide-driven flow only, without weather effects.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Text("The narrow tidal passes (Dodd Narrows, Seymour Narrows, Active Pass, and others) are too small for the models to resolve, so they use the Canadian Hydrographic Service's own tidal-current predictions, fitted for offline use with CHS slack and maximum times.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
