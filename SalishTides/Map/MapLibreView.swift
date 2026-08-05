@@ -356,6 +356,7 @@ struct MapLibreView: UIViewRepresentable {
             // markers (position + crosshair proximity) on settle as well.
             projectStation(on: mapView)
             projectStations(on: mapView)
+            syncReticleSelection()
             // Rescale the arrows when the zoom changes: a pure zoom-in-place
             // keeps the same vectors, so the viewport-driven data reload may
             // not rebuild the shapes — re-apply here so the arrows track the
@@ -397,6 +398,7 @@ struct MapLibreView: UIViewRepresentable {
             onCentreChange(centre.latitude, centre.longitude)
             projectStation(on: mapView)
             projectStations(on: mapView)
+            syncReticleSelection()
         }
 
         // MARK: Tide-station marker
@@ -494,6 +496,7 @@ struct MapLibreView: UIViewRepresentable {
             let readings = stationReadings
             MainActor.assumeIsolated {
                 let size = mapView.bounds.size
+                lastCentreScreen = CGPoint(x: size.width / 2, y: size.height / 2)
                 guard !readings.isEmpty, size.width > 0, size.height > 0 else {
                     if !currentStationMarkers.markers.isEmpty { currentStationMarkers.markers = [] }
                     return
@@ -510,9 +513,48 @@ struct MapLibreView: UIViewRepresentable {
                     out.append(.init(id: r.code, name: r.name, point: p,
                                      speedKn: r.speedKn, bearingDeg: r.bearingDeg, isFlood: r.isFlood))
                 }
+                let wasEmpty = currentStationMarkers.markers.isEmpty
                 if out != currentStationMarkers.markers { currentStationMarkers.markers = out }
+                // First time the markers populate (e.g. the data load finishing
+                // while parked over a pass on launch), run the reticle selection
+                // once — otherwise it only fires on a camera move and the card
+                // would stay on the tide chart until the user pans.
+                if wasEmpty && !out.isEmpty { syncReticleSelection() }
             }
         }
+
+        // Screen-space radius (pt) within which a current station under the
+        // reticle (map centre) becomes the selected one — "pan the reticle over
+        // a pass to see its card". A touch larger than the badge so it's not
+        // finicky.
+        private static let stationSelectRadius: CGFloat = 55
+
+        /// Reticle-driven selection: the current station nearest the map centre
+        /// (within `stationSelectRadius`) becomes selected — its card takes over
+        /// the phase card — and panning away clears it (back to the tide chart).
+        /// Called on real camera moves only (not every layout pass), so a tap
+        /// selection on a marker away from centre persists until the user pans.
+        /// Reuses the points `projectStations` just wrote.
+        private func syncReticleSelection() {
+            MainActor.assumeIsolated {
+                let centre = CGPoint(x: lastCentreScreen.x, y: lastCentreScreen.y)
+                var best: (code: String, d: CGFloat)?
+                for mk in currentStationMarkers.markers {
+                    let d = hypot(mk.point.x - centre.x, mk.point.y - centre.y)
+                    if d <= Self.stationSelectRadius, best == nil || d < best!.d {
+                        best = (mk.id, d)
+                    }
+                }
+                if currentStationMarkers.selectedStationCode != best?.code {
+                    currentStationMarkers.selectedStationCode = best?.code
+                }
+            }
+        }
+
+        // Map-centre in screen points, refreshed alongside projectStations so
+        // syncReticleSelection measures against the reticle without another
+        // bounds read.
+        nonisolated(unsafe) private var lastCentreScreen: CGPoint = .zero
 
         // Latest arrows vectors + particle-field inputs (full-res vectors,
         // land mask, drawn-land polygons, viewport), retained both for change

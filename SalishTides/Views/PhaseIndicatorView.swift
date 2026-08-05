@@ -5,8 +5,30 @@ import SwiftUI
 struct PhaseIndicatorView: View {
     @Environment(MapViewModel.self) private var vm
     @Environment(AppSettings.self) private var settings
+    @Environment(CurrentStationMarkerPresenter.self) private var stations
+
+    /// The selected pass, if any — it takes over the card from the tide chart.
+    private var selectedCurrentStation: CurrentStation? {
+        guard let code = stations.selectedStationCode else { return nil }
+        return CurrentStationStore.all.first { $0.code == code }
+    }
 
     var body: some View {
+        // A tapped / reticle-selected current station owns the card; otherwise
+        // the nearest tide station's chart, as before — one unified card.
+        if let station = selectedCurrentStation {
+            CurrentStationDetail(station: station, now: vm.displayDate,
+                                 onClose: { stations.selectedStationCode = nil })
+                .padding(Spacing.md)
+                .frame(width: 248)
+                .floatingCard()
+        } else {
+            tideCard
+        }
+    }
+
+    @ViewBuilder
+    private var tideCard: some View {
         // Events can be empty with a station present (query failure, or a
         // scrub past the bundled predictions' horizon) — hide the card rather
         // than show an empty chart.

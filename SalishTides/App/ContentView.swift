@@ -121,12 +121,6 @@ struct ContentView: View {
                     .padding(.top, Spacing.sm)
                 }
                 Spacer()
-                // Tapped current-station card (Dodd, Seymour, ...): floats above
-                // the status pills / timeline, showing the pass's current now plus
-                // its next slack / max from the bundled CHS events.
-                CurrentStationCard()
-                    .padding(.horizontal, Spacing.lg)
-                    .padding(.bottom, Spacing.sm)
                 // Status pills above the timeline, on one baseline: connectivity
                 // on the left — an "Offline" pill shown only while a streaming
                 // basemap (Satellite) is selected and the network is unreachable,
