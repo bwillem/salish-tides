@@ -11,7 +11,6 @@ import SwiftUI
 struct CurrentStationDetail: View {
     let station: CurrentStation
     let now: Date
-    let onClose: () -> Void
 
     var body: some View {
         let signed = station.signedSpeedKn(at: now)
@@ -21,22 +20,16 @@ struct CurrentStationDetail: View {
         let nextMax = upcoming.first { $0.kind != .slack }
 
         VStack(alignment: .leading, spacing: Spacing.xs) {
-            HStack(spacing: Spacing.xs) {
-                Text(station.name)
-                    .font(.stCaption).bold()
-                    .foregroundStyle(.primary)
-                    .lineLimit(1).truncationMode(.tail)
-                Spacer(minLength: Spacing.xs)
-                Button(action: onClose) {
-                    Image(systemName: "xmark").font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                }
-                .accessibilityLabel("Close")
-            }
+            Text(station.name)
+                .font(.stCaption).bold()
+                .foregroundStyle(.primary)
+                .lineLimit(1).truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-            HStack(spacing: Spacing.xs) {
-                Image(systemName: flooding ? "arrow.up" : "arrow.down")
-                    .font(.system(size: 12, weight: .bold))
+            // Unit + flood/ebb baseline-align with the big number so they sit at
+            // its bottom (matches the crosshair speed pill). No direction arrow —
+            // the "flooding"/"ebbing" word already says it.
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
                 Text(String(format: "%.1f", abs(signed))).font(.stReadout)
                 Text("kn").font(.stReadoutUnit).foregroundStyle(.secondary)
                 Text(flooding ? "flooding" : "ebbing").font(.stCaption)

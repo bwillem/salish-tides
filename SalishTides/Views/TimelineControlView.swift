@@ -70,7 +70,6 @@ struct TimelineControlView: View {
                     applyOffset()
                 }
             )
-            .frame(height: 36)
         }
         .onAppear { jumpToNow() }
         // "Now" moves: without re-anchoring, an app left open (or foregrounded

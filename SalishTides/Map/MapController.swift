@@ -163,8 +163,8 @@ final class CurrentStationMarkerPresenter {
     /// Visible current-station markers. Empty when none are in view.
     var markers: [Marker] = []
 
-    /// CHS code of the station whose card is open, or nil. Set by tapping a
-    /// marker; drives `CurrentStationCard`.
+    /// CHS code of the station whose card is open, or nil. Set by the reticle
+    /// passing over a pass or by tapping a marker; drives the phase card.
     var selectedStationCode: String?
 }
 

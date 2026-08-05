@@ -17,8 +17,7 @@ struct PhaseIndicatorView: View {
         // A tapped / reticle-selected current station owns the card; otherwise
         // the nearest tide station's chart, as before — one unified card.
         if let station = selectedCurrentStation {
-            CurrentStationDetail(station: station, now: vm.displayDate,
-                                 onClose: { stations.selectedStationCode = nil })
+            CurrentStationDetail(station: station, now: vm.displayDate)
                 .padding(Spacing.md)
                 .frame(width: 248)
                 .floatingCard()

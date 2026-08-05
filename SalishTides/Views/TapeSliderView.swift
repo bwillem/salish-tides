@@ -51,10 +51,18 @@ struct TapeSliderView: View {
         onCommit()
     }
 
+    /// Extra drag target above the tape. The tape sits below the time readout
+    /// with a gap between; a finger landing in that gap (just above the tape)
+    /// used to miss the scrubber. This grows the hit area up into the gap while
+    /// the tape draws in place (negative padding cancels the layout cost).
+    private static let topHitSlop: CGFloat = 16
+
     var body: some View {
         Canvas { ctx, size in
             draw(ctx: ctx, size: size)
         }
+        .frame(height: 36)
+        .padding(.top, Self.topHitSlop)
         .contentShape(Rectangle())
         .gesture(
             DragGesture(minimumDistance: 2)
@@ -83,6 +91,7 @@ struct TapeSliderView: View {
                     onCommit()
                 }
         )
+        .padding(.top, -Self.topHitSlop)
         .accessibilityElement()
         .accessibilityLabel("Forecast time")
         .accessibilityValue(accessibilityValueText)
