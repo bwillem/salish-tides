@@ -277,7 +277,15 @@ final class MapViewModel {
             guard generation == loadGeneration, !Task.isCancelled else { return }
         }
 
-        let vectors = (liveVectors ?? []) + modelVectors
+        // Overlay the CHS pass currents onto the raster: near each station the
+        // model masks the throat and understates the flow, so we replace those
+        // cells with the station's own CHS speed + flood/ebb axis. This feeds
+        // everything downstream from one place — the particle field (so
+        // particles rip through the narrows at the real speed), the arrows, and
+        // the crosshair readout (so the reticle agrees with the station card).
+        let stations = stationReadings(for: date)
+        let vectors = applyingStationCurrents((liveVectors ?? []) + modelVectors,
+                                              stations: stations)
 
         // The coastline mask, culled like the vectors. Every tier provides
         // one (live from cached wet cells, models from their own meshes) so
@@ -347,17 +355,14 @@ final class MapViewModel {
         // and thinning (arbitrary pick per bin at speed 0) punches holes in it.
         // Only assign on change — every reassignment re-runs the map update
         // and a particle field rebuild via Observation.
-        // Punch a hole in the raster arrows + particle field around every pass:
-        // there the model masks the throat and understates the flow, and the CHS
-        // station marker is the authority. Removing those vectors lets the
-        // particle field fade out around the marker instead of drawing a weak,
-        // contradictory current under it.
-        let thinnedVectors = suppressingStations(thinned(vectors, for: visibleViewport))
+        // `vectors` already carries the CHS pass currents (injected above), so
+        // the arrows and particle field flow at the real speed through the
+        // narrows — no hole, no contradictory weak current.
+        let thinnedVectors = thinned(vectors, for: visibleViewport)
         if thinnedVectors != currentVectors { currentVectors = thinnedVectors }
-        let fieldVectors = suppressingStations(viewportFiltered(vectors))
+        let fieldVectors = viewportFiltered(vectors)
         if fieldVectors != currentFieldVectors { currentFieldVectors = fieldVectors }
         if landMask != currentLandMask { currentLandMask = landMask }
-        let stations = stationReadings(for: date)
         if stations != currentStationReadings { currentStationReadings = stations }
 
         await updateTides(for: date, generation: generation)
@@ -379,26 +384,33 @@ final class MapViewModel {
         }
     }
 
-    /// Radius (km) around a CHS current station within which raster vectors are
-    /// dropped so the station marker owns the pass. ~the physical scale of the
-    /// narrow passes; the particle layer's frontier fade softens the edge.
-    private static let stationSuppressionKm = 1.3
+    /// Radius (km) around a CHS station within which raster cells take on the
+    /// station's current — roughly the physical reach of the pass jet.
+    private static let stationInfluenceKm = 1.3
 
-    /// Drops raster vectors within `stationSuppressionKm` of any current station,
-    /// so the authoritative marker doesn't sit on a contradictory weak current.
-    /// Cheap: |vectors| × 22 squared-distance checks, once per load (not frame).
-    private func suppressingStations(_ points: [CurrentVector]) -> [CurrentVector] {
-        let stations = CurrentStationStore.all
+    /// Overlays each in-view CHS station's current onto the raster: any vector
+    /// within `stationInfluenceKm` of a station is replaced with that station's
+    /// CHS speed (m/s) and flood/ebb bearing, so the field carries the accurate
+    /// pass flow instead of the model's masked/understated value. Nearest
+    /// station wins on overlap. Cheap: |vectors| × |stations| checks, once per
+    /// load (not per frame).
+    private func applyingStationCurrents(_ points: [CurrentVector],
+                                         stations: [CurrentStationReading]) -> [CurrentVector] {
         guard !stations.isEmpty else { return points }
-        let r2 = Self.stationSuppressionKm * Self.stationSuppressionKm
-        return points.filter { v in
+        let r2 = Self.stationInfluenceKm * Self.stationInfluenceKm
+        return points.map { v in
             let cosLat = cos(v.lat * .pi / 180)
+            var best: (d2: Double, station: CurrentStationReading)?
             for s in stations {
                 let dLat = (v.lat - s.lat) * 111.0
                 let dLon = (v.lon - s.lon) * 111.0 * cosLat
-                if dLat * dLat + dLon * dLon < r2 { return false }
+                let d2 = dLat * dLat + dLon * dLon
+                if d2 < r2, best == nil || d2 < best!.d2 { best = (d2, s) }
             }
-            return true
+            guard let s = best?.station else { return v }
+            return CurrentVector(lat: v.lat, lon: v.lon,
+                                 speed_ms: s.speedKn / 1.944,
+                                 direction_deg: s.bearingDeg)
         }
     }
 
