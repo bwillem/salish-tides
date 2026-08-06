@@ -286,8 +286,9 @@ final class MapViewModel {
         // channel. Feeds everything: the particle field, the arrows, and the
         // crosshair readout (so the reticle agrees with the station card).
         let stations = stationReadings(for: date)
-        let vectors = (liveVectors ?? []) + modelVectors
-            + stationInjectionVectors(for: stations)
+        let rawVectors = (liveVectors ?? []) + modelVectors
+        let vectors = rawVectors
+            + stationInjectionVectors(for: stations, model: rawVectors)
 
         // The coastline mask, culled like the vectors. Every tier provides
         // one (live from cached wet cells, models from their own meshes) so
@@ -390,21 +391,30 @@ final class MapViewModel {
     private static let stationInjectRadiusKm = 0.6
     /// Grid spacing (km) of the injected samples — a few per raster cell.
     private static let stationInjectStepKm = 0.15
+    /// How far (degrees) to look for the surrounding field to ramp into — wide
+    /// enough to find the model flow past a masked narrows (~2 km).
+    private static let stationBlendSampleDeg = 0.02
 
-    /// A CHS current bump centred on each in-view station: a small grid of
-    /// samples whose speed ramps from the full CHS value at the station down to
-    /// the surrounding field with a smoothstep falloff, so the pass flow blends
-    /// into the model particles instead of appearing as one abrupt fast cell.
-    /// The near-zero rim is dropped so the taper never drags the surrounding
-    /// field down; the particle layer's coarse-regime rule renders the (masked)
-    /// core, and the drawn coastline keeps it in the channel.
-    private func stationInjectionVectors(for stations: [CurrentStationReading]) -> [CurrentVector] {
+    /// A CHS current bump on each in-view station that blends INTO its
+    /// surroundings: at the station it's the full CHS velocity; toward the rim a
+    /// smoothstep ramps it to the *local model velocity* sampled from the field
+    /// (`model`), so it eases into whatever's actually there — slower, equal, or
+    /// faster — instead of always fading toward zero. Blended as vectors (east/
+    /// north) so both speed AND direction ease across. The particle layer's
+    /// coarse-regime rule renders the (masked) core; the drawn coastline keeps
+    /// it in the channel.
+    private func stationInjectionVectors(for stations: [CurrentStationReading],
+                                         model: [CurrentVector]) -> [CurrentVector] {
         guard !stations.isEmpty else { return [] }
         let R = Self.stationInjectRadiusKm
         let step = Self.stationInjectStepKm
+        let maxDeg = Self.stationBlendSampleDeg
+        let index = VectorSpatialIndex(vectors: model, binDeg: maxDeg)
         var out: [CurrentVector] = []
         for s in stations {
             let speed = s.speedKn / 1.944
+            let axis = s.bearingDeg * .pi / 180
+            let su = speed * sin(axis), sv = speed * cos(axis)   // station east, north
             let cosLat = cos(s.lat * .pi / 180)
             var dy = -R
             while dy <= R + 1e-9 {
@@ -414,12 +424,21 @@ final class MapViewModel {
                     if dKm <= R {
                         let t = 1 - dKm / R
                         let w = t * t * (3 - 2 * t)          // smoothstep 1→0
-                        if w > 0.2 {                          // drop the faint rim
-                            out.append(CurrentVector(lat: s.lat + dy / 111.0,
-                                                     lon: s.lon + dx / (111.0 * cosLat),
-                                                     speed_ms: speed * w,
-                                                     direction_deg: s.bearingDeg))
+                        let lat = s.lat + dy / 111.0
+                        let lon = s.lon + dx / (111.0 * cosLat)
+                        // Local field to ramp into (zero if nothing nearby).
+                        var mu = 0.0, mv = 0.0
+                        if let m = index.nearest(lat: lat, lon: lon, maxDistanceDeg: maxDeg) {
+                            let md = m.direction_deg * .pi / 180
+                            mu = m.speed_ms * sin(md); mv = m.speed_ms * cos(md)
                         }
+                        let eu = mu + w * (su - mu)          // lerp field → station by w
+                        let ev = mv + w * (sv - mv)
+                        let spd = (eu * eu + ev * ev).squareRoot()
+                        var dir = atan2(eu, ev) * 180 / .pi
+                        if dir < 0 { dir += 360 }
+                        out.append(CurrentVector(lat: lat, lon: lon,
+                                                 speed_ms: spd, direction_deg: dir))
                     }
                     dx += step
                 }
