@@ -17,8 +17,8 @@ MAPTILER_KEY =
 // CFBundleShortVersionString / CFBundleVersion reference these (see Info.plist).
 // Bump CURRENT_PROJECT_VERSION for every TestFlight upload (must be unique and
 // increasing for a given MARKETING_VERSION).
-MARKETING_VERSION = 1.2.0
-CURRENT_PROJECT_VERSION = 10
+MARKETING_VERSION = 1.2.1
+CURRENT_PROJECT_VERSION = 11
 
 // --- Code signing -------------------------------------------------------------
 // Set DEVELOPMENT_TEAM to your 10-character Apple Developer Team ID for device

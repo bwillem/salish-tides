@@ -4,6 +4,11 @@ All notable changes to Salish Tides are recorded here. Versions follow
 [semantic versioning](https://semver.org); dates are the release date in the
 Salish Sea (America/Vancouver). The newest release is first.
 
+## [1.2.1] - 2026-08-05
+
+### Fixed
+- Blend the narrow-pass currents smoothly into the surrounding water instead of fading out at their edges
+
 ## [1.2.0] - 2026-08-05
 
 ### Added
