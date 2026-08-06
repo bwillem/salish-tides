@@ -386,29 +386,44 @@ final class MapViewModel {
         }
     }
 
-    /// Half-length (km) of the injected sample line along the flood/ebb axis —
-    /// small, so the CHS flow lands on the station itself (~one raster cell),
-    /// not a broad disc over the surrounding water.
-    private static let stationInjectHalfKm = 0.15
+    /// Radius (km) of the injected speed bump around a station.
+    private static let stationInjectRadiusKm = 0.6
+    /// Grid spacing (km) of the injected samples — a few per raster cell.
+    private static let stationInjectStepKm = 0.15
 
-    /// A compact CHS current placed AT each in-view station: three samples along
-    /// the flood/ebb axis (centre ± `stationInjectHalfKm`), tight enough to land
-    /// in ~one raster cell. The particle layer's coarse-regime reconciliation
-    /// then forces that (model-land) cell to water and the drawn coastline clips
-    /// the flow to the channel — so particles run through the narrows itself.
+    /// A CHS current bump centred on each in-view station: a small grid of
+    /// samples whose speed ramps from the full CHS value at the station down to
+    /// the surrounding field with a smoothstep falloff, so the pass flow blends
+    /// into the model particles instead of appearing as one abrupt fast cell.
+    /// The near-zero rim is dropped so the taper never drags the surrounding
+    /// field down; the particle layer's coarse-regime rule renders the (masked)
+    /// core, and the drawn coastline keeps it in the channel.
     private func stationInjectionVectors(for stations: [CurrentStationReading]) -> [CurrentVector] {
         guard !stations.isEmpty else { return [] }
+        let R = Self.stationInjectRadiusKm
+        let step = Self.stationInjectStepKm
         var out: [CurrentVector] = []
-        out.reserveCapacity(stations.count * 3)
         for s in stations {
             let speed = s.speedKn / 1.944
-            let axis = s.bearingDeg * .pi / 180
             let cosLat = cos(s.lat * .pi / 180)
-            for alongKm in [-Self.stationInjectHalfKm, 0, Self.stationInjectHalfKm] {
-                let dLat = (alongKm * cos(axis)) / 111.0
-                let dLon = (alongKm * sin(axis)) / (111.0 * cosLat)
-                out.append(CurrentVector(lat: s.lat + dLat, lon: s.lon + dLon,
-                                         speed_ms: speed, direction_deg: s.bearingDeg))
+            var dy = -R
+            while dy <= R + 1e-9 {
+                var dx = -R
+                while dx <= R + 1e-9 {
+                    let dKm = (dx * dx + dy * dy).squareRoot()
+                    if dKm <= R {
+                        let t = 1 - dKm / R
+                        let w = t * t * (3 - 2 * t)          // smoothstep 1→0
+                        if w > 0.2 {                          // drop the faint rim
+                            out.append(CurrentVector(lat: s.lat + dy / 111.0,
+                                                     lon: s.lon + dx / (111.0 * cosLat),
+                                                     speed_ms: speed * w,
+                                                     direction_deg: s.bearingDeg))
+                        }
+                    }
+                    dx += step
+                }
+                dy += step
             }
         }
         return out
