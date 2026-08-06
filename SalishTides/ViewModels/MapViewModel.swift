@@ -277,15 +277,17 @@ final class MapViewModel {
             guard generation == loadGeneration, !Task.isCancelled else { return }
         }
 
-        // Overlay the CHS pass currents onto the raster: near each station the
-        // model masks the throat and understates the flow, so we replace those
-        // cells with the station's own CHS speed + flood/ebb axis. This feeds
-        // everything downstream from one place — the particle field (so
-        // particles rip through the narrows at the real speed), the arrows, and
-        // the crosshair readout (so the reticle agrees with the station card).
+        // Inject the CHS pass currents AT each station — a tight cluster on the
+        // station point, not a broad disc. The model masks the whole narrows, so
+        // replacing nearby wet cells would land the flow out in the approaches;
+        // instead we add samples at the throat and let the particle layer's
+        // coarse-regime "sample in a land cell → force water" rule (named for
+        // Dodd Narrows in CurrentParticleLayer) render them through the drawn
+        // channel. Feeds everything: the particle field, the arrows, and the
+        // crosshair readout (so the reticle agrees with the station card).
         let stations = stationReadings(for: date)
-        let vectors = applyingStationCurrents((liveVectors ?? []) + modelVectors,
-                                              stations: stations)
+        let vectors = (liveVectors ?? []) + modelVectors
+            + stationInjectionVectors(for: stations)
 
         // The coastline mask, culled like the vectors. Every tier provides
         // one (live from cached wet cells, models from their own meshes) so
@@ -384,34 +386,32 @@ final class MapViewModel {
         }
     }
 
-    /// Radius (km) around a CHS station within which raster cells take on the
-    /// station's current — roughly the physical reach of the pass jet.
-    private static let stationInfluenceKm = 1.3
+    /// Half-length (km) of the injected sample line along the flood/ebb axis —
+    /// small, so the CHS flow lands on the station itself (~one raster cell),
+    /// not a broad disc over the surrounding water.
+    private static let stationInjectHalfKm = 0.15
 
-    /// Overlays each in-view CHS station's current onto the raster: any vector
-    /// within `stationInfluenceKm` of a station is replaced with that station's
-    /// CHS speed (m/s) and flood/ebb bearing, so the field carries the accurate
-    /// pass flow instead of the model's masked/understated value. Nearest
-    /// station wins on overlap. Cheap: |vectors| × |stations| checks, once per
-    /// load (not per frame).
-    private func applyingStationCurrents(_ points: [CurrentVector],
-                                         stations: [CurrentStationReading]) -> [CurrentVector] {
-        guard !stations.isEmpty else { return points }
-        let r2 = Self.stationInfluenceKm * Self.stationInfluenceKm
-        return points.map { v in
-            let cosLat = cos(v.lat * .pi / 180)
-            var best: (d2: Double, station: CurrentStationReading)?
-            for s in stations {
-                let dLat = (v.lat - s.lat) * 111.0
-                let dLon = (v.lon - s.lon) * 111.0 * cosLat
-                let d2 = dLat * dLat + dLon * dLon
-                if d2 < r2, best == nil || d2 < best!.d2 { best = (d2, s) }
+    /// A compact CHS current placed AT each in-view station: three samples along
+    /// the flood/ebb axis (centre ± `stationInjectHalfKm`), tight enough to land
+    /// in ~one raster cell. The particle layer's coarse-regime reconciliation
+    /// then forces that (model-land) cell to water and the drawn coastline clips
+    /// the flow to the channel — so particles run through the narrows itself.
+    private func stationInjectionVectors(for stations: [CurrentStationReading]) -> [CurrentVector] {
+        guard !stations.isEmpty else { return [] }
+        var out: [CurrentVector] = []
+        out.reserveCapacity(stations.count * 3)
+        for s in stations {
+            let speed = s.speedKn / 1.944
+            let axis = s.bearingDeg * .pi / 180
+            let cosLat = cos(s.lat * .pi / 180)
+            for alongKm in [-Self.stationInjectHalfKm, 0, Self.stationInjectHalfKm] {
+                let dLat = (alongKm * cos(axis)) / 111.0
+                let dLon = (alongKm * sin(axis)) / (111.0 * cosLat)
+                out.append(CurrentVector(lat: s.lat + dLat, lon: s.lon + dLon,
+                                         speed_ms: speed, direction_deg: s.bearingDeg))
             }
-            guard let s = best?.station else { return v }
-            return CurrentVector(lat: v.lat, lon: v.lon,
-                                 speed_ms: s.speedKn / 1.944,
-                                 direction_deg: s.bearingDeg)
         }
+        return out
     }
 
     /// Points within the viewport plus the shared cull margin, so pans don't
