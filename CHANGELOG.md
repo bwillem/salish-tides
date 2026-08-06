@@ -4,6 +4,14 @@ All notable changes to Salish Tides are recorded here. Versions follow
 [semantic versioning](https://semver.org); dates are the release date in the
 Salish Sea (America/Vancouver). The newest release is first.
 
+## [1.2.0] - 2026-08-05
+
+### Added
+- Tidal currents for the narrow passes — Dodd Narrows, Seymour Narrows, Active Pass, Porlier Pass, and more. The ocean model can't resolve these tight channels, so they now use the Canadian Hydrographic Service's own predictions: the current flows through the pass on the map, and putting the crosshair over a pass (or tapping it) shows its speed now plus the next slack and maximum flood/ebb — all offline.
+
+### Changed
+- One info card for both tide and current stations: the crosshair over a pass shows that pass's currents; elsewhere it shows the nearest tide station's chart.
+
 ## [1.1.4] - 2026-08-04
 
 ### Changed
