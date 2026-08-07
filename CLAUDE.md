@@ -37,7 +37,7 @@ State is a handful of `@Observable` stores built in `SalishTidesApp.init` and in
 
 ### Current field — live tier + bundled harmonic models
 `MapViewModel.currentSource` is `.live`, `.model`, or nil (no coverage → no badge):
-1. **`.live`** — real-time SalishSeaCast forecast (`Live/`), enhancement when online; cached in `LiveDataStore` so dock-fetched data keeps working underway. Disabled entirely by `AppSettings.offlineOnly`.
+1. **`.live`** — real-time SalishSeaCast forecast (`Live/`), enhancement when online; cached in `LiveDataStore` so dock-fetched data keeps working underway. There is no user setting for it: fetching is gated solely by `NetworkMonitor.isOnline` (`LiveDataService.fetchingAllowed`), and everything already cached is served even offline.
 2. **`.model`** — bundled offline harmonic models (`CurrentModel/`): `.b1` constituent grids decoded by `OfflineCurrentModel` (an `actor`; one instance per asset, priority-ordered in `OfflineCurrentModel.all`), synthesized per-hour by `TidalHarmonics` (8-constituent Doodson engine, validated against NOAA). `salishSea` reproduces live SalishSeaCast at ~0.98 correlation; `webTide` extends coverage up the outer coast.
 
 **Overlap is resolved at pack time, not runtime**: `webtide_pack.py` drops every WebTide cell within 2.4 km of SalishSeaCast water, so the model domains are spatially disjoint and rendering is plain concatenation. `webTide` renders even alongside the live tier (it's disjoint from the live/NEMO footprint too); `salishSea` is suppressed while live renders because it duplicates that domain. Lower-priority models filter their dry-shoreline land mask against higher-priority fields (`hasWater(withinKm:)`) so the pack-mask edge doesn't render as a particle barrier mid-strait.
