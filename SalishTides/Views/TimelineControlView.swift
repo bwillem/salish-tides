@@ -39,6 +39,12 @@ struct TimelineControlView: View {
             // action, not on the time itself. (Phase/tendency is omitted here —
             // it already lives in the phase-indicator card.)
             ZStack {
+                // Reserve the pill's height at all times. The pill is taller than
+                // the plain readout (capsule + vertical padding), so without this
+                // the row — and the glass card around it — would grow the instant
+                // the pill faded in and shrink back when it left. .hidden() keeps
+                // it in layout for sizing while drawing nothing and taking no taps.
+                nowPill.hidden()
                 Button(action: presentDatePicker) {
                     readout
                 }
