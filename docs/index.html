@@ -26,8 +26,11 @@
     /* Tokens, reset, and base body typography come from /site.css. */
     html, body { height: 100%; }
 
-    body {
-      margin: 0;
+    body { margin: 0; }
+
+    /* .page stacks hero over footer; .hero is a single column until the desktop
+       breakpoint below turns it into two and reveals the showcase video. */
+    .page {
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -35,6 +38,12 @@
       min-height: 100dvh;
       padding: 2rem 1.25rem;
       gap: 2rem;
+    }
+
+    .hero {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }
 
     main {
@@ -114,31 +123,110 @@
 
     /* Fixed to the bottom on tall viewports; flows naturally on short ones. */
     @media (min-height: 560px) {
-      body { justify-content: space-between; }
-      body::before { content: ""; }   /* top spacer to keep main centered */
-      main { flex: 1; justify-content: center; }
+      .page { justify-content: space-between; }
+      .page::before { content: ""; }   /* top spacer to keep the hero centered */
+      .hero { flex: 1; justify-content: center; }
+    }
+
+    /* App showcase — desktop only. Hidden by default AND left source-less: the
+       <video> carries data-src/data-poster, and the inline script at the end of
+       <body> only promotes them to real attributes when the desktop query
+       matches, so phones download zero bytes of it. */
+    .showcase { display: none; }
+
+    @media (min-width: 960px) and (min-height: 600px) {
+      .page {
+        max-width: 1000px;
+        margin: 0 auto;
+      }
+
+      .hero {
+        flex-direction: row;
+        align-items: center;
+        justify-content: center;
+        gap: 3.5rem;
+        width: 100%;
+      }
+
+      /* Equal halves: the shared 50% basis overflows by the gap, so both
+         shrink off it identically and settle at 50% minus half the gap. */
+      main { flex: 1 1 50%; min-width: 0; }
+
+      .showcase {
+        display: flex;
+        justify-content: center;   /* portrait video is narrower than its half */
+        flex: 1 1 50%;
+        min-width: 0;
+        margin: 0;
+      }
+
+      /* Portrait capture: size it off the viewport height, let width follow. */
+      .showcase video {
+        display: block;
+        height: min(72dvh, 700px);   /* leaves room for the footer row below */
+        width: auto;
+        max-width: 100%;
+        border-radius: 20px;
+        border: 1px solid var(--rule);
+        background: var(--rule);   /* placeholder tint before the poster paints */
+      }
     }
   </style>
 </head>
 <body>
-  <main>
-    <img class="logo" src="logo.png" alt="Salish Tides">
-    <p class="tagline">predictive offline current maps<br>for the Salish Sea and beyond</p>
-    <a class="appstore" href="https://apps.apple.com/us/app/salish-tides/id6791828601" aria-label="Download on the App Store">
-      <img src="app-store-btn.png" alt="Download on the App Store">
-    </a>
-  </main>
+  <div class="page">
+    <div class="hero">
+      <main>
+        <img class="logo" src="logo.png" alt="Salish Tides">
+        <p class="tagline">predictive offline current maps<br>for the Salish Sea and beyond</p>
+        <a class="appstore" href="https://apps.apple.com/us/app/salish-tides/id6791828601" aria-label="Download on the App Store">
+          <img src="app-store-btn.png" alt="Download on the App Store">
+        </a>
+      </main>
 
-  <footer>
-    <nav>
-      <a href="https://apps.apple.com/us/app/salish-tides/id6791828601">download</a>
-      <a href="/about">about</a>
-      <a href="/changelog">changelog</a>
-      <a href="/privacy">privacy</a>
-    </nav>
-    <p class="copyright">&copy; Bryan Guenther <span id="year">2026</span></p>
-  </footer>
+      <figure class="showcase" aria-hidden="true">
+        <video id="showcase" width="540" height="1174"
+               data-src="hero.mp4" data-poster="hero-poster.jpg"
+               preload="none" autoplay muted loop playsinline
+               disablepictureinpicture tabindex="-1"></video>
+      </figure>
+    </div>
 
-  <script>document.getElementById("year").textContent = new Date().getFullYear();</script>
+    <footer>
+      <nav>
+        <a href="https://apps.apple.com/us/app/salish-tides/id6791828601">download</a>
+        <a href="/about">about</a>
+        <a href="/changelog">changelog</a>
+        <a href="/privacy">privacy</a>
+      </nav>
+      <p class="copyright">&copy; Bryan Guenther <span id="year">2026</span></p>
+    </footer>
+  </div>
+
+  <script>
+    document.getElementById("year").textContent = new Date().getFullYear();
+
+    // Desktop-only, and only once: attach the poster, then the video itself.
+    // Under Reduce Motion the poster stands in and the mp4 is never requested.
+    (function () {
+      var video = document.getElementById("showcase");
+      var desktop = window.matchMedia("(min-width: 960px) and (min-height: 600px)");
+      var still = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+      function attach() {
+        if (!desktop.matches || video.dataset.attached) return;
+        video.dataset.attached = "1";
+        video.poster = video.dataset.poster;
+        if (still.matches) return;
+        video.src = video.dataset.src;
+        // Safari can reject autoplay; the poster is a fine resting state.
+        var started = video.play();
+        if (started) started.catch(function () {});
+      }
+
+      attach();
+      desktop.addEventListener("change", attach);
+    })();
+  </script>
 </body>
 </html>
