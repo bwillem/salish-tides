@@ -20,9 +20,14 @@
 set -euo pipefail
 
 # --- Coverage --------------------------------------------------------------
-# Envelope of all four atlas volumes (lat 47.07–51.05, lon -128.08–-122.20)
-# plus a ~15 km margin so the basemap extends past the outermost current arrows.
-BBOX="-128.23,46.92,-122.05,51.20"   # min_lon,min_lat,max_lon,max_lat
+# Outer envelope of the WebTide outer-coast current model (webtide_nepac.b1:
+# lat 45.98–60.00, lon -140.06–-121.97) plus a small margin. This is the box
+# the app clamps the camera to (ChartBounds.coverage) — NOT the set of tiles
+# actually shipped. The extract below is clipped to a coastal REGION (see
+# coastal-region.py) that follows the modelled water and drops the tile-dense
+# BC interior with no current data under it; so the archive is far smaller than
+# this rectangle implies while still covering every coast the arrows reach.
+BBOX="-140.1,45.9,-121.9,60.05"   # min_lon,min_lat,max_lon,max_lat
 # z0–12 vector tiles; MapLibre overzooms to the app's z14 ceiling (vector
 # geometry/labels stay crisp). Bump to 13/14 for sharper-but-larger archives
 # (z13 ≈ 114 MB, z14 ≈ 237 MB) if a denser harbour detail is ever needed.
@@ -44,7 +49,11 @@ OUT="${REPO_ROOT}/data/basemap/salish.pmtiles"
 # rewrites it to global bounds.)
 CHART_BOUNDS="${REPO_ROOT}/SalishTides/Models/ChartBounds.swift"
 IFS=',' read -r bb_lon_min bb_lat_min bb_lon_max bb_lat_max <<< "$BBOX"
-swift_bounds=$(sed -n 's/.*ChartBounds(lat_min: *\([-0-9.]*\), *lat_max: *\([-0-9.]*\),.*/\1,\2/p;s/.*lon_min: *\([-0-9.]*\), *lon_max: *\([-0-9.]*\)).*/\1,\2/p' "$CHART_BOUNDS" | tr -d '\n')
+# Isolate the `coverage` declaration first (it spans two lines) so other
+# ChartBounds literals in the file — cameraPan, zoomFloorFrame — don't get
+# scooped up by the number extraction.
+cov_block=$(sed -n '/static let coverage = ChartBounds(/,/)/p' "$CHART_BOUNDS")
+swift_bounds=$(printf '%s\n' "$cov_block" | sed -n 's/.*lat_min: *\([-0-9.]*\), *lat_max: *\([-0-9.]*\),.*/\1,\2/p;s/.*lon_min: *\([-0-9.]*\), *lon_max: *\([-0-9.]*\)).*/\1,\2/p' | tr -d '\n')
 expected="${bb_lat_min},${bb_lat_max}${bb_lon_min},${bb_lon_max}"
 if [[ "$swift_bounds" != "$expected" ]]; then
   echo "error: BBOX and ChartBounds.coverage disagree." >&2
@@ -83,8 +92,22 @@ mkdir -p "$(dirname "$OUT")"
 #    the format from it) without orphaning a stray mktemp file.
 TMP_DIR="$(mktemp -d -t salish-basemap)"
 trap 'rm -rf "$TMP_DIR"' EXIT
+
+# 1a. Build the coastal extract region from the current models' water footprints
+#     so we ship coast/ocean tiles but not the BC interior. Falls back to the
+#     bbox if its deps are missing (still correct, just larger).
+REGION="$TMP_DIR/region.geojson"
+region_arg=(--bbox="$BBOX")
+if python3 -c "import numpy, shapely" 2>/dev/null \
+   && python3 "$(dirname "$0")/coastal-region.py" "$REGION"; then
+  region_arg=(--region="$REGION")
+  echo "Extract region: coastal (from current-model footprints)"
+else
+  echo "warning: numpy/shapely missing — extracting the full bbox (larger archive)" >&2
+fi
+
 RAW="$TMP_DIR/raw.pmtiles"
-pmtiles extract "$SRC" "$RAW" --bbox="$BBOX" --maxzoom="$MAXZOOM"
+pmtiles extract "$SRC" "$RAW" "${region_arg[@]}" --maxzoom="$MAXZOOM"
 
 # 2. Strip the unwanted layers (tile-join re-tiles; pmtiles extract can't drop
 #    layers). -L excludes a layer.

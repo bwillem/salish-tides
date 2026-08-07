@@ -221,14 +221,17 @@ struct MapLibreView: UIViewRepresentable {
         // on an actual resize (updateUIView runs for every observed change).
         nonisolated(unsafe) private var minZoomSize: CGSize = .zero
 
-        /// Sets `minimumZoomLevel` to the zoom at which `ChartBounds.coverage`
-        /// still covers the whole viewport, at any bearing.
+        /// Sets `minimumZoomLevel` to the zoom at which `ChartBounds.zoomFloorFrame`
+        /// (the core Salish Sea, *not* the full `coverage` extent) still covers
+        /// the whole viewport, at any bearing.
         ///
         /// Pairs with `maximumScreenBounds`, which holds the visible region
         /// inside the coverage box but says nothing about zoom: without a floor
-        /// the user could zoom to the old z7 minimum and watch the shipped
-        /// tiles shrink to a postage stamp adrift in blank grey. At the floor
-        /// the box still fills the screen, so there's nothing left to pan to.
+        /// the user could zoom to the old z7 minimum and watch the map shrink to
+        /// a postage stamp. Framing the floor on the Salish Sea core (rather than
+        /// the 60°N coverage box) keeps the fully-zoomed-out view centred on the
+        /// primary charted area — the far-north coast is reached by panning, not
+        /// by zooming out until the whole outer coast fits on screen.
         ///
         /// Called from `updateUIView` *and* from the camera-settle and idle
         /// callbacks. The first layout can land after the final `updateUIView`
@@ -242,7 +245,7 @@ struct MapLibreView: UIViewRepresentable {
             MainActor.assumeIsolated {
                 let size = mapView.bounds.size
                 guard size != minZoomSize,
-                      let raw = ChartBounds.coverage.minimumZoomCovering(
+                      let raw = ChartBounds.zoomFloorFrame.minimumZoomCovering(
                           width: size.width, height: size.height) else { return }
                 minZoomSize = size
 

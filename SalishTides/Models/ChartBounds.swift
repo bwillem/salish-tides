@@ -18,11 +18,35 @@ struct ChartBounds: Decodable, Sendable, Equatable {
     /// PMTiles header itself is useless here (tile-join rewrites it to global
     /// bounds), so the build script is the only source of truth.
     ///
-    /// Note this is *narrower* than the current models: `webtide_nepac.b1`
-    /// reaches 60°N and the tide-station set reaches 52.2°N. That data has no
-    /// basemap under it, so it was never usably reachable.
-    static let coverage = ChartBounds(lat_min: 46.92, lat_max: 51.20,
-                                      lon_min: -128.23, lon_max: -122.05)
+    /// Matches the full extent of the WebTide outer-coast model
+    /// (`webtide_nepac.b1`: lat 45.98–60.00, lon -140.06–-121.97) so every
+    /// current arrow the app draws has a basemap tile under it, up the BC coast
+    /// to SE Alaska. The finer SalishSeaCast grid and the tide stations both
+    /// sit well inside this box. (The camera-pan boundary derives from it, so
+    /// widening here is what lets the map *reach* the northern data. The
+    /// zoom-out floor, by contrast, is framed on `zoomFloorFrame` below, not on
+    /// this box — so the far north is reachable by panning, not by zooming all
+    /// the way out to fit the whole 60°N span on screen at once.)
+    static let coverage = ChartBounds(lat_min: 45.9, lat_max: 60.05,
+                                      lon_min: -140.1, lon_max: -121.9)
+
+    /// The frame the zoom-out floor keeps on screen — the core Salish Sea, not
+    /// the full `coverage` extent. `applyMinimumZoom` sizes the minimum zoom so
+    /// this box fills the viewport, which caps how far out the user can pinch.
+    ///
+    /// It is intentionally *decoupled* from `coverage`: when `coverage` grew to
+    /// the WebTide model's full envelope (up to 60°N / SE Alaska), deriving the
+    /// floor from it let the map zoom out until the entire outer coast shrank on
+    /// screen — far looser than wanted. Framing the floor on the Salish Sea core
+    /// instead restores the tighter zoom-out feel while leaving pan-reach and
+    /// the basemap at their full northern extent. (Value is the pre-expansion
+    /// coverage box — the framing whose zoom-out headroom we're preserving.)
+    ///
+    /// Safe against the old "postage stamp adrift in grey" failure `coverage`
+    /// once guarded: the basemap now tiles the whole `coverage` extent, so even
+    /// panned far north there are no empty tiles at the floor.
+    static let zoomFloorFrame = ChartBounds(lat_min: 46.92, lat_max: 51.20,
+                                            lon_min: -128.23, lon_max: -122.05)
 
     /// The camera-pan boundary — `coverage` loosened on every edge so the screen
     /// *centre* can reach the data edges instead of stalling half a viewport
