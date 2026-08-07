@@ -4,6 +4,11 @@ All notable changes to Salish Tides are recorded here. Versions follow
 [semantic versioning](https://semver.org); dates are the release date in the
 Salish Sea (America/Vancouver). The newest release is first.
 
+## [1.3.0] - 2026-08-07
+
+### Changed
+- Extended the map north up the entire BC coast to SE Alaska — past Namu, Bella Bella, Prince Rupert, and Ketchikan. The tidal-current forecast reaches these northern waters, and now the chart does too, so there's a map under it everywhere. The bundled basemap hugs the coastline to keep the download small.
+
 ## [1.2.1] - 2026-08-05
 
 ### Fixed
